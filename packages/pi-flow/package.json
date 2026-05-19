@@ -1,0 +1,16 @@
+{
+  "name": "pi-flow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Aggregate install package for pi-flow workflow resources.",
+  "keywords": ["pi-package"],
+  "dependencies": { "pi-flow-core": "workspace:*" },
+  "peerDependencies": { "pi-interactive-subagent": "*" },
+  "scripts": {
+    "test:node": "find __tests__ -name '*.test.mjs' -print0 | xargs -0 node --test",
+    "test": "pnpm run test:node",
+    "check": "pnpm run test"
+  },
+  "pi": { "skills": ["node_modules/pi-flow-core/skills/*/SKILL.md"] }
+}

@@ -1,0 +1,17 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: false
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .: {}
+
+  packages/pi-flow:
+    dependencies:
+      pi-flow-core:
+        specifier: workspace:*
+        version: link:../pi-flow-core
+
+  packages/pi-flow-core: {}
