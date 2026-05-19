@@ -94,7 +94,7 @@ When `{CARRY_OVER_REVIEW}` is empty (first-era runs, etc.), skip the carry-over 
 
 ### Iteration 1: Full Review
 
-1. **Read the review template** at `~/.pi/agent/skills/requesting-code-review/review-code-prompt.md`.
+1. **Read the review template** at `$(pi-flow template requesting-code-review/review-code-prompt)`.
 
 2. **Fill placeholders** for a full review:
    - `{WHAT_WAS_IMPLEMENTED}` — the Plan Goal above
@@ -185,7 +185,7 @@ When `Approved with concerns` triggers Final Verification, the reviewer's waived
 
 1. **Read the review template** (same as iteration 1).
 
-2. **Read the re-review block** at `~/.pi/agent/skills/refine-code/review-fix-block.md`.
+2. **Read the re-review block** at `$(pi-flow template refine-code/review-fix-block)`.
 
 3. **Fill re-review block placeholders:**
    - `{PREVIOUS_FINDINGS}` — all findings from the previous review pass (full text)
