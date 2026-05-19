@@ -144,3 +144,14 @@ vite.config.ts.timestamp-*
 
 # Git worktrees
 .worktrees/
+
+# Build artifacts
+dist/
+__pycache__/
+*.pyc
+
+# System files
+.DS_Store
+
+# pnpm store
+.pnpm-store/
