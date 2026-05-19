@@ -1,0 +1,7 @@
+STATUS: not_approved_within_budget
+COMMIT: left_uncommitted
+PLAN_PATH: docs/plans/bar.md
+REVIEW_PATHS:
+- docs/plans/reviews/bar-plan-review-v1.md
+- docs/plans/reviews/bar-plan-review-v2.md
+STRUCTURAL_ONLY: no

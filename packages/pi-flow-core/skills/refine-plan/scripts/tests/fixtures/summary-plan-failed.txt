@@ -1,0 +1,6 @@
+STATUS: failed
+COMMIT: not_attempted [reviewer artifact handoff failed: missing REVIEW_ARTIFACT marker]
+PLAN_PATH: docs/plans/baz.md
+REVIEW_PATHS:
+STRUCTURAL_ONLY: no
+FAILURE_REASON: worker dispatch failed: plan-reviewer

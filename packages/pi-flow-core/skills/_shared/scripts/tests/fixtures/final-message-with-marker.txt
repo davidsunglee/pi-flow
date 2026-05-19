@@ -1,0 +1,2 @@
+The brief has been written successfully. All sections are complete.
+BRIEF_ARTIFACT: /tmp/sample-brief.md

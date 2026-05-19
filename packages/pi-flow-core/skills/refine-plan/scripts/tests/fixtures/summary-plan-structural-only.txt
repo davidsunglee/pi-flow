@@ -1,0 +1,6 @@
+STATUS: approved
+COMMIT: committed def5678
+PLAN_PATH: docs/plans/qux.md
+REVIEW_PATHS:
+- docs/plans/reviews/qux-plan-review-v1.md
+STRUCTURAL_ONLY: yes

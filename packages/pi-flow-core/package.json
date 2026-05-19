@@ -1,0 +1,18 @@
+{
+  "name": "pi-flow-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Workflow skills, bundled agent definitions, and helper runner for pi-flow.",
+  "keywords": ["pi-package"],
+  "bin": { "pi-flow": "./bin/pi-flow.mjs" },
+  "files": ["bin", "skills", "agents", "docs", "model-tiers.example.json"],
+  "scripts": {
+    "test:helpers": "python3 -m unittest discover -s skills/_shared/scripts/tests -p \"test_*.py\" && python3 -m unittest discover -s skills/define-spec/scripts/tests -p \"test_*.py\" && python3 -m unittest discover -s skills/execute-plan/scripts/tests -p \"test_*.py\" && python3 -m unittest discover -s skills/fastlane/scripts/tests -p \"test_*.py\" && python3 -m unittest discover -s skills/refine-code/scripts/tests -p \"test_*.py\" && python3 -m unittest discover -s skills/refine-plan/scripts/tests -p \"test_*.py\"",
+    "test:node": "find bin __tests__ -name '*.test.mjs' -print0 | xargs -0 node --test",
+    "test": "pnpm run test:node && pnpm run test:helpers",
+    "check": "pnpm run test"
+  },
+  "peerDependencies": { "pi-interactive-subagent": "*" },
+  "pi": { "skills": ["skills/*/SKILL.md"] }
+}

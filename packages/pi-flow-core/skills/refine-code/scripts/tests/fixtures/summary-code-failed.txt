@@ -1,0 +1,13 @@
+STATUS: failed
+
+## Summary
+Iterations: 0
+Issues found: 0 (0 Critical, 0 Important, 0 Minor)
+Issues fixed: 0
+Issues remaining: 0
+
+## Review File
+(none)
+
+## Failure Reason
+worker dispatch failed: code-reviewer

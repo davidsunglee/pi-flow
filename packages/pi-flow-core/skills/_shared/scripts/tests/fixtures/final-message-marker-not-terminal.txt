@@ -1,0 +1,11 @@
+Starting brief generation.
+
+BRIEF_ARTIFACT: /tmp/early.md
+
+Now I will continue with prose describing the work that was done. Several
+paragraphs follow, and the marker above is incidental — it appears in the
+body of the message but is not the actual handoff line.
+
+The final summary of the work follows below.
+
+Done with the work, see above.

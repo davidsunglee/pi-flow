@@ -1,0 +1,5 @@
+The brief is complete. Final handoff:
+
+BRIEF_ARTIFACT: /tmp/ok.md
+
+

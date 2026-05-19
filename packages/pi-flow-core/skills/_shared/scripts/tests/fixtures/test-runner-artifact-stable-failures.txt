@@ -1,0 +1,18 @@
+PHASE: baseline
+COMMAND: pytest tests/
+WORKING_DIRECTORY: /tmp/project
+EXIT_CODE: 1
+TIMESTAMP: 2026-05-01T10:00:00Z
+FAILING_IDENTIFIERS_COUNT: 2
+FAILING_IDENTIFIERS:
+tests/test_a.py::test_one
+tests/test_b.py::test_two
+END_FAILING_IDENTIFIERS
+NON_RECONCILABLE_COUNT: 0
+NON_RECONCILABLE_FAILURES:
+END_NON_RECONCILABLE_FAILURES
+
+--- RAW RUN OUTPUT BELOW ---
+FAILED tests/test_a.py::test_one - AssertionError
+FAILED tests/test_b.py::test_two - AssertionError
+2 failed, 8 passed

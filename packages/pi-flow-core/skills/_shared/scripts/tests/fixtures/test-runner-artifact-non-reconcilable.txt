@@ -1,0 +1,23 @@
+PHASE: baseline
+COMMAND: pytest tests/
+WORKING_DIRECTORY: /tmp/project
+EXIT_CODE: 2
+TIMESTAMP: 2026-05-01T10:00:00Z
+FAILING_IDENTIFIERS_COUNT: 1
+FAILING_IDENTIFIERS:
+tests/test_c.py::test_three
+END_FAILING_IDENTIFIERS
+NON_RECONCILABLE_COUNT: 2
+NON_RECONCILABLE_FAILURES:
+ImportError: failed to import module
+  File "tests/conftest.py", line 5
+    from missing_dep import something
+
+SyntaxError: invalid syntax at tests/test_y.py:10
+  File "tests/test_y.py", line 10
+    def bad_func(:
+END_NON_RECONCILABLE_FAILURES
+
+--- RAW RUN OUTPUT BELOW ---
+FAILED tests/test_c.py::test_three - AssertionError
+ERROR collecting tests/test_y.py

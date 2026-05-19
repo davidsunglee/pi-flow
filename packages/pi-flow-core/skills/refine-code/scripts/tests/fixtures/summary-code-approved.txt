@@ -1,0 +1,10 @@
+STATUS: approved
+
+## Summary
+Iterations: 2
+Issues found: 5 (1 Critical, 2 Important, 2 Minor)
+Issues fixed: 3
+Issues remaining: 2
+
+## Review File
+docs/reviews/sample-code-review-v1.md

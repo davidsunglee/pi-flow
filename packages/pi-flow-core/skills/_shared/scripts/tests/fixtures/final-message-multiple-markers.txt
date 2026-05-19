@@ -1,0 +1,7 @@
+Starting brief generation for the requested scope.
+
+BRIEF_ARTIFACT: /tmp/first-brief.md
+
+The first draft had some issues so a revised version was produced.
+
+BRIEF_ARTIFACT: /tmp/last-brief.md

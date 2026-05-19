@@ -1,0 +1,14 @@
+{
+    "capable": "anthropic/claude-opus-4-7",
+    "standard": "anthropic/claude-sonnet-4-6",
+    "cheap": "anthropic/claude-haiku-4-5",
+    "crossProvider": {
+        "capable": "openai-codex/gpt-5.5",
+        "standard": "openai-codex/gpt-5.4",
+        "cheap": "openai-codex/gpt-5.4-mini"
+    },
+    "dispatch": {
+        "anthropic": "claude",
+        "openai-codex": "pi"
+    }
+}

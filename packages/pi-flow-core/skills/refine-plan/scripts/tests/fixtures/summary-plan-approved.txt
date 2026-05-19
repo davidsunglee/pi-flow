@@ -1,0 +1,6 @@
+STATUS: approved
+COMMIT: committed abc1234
+PLAN_PATH: docs/plans/foo.md
+REVIEW_PATHS:
+- docs/plans/reviews/foo-plan-review-v1.md
+STRUCTURAL_ONLY: no
