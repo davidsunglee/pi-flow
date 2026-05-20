@@ -1,7 +1,7 @@
 # Flow Setup and Command Surface
 
 Source: TODO-cfcb8ede
-Scout brief: docs/briefs/TODO-cfcb8ede-brief.md
+Scout brief: docs/briefs/2026-05-20-flow-setup-commands-brief.md
 
 ## Goal
 
