@@ -25,6 +25,15 @@ const EXPECTED_SKILL_NAMES = [
   'verification-before-completion',
 ];
 
+const EXPECTED_ROOT_EXTENSIONS = [
+  'packages/pi-flow-ux/extensions/footer.ts',
+  'packages/pi-flow-ux/extensions/working/index.ts',
+];
+
+const EXPECTED_ROOT_THEMES = [
+  'packages/pi-flow-ux/themes/nord.json',
+];
+
 function rootPath(...parts) {
   return resolve(ROOT_DIR, ...parts);
 }
@@ -76,6 +85,16 @@ test('repo root declares a Pi package manifest for git installs', () => {
     ['packages/pi-flow-core/skills/*/SKILL.md'],
     'root pi.skills must point at the core skills from the git checkout root',
   );
+  assert.deepEqual(
+    pkg.pi?.extensions,
+    EXPECTED_ROOT_EXTENSIONS,
+    'root pi.extensions must forward the UX extensions from the git checkout root',
+  );
+  assert.deepEqual(
+    pkg.pi?.themes,
+    EXPECTED_ROOT_THEMES,
+    'root pi.themes must forward the UX theme from the git checkout root',
+  );
   assert.equal(
     pkg.bin?.['pi-flow'],
     './packages/pi-flow-core/bin/pi-flow.mjs',
@@ -94,6 +113,17 @@ test('root pi.skills glob resolves to the shipped workflow skills', () => {
     .sort();
 
   assert.deepEqual(found, [...EXPECTED_SKILL_NAMES].sort());
+});
+
+test('root pi.extensions and pi.themes resolve to the shipped UX resources', () => {
+  const pkg = readRootPackage();
+
+  assert.deepEqual(pkg.pi?.extensions, EXPECTED_ROOT_EXTENSIONS);
+  assert.deepEqual(pkg.pi?.themes, EXPECTED_ROOT_THEMES);
+
+  for (const rel of [...EXPECTED_ROOT_EXTENSIONS, ...EXPECTED_ROOT_THEMES]) {
+    assert.ok(existsSync(rootPath(rel)), `root pi resource must exist: ${rel}`);
+  }
 });
 
 test('root pi-flow bin target exists and is executable by node', () => {

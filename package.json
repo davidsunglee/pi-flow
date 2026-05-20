@@ -21,6 +21,13 @@
   "pi": {
     "skills": [
       "packages/pi-flow-core/skills/*/SKILL.md"
+    ],
+    "extensions": [
+      "packages/pi-flow-ux/extensions/footer.ts",
+      "packages/pi-flow-ux/extensions/working/index.ts"
+    ],
+    "themes": [
+      "packages/pi-flow-ux/themes/nord.json"
     ]
   },
   "version": "0.2.0"
