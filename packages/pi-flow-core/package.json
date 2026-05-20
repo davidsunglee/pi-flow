@@ -10,8 +10,9 @@
   "scripts": {
     "test:helpers": "python3 -m unittest discover -s skills/_shared/scripts/tests -p \"test_*.py\" && python3 -m unittest discover -s skills/define-spec/scripts/tests -p \"test_*.py\" && python3 -m unittest discover -s skills/execute-plan/scripts/tests -p \"test_*.py\" && python3 -m unittest discover -s skills/fastlane/scripts/tests -p \"test_*.py\" && python3 -m unittest discover -s skills/refine-code/scripts/tests -p \"test_*.py\" && python3 -m unittest discover -s skills/refine-plan/scripts/tests -p \"test_*.py\" && find skills -type d -name __pycache__ -print0 | xargs -0 rm -rf",
     "test:node": "find bin __tests__ extensions \\( -name '*.test.mjs' -o -name '*.test.ts' \\) -print0 | xargs -0 node --experimental-strip-types --test",
+    "typecheck": "tsc --noEmit",
     "test": "pnpm run test:node && pnpm run test:helpers",
-    "check": "pnpm run test"
+    "check": "pnpm run typecheck && pnpm run test"
   },
   "dependencies": {
     "typebox": "*"

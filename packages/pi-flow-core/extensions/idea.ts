@@ -48,11 +48,11 @@ type IdeaToolParams = {
   status?: "open" | "done";
 };
 
-function textResult(text: string, opts: { isError?: boolean; details?: unknown } = {}): AgentToolResult {
+function textResult(text: string, opts: { isError?: boolean; details?: unknown } = {}): AgentToolResult<unknown> {
   return {
     content: [{ type: "text", text }],
+    details: opts.details,
     ...(opts.isError === undefined ? {} : { isError: opts.isError }),
-    ...(opts.details === undefined ? {} : { details: opts.details }),
   };
 }
 
@@ -85,7 +85,7 @@ function extraFields(params: IdeaToolParams, allowed: Array<keyof IdeaToolParams
 async function executeIdeaTool(
   params: IdeaToolParams,
   ctx: ExtensionContext,
-): Promise<AgentToolResult> {
+): Promise<AgentToolResult<unknown>> {
   const dir = await getTodoDir(ctx.cwd);
 
   if (params.action === "list") {

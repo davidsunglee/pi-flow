@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 import { DefaultResourceLoader } from "@earendil-works/pi-coding-agent";
 
@@ -84,27 +84,6 @@ async function withToolDenyOverride(fn) {
   }
 }
 
-async function loadCommandsIntoStub() {
-  const registeredCommands = new Map();
-  const sendUserMessageCalls = [];
-  const module = await import(pathToFileURL(COMMANDS_PATH).href);
-
-  module.default({
-    registerCommand(name, def) {
-      registeredCommands.set(name, def);
-    },
-    registerTool() {},
-    getCommands() {
-      return [];
-    },
-    sendUserMessage(message) {
-      sendUserMessageCalls.push(message);
-    },
-  });
-
-  return { registeredCommands, sendUserMessageCalls };
-}
-
 test("setup + dispatch smoke", async (t) => {
   const sandbox = mkdtempSync(join(tmpdir(), "pi-flow-setup-dispatch-"));
   const homeDir = join(sandbox, "home");
@@ -139,9 +118,24 @@ test("setup + dispatch smoke", async (t) => {
     assert.ok(commandsExtension, "expected commands extension to load");
     assert.ok(subagentExtension, "expected pi-interactive-subagent extension to load");
 
-    const { registeredCommands, sendUserMessageCalls } = await loadCommandsIntoStub();
-    const setupHandler = registeredCommands.get("flow:setup")?.handler;
-    const scoutHandler = registeredCommands.get("flow:scout")?.handler;
+    const sendUserMessageCalls = [];
+    extensions.runtime.sendUserMessage = (content) => {
+      sendUserMessageCalls.push(content);
+    };
+    extensions.runtime.getCommands = () =>
+      [...commandsExtension.commands.entries()].map(([name, command]) => ({
+        name,
+        sourceInfo: command.sourceInfo,
+      }));
+
+    const setupCommand = commandsExtension.commands.get("flow:setup");
+    const scoutCommand = commandsExtension.commands.get("flow:scout");
+    assert.ok(setupCommand, "expected flow:setup to be registered via the loader");
+    assert.ok(scoutCommand, "expected flow:scout to be registered via the loader");
+    assert.ok(setupCommand.sourceInfo, "loader-registered command must carry sourceInfo");
+    assert.ok(scoutCommand.sourceInfo, "loader-registered command must carry sourceInfo");
+    const setupHandler = setupCommand.handler;
+    const scoutHandler = scoutCommand.handler;
     assert.equal(typeof setupHandler, "function");
     assert.equal(typeof scoutHandler, "function");
 
