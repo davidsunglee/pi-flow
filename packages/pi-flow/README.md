@@ -1,6 +1,6 @@
 # pi-flow
 
-Aggregate install package for pi-flow workflow resources.
+The aggregate package for pi-flow workflow resources — a single install point that forwards all workflow skills, UX enhancements, and agent definitions through `pi-flow-core` and `pi-flow-ux`.
 
 ## What this is
 
@@ -12,6 +12,7 @@ Aggregate install package for pi-flow workflow resources.
 - **Bundled agent definitions** (passive, not auto-installed) via `pi-flow-core`
 - **Helper runner** (`pi-flow helper <id>`, `pi-flow template <id>`) via `pi-flow-core/bin`
 - **Model-tier example** (`model-tiers.example.json`) via `pi-flow-core`
+- **UX enhancements** — footer extension, working indicator/message, Nord theme, and packaged working defaults via `pi-flow-ux`
 
 ## What it does NOT yet include
 
@@ -20,7 +21,6 @@ The following are intentionally deferred to follow-up specs:
 - `/flow:*` commands (no command surface implemented)
 - `/flow:setup` command
 - Idea/TODO command surface
-- UX resources: footer, working indicator, nord theme
 
 ## Required companion
 
@@ -29,6 +29,16 @@ This package declares `pi-interactive-subagent` as a peer dependency (range `"*"
 ```
 pi-interactive-subagent  (peer, range "*")
 ```
+
+## Minimal/headless use
+
+`pi-flow` is opinionated and includes UX enhancements (footer, working indicator, Nord theme) alongside workflow skills. If you prefer workflow skills without UX layers, install `pi-flow-core` directly instead:
+
+```sh
+npm install pi-flow-core
+```
+
+`pi-flow-core` provides all workflow skills and agent definitions without themes, footer renderers, working indicators, or packaged working defaults—suitable for headless environments, script-driven workflows, or minimal CLI setups where UX enhancements are not desired.
 
 ## Install pointer
 
