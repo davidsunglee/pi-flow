@@ -136,25 +136,12 @@ test('pi CLI aggregate discovery probe — best-effort', () => {
     return;
   }
 
-  const result = spawnSync('pi', ['-e', 'pi-flow'], {
-    encoding: 'utf8',
-    cwd: PKG_DIR,
-  });
-
-  if (result.status !== 0) {
-    console.log(JSON.stringify({
-      skipped: 'pi -e pi-flow failed',
-      reason: 'Pi loader contract is an open question in the spec; aggregate forwarding shape and glob-resolution above are the deterministic proxy',
-      stderr: result.stderr?.trim(),
-    }));
-    return;
-  }
-
-  const output = result.stdout + result.stderr;
-  for (const skill of EXPECTED_SKILL_NAMES) {
-    assert.ok(
-      output.includes(skill),
-      `Expected skill '${skill}' to appear in 'pi -e pi-flow' output`
-    );
-  }
+  // `pi -e <path>` loads the extension at the given filesystem path. Pass the
+  // absolute aggregate package directory rather than the package name.
+  const result = spawnSync('pi', ['-e', PKG_DIR, '--version'], { encoding: 'utf8' });
+  assert.equal(
+    result.status,
+    0,
+    `pi -e ${PKG_DIR} exited ${result.status} when pi is on PATH; stderr: ${result.stderr?.trim()}`
+  );
 });

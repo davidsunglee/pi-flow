@@ -46,7 +46,7 @@ If the file doesn't exist or is unreadable, stop with: "refine-code requires ~/.
 
 ## Step 3: Assemble coordinator prompt
 
-Invoke `pi-flow helper refine-code/scripts/fill-refine-code-prompt --plan-goal <path|-> --plan-contents <path|-> --base-sha <BASE_SHA> --head-sha <HEAD_SHA> --review-output-path <REVIEW_OUTPUT_PATH> --max-iterations <MAX_ITERATIONS> --model-matrix <path> --working-dir <WORKING_DIR> --carry-over-review "<carry-over review path or empty>" --output <filled-prompt-path>`. It performs single-pass substitution and fails closed on unreplaced placeholders.
+Invoke `pi-flow helper refine-code/fill-refine-code-prompt --plan-goal <path|-> --plan-contents <path|-> --base-sha <BASE_SHA> --head-sha <HEAD_SHA> --review-output-path <REVIEW_OUTPUT_PATH> --max-iterations <MAX_ITERATIONS> --model-matrix <path> --working-dir <WORKING_DIR> --carry-over-review "<carry-over review path or empty>" --output <filled-prompt-path>`. It performs single-pass substitution and fails closed on unreplaced placeholders.
 
 ## Step 4: Dispatch code-refiner
 
@@ -97,13 +97,13 @@ The caller (execute-plan or user) makes the decision. This skill does not auto-c
 >   this skill is the (c) continue-refining choice on `not_approved_within_budget`.
 >
 > The only sanctioned post-coordinator path is: parse `finalMessage` for the `STATUS:` line,
-> validate provenance via `pi-flow helper _shared/scripts/validate-review-provenance`
+> validate provenance via `pi-flow helper _shared/validate-review-provenance`
 > (Step 6), and forward the coordinator's output verbatim. See
 > `skills/_shared/orchestrator-verification-boundary.md` for the shared statement.
 >
 > Post-helper bookkeeping: any Python bytecode caches (`__pycache__`) left behind by
 > helper-script invocations under `skills/refine-code/scripts/` are removed via
-> `pi-flow helper _shared/scripts/cleanup-pycache <path>`, never via ad hoc
+> `pi-flow helper _shared/cleanup-pycache <path>`, never via ad hoc
 > `find … -exec rm` commands.
 
 ## Step 6: Validate review provenance
@@ -112,8 +112,8 @@ Run this validation only on `STATUS: approved`, `STATUS: approved_with_concerns`
 
 Use the path the coordinator reported in its `## Review File` block (the latest versioned `<REVIEW_OUTPUT_PATH>-v<ERA>.md`) as `<path>`.
 
-- On `STATUS: approved` or `STATUS: approved_with_concerns`: invoke `pi-flow helper _shared/scripts/validate-review-provenance --review-file <path> --allowed-tiers crossProvider.capable`.
-- On `STATUS: not_approved_within_budget`: invoke `pi-flow helper _shared/scripts/validate-review-provenance --review-file <path> --allowed-tiers crossProvider.capable,standard`.
+- On `STATUS: approved` or `STATUS: approved_with_concerns`: invoke `pi-flow helper _shared/validate-review-provenance --review-file <path> --allowed-tiers crossProvider.capable`.
+- On `STATUS: not_approved_within_budget`: invoke `pi-flow helper _shared/validate-review-provenance --review-file <path> --allowed-tiers crossProvider.capable,standard`.
 
 On non-zero exit, surface `refine-code: review provenance validation failed at <path>: <specific check>` to the caller and do not report the stashed success.
 

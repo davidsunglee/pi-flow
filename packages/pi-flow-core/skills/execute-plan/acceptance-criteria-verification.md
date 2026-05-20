@@ -13,7 +13,7 @@ The caller supplies five inputs:
 1. **Task spec** — the task description as a verbatim string.
 2. **Acceptance criteria** — a list of `(criterion_text, verify_recipe)` pairs. Each pair must have a non-empty `Verify:` recipe.
 3. **Verifier-visible file set** — a deduplicated list of paths the verifier may inspect. The caller computes this via the `{MODIFIED_FILES}` union rule; that computation is out of scope for this file.
-4. **Diff context** — a single text block produced by `pi-flow helper execute-plan/scripts/collect-diff-context`.
+4. **Diff context** — a single text block produced by `pi-flow helper execute-plan/collect-diff-context`.
 5. **Working directory** — the absolute path the verifier subagent will operate from.
 
 ## Behavior
@@ -24,9 +24,9 @@ a. **Validate criteria.** Confirm every criterion has a non-empty `Verify:` reci
 
 b. **Classify recipes.** Classify each `Verify:` recipe as either command-style (a runnable shell command) or inspection-style (a file/section to read and assert against).
 
-c. **Fill the verifier prompt.** Fill `$(pi-flow template execute-plan/verify-task-prompt)` via `pi-flow helper execute-plan/scripts/assemble-verifier-prompt`, passing the inputs above.
+c. **Fill the verifier prompt.** Fill `$(pi-flow template execute-plan/verify-task-prompt)` via `pi-flow helper execute-plan/assemble-verifier-prompt`, passing the inputs above.
 
-d. **Resolve dispatch.** Resolve `(model, cli)` for the dispatch by invoking `pi-flow helper _shared/scripts/resolve-model-dispatch --tier crossProvider.standard --agent verifier`. On resolution failure, surface the byte-equal canonical Templates (1)–(4) per `skills/_shared/model-tier-resolution.md`.
+d. **Resolve dispatch.** Resolve `(model, cli)` for the dispatch by invoking `pi-flow helper _shared/resolve-model-dispatch --tier crossProvider.standard --agent verifier`. On resolution failure, surface the byte-equal canonical Templates (1)–(4) per `skills/_shared/model-tier-resolution.md`.
 
 e. **Dispatch the verifier.** Dispatch a single `verifier` subagent via:
 
@@ -34,7 +34,7 @@ e. **Dispatch the verifier.** Dispatch a single `verifier` subagent via:
    subagent_run_serial { tasks: [{ name: "verifier: <task-N>", agent: "verifier", task: <filled prompt>, model: <resolved>, cli: <resolved> }] }
    ```
 
-f. **Parse the result.** Parse the dispatched final message via `pi-flow helper execute-plan/scripts/parse-verifier-report`. Treat any protocol errors the parser surfaces as `VERDICT: FAIL`.
+f. **Parse the result.** Parse the dispatched final message via `pi-flow helper execute-plan/parse-verifier-report`. Treat any protocol errors the parser surfaces as `VERDICT: FAIL`.
 
 ## Output
 
@@ -44,7 +44,7 @@ The protocol returns a structured result:
 - An overall `VERDICT: PASS|FAIL`.
 - OR a structured protocol-error reason that the caller treats as `VERDICT: FAIL`.
 
-The output is the JSON shape produced by `pi-flow helper execute-plan/scripts/parse-verifier-report`, with fields:
+The output is the JSON shape produced by `pi-flow helper execute-plan/parse-verifier-report`, with fields:
 
 - `verdict`
 - `per_criterion`

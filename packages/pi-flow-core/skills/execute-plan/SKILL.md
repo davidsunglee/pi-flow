@@ -9,7 +9,7 @@ description: "Executes a structured plan file from docs/plans/. Decomposes tasks
 
 Before starting execution, determine the workspace.
 
-**Auto-detect:** Run `pi-flow helper _shared/scripts/git-workspace-status --working-dir <working-dir>`. The helper emits a JSON object with `is_git_repo`, `is_worktree`, `is_feature_branch`, `current_branch`, `branch_label`, and `workspace_path` fields. If `.is_git_repo` is `false`, stop with: `execute-plan requires a git repository.` Otherwise consume `IS_WORKTREE`, `IS_FEATURE_BRANCH`, `CURRENT_BRANCH`, `BRANCH_LABEL`, and `WORKSPACE_PATH` from the helper output.
+**Auto-detect:** Run `pi-flow helper _shared/git-workspace-status --working-dir <working-dir>`. The helper emits a JSON object with `is_git_repo`, `is_worktree`, `is_feature_branch`, `current_branch`, `branch_label`, and `workspace_path` fields. If `.is_git_repo` is `false`, stop with: `execute-plan requires a git repository.` Otherwise consume `IS_WORKTREE`, `IS_FEATURE_BRANCH`, `CURRENT_BRANCH`, `BRANCH_LABEL`, and `WORKSPACE_PATH` from the helper output.
 
 **If `IS_WORKTREE=1` or `IS_FEATURE_BRANCH=1`:** Reuse the existing workspace, but log and safety-check it first.
 
@@ -58,7 +58,7 @@ If the user picks "current workspace" during customization, proceed without a wo
 
 ## Step 2: Validate the plan
 
-Run `pi-flow helper execute-plan/scripts/extract-plan-tasks --plan <PLAN_PATH>`; on non-zero exit, surface the stderr JSON `missing_required_section` / `dependency_unknown_target` / `dependency_cycle` errors verbatim and stop. Suggest re-running `generate-plan`.
+Run `pi-flow helper execute-plan/extract-plan-tasks --plan <PLAN_PATH>`; on non-zero exit, surface the stderr JSON `missing_required_section` / `dependency_unknown_target` / `dependency_cycle` errors verbatim and stop. Suggest re-running `generate-plan`.
 
 The plan may also contain an optional `## Test Command` section with a bash command for running the project's test suite. If present, extract the command (the content of the bash fenced code block inside `## Test Command`) for use in later steps (baseline capture and integration tests). If absent, test command detection falls back to auto-detect in Step 3.
 
@@ -99,7 +99,7 @@ Ready to execute:
 
 **Test command resolution order:**
 1. If the plan contains a `## Test Command` section (extracted in Step 2), use that command.
-2. Otherwise, run `pi-flow helper _shared/scripts/detect-test-command --working-dir <working-dir>` and consume the helper's `.command` field.
+2. Otherwise, run `pi-flow helper _shared/detect-test-command --working-dir <working-dir>` and consume the helper's `.command` field.
 3. If neither yields a command, show "not detected" in the settings. During customize, allow the user to provide a command or confirm no tests.
 
 **If `s`:** Accept all defaults and proceed to Step 4.
@@ -147,7 +147,7 @@ If a task has no tier specified, apply this rubric:
 - Touches multiple files with integration concerns → `standard`
 - Requires design judgment or broad codebase understanding → `capable`
 
-Resolve `(model, cli)` per task by invoking `pi-flow helper _shared/scripts/resolve-model-dispatch --tier <task-tier> --agent coder`. The full procedure is documented in [`skills/_shared/model-tier-resolution.md`](../_shared/model-tier-resolution.md). Surface byte-equal canonical Template (1)–(4) on non-zero exit and stop the call site.
+Resolve `(model, cli)` per task by invoking `pi-flow helper _shared/resolve-model-dispatch --tier <task-tier> --agent coder`. The full procedure is documented in [`skills/_shared/model-tier-resolution.md`](../_shared/model-tier-resolution.md). Surface byte-equal canonical Template (1)–(4) on non-zero exit and stop the call site.
 
 Always pass `cli` explicitly on every orchestration call, even when it resolves to `"pi"`.
 
@@ -159,7 +159,7 @@ Before the first wave, run the integration suite via `test-runner` (see the shar
 
 #### Baseline recording
 
-After artifact readback, run `pi-flow helper _shared/scripts/reconcile-test-run --artifact <baseline-artifact-path> --mode capture > <working-dir>/docs/test-runs/<plan-name>/baseline-failures.json`. Treat that file as `<baseline-json-path>` for every later reconcile call. Read `.classification` (`clean` | `stable-failures-only` | `contains-non-reconcilable-evidence`) and `.baseline_failures` from the saved JSON, then route to the per-classification user prompts below.
+After artifact readback, run `pi-flow helper _shared/reconcile-test-run --artifact <baseline-artifact-path> --mode capture > <working-dir>/docs/test-runs/<plan-name>/baseline-failures.json`. Treat that file as `<baseline-json-path>` for every later reconcile call. Read `.classification` (`clean` | `stable-failures-only` | `contains-non-reconcilable-evidence`) and `.baseline_failures` from the saved JSON, then route to the per-classification user prompts below.
 
 **`clean`:** record `baseline_failures := ∅` and proceed.
 
@@ -196,8 +196,8 @@ See [`integration-regression-gate.md`](integration-regression-gate.md) for the b
 > The orchestrator MUST NOT run the configured test command itself or synthesize a `test-runner` artifact from locally-run output. All integration-test execution and artifact writing must be performed by the `test-runner` subagent. The orchestrator may only:
 > - Create the parent directory `docs/test-runs/<plan-name>/` (via `mkdir -p`).
 > - Dispatch `test-runner` via `subagent_run_serial` with the filled `test-runner-prompt.md` template.
-> - Parse the artifact handoff marker via `pi-flow helper _shared/scripts/parse-test-runner-artifact`.
-> - Validate the artifact format via the same `pi-flow helper _shared/scripts/parse-test-runner-artifact` helper, which performs both the handoff parse and the structural format checks (required-header presence and order, `EXIT_CODE` integer parse, `FAILING_IDENTIFIERS_COUNT` / `NON_RECONCILABLE_COUNT` integer parse and count reconciliation, raw-output marker presence).
+> - Parse the artifact handoff marker via `pi-flow helper _shared/parse-test-runner-artifact`.
+> - Validate the artifact format via the same `pi-flow helper _shared/parse-test-runner-artifact` helper, which performs both the handoff parse and the structural format checks (required-header presence and order, `EXIT_CODE` integer parse, `FAILING_IDENTIFIERS_COUNT` / `NON_RECONCILABLE_COUNT` integer parse and count reconciliation, raw-output marker presence).
 > - Reconcile the parsed `FAILING_IDENTIFIERS:` and `NON_RECONCILABLE_FAILURES:` against the frozen `baseline_failures` per `integration-regression-gate.md`.
 >
 > This boundary applies identically at Step 7 (baseline), Step 12 (post-wave), the Step 12 Debugger-first re-test, and Step 16 (final-gate). See `skills/_shared/orchestrator-verification-boundary.md` for the shared statement.
@@ -225,11 +225,11 @@ If executing directly in the current workspace (not a worktree), emit this warni
 
 For each wave, dispatch all tasks in parallel via `subagent_run_parallel`; in sequential mode, dispatch one at a time via `subagent_run_serial`. Each task entry has shape `{ name: "<task-N>: <task-title>", agent: "coder", task: "<self-contained prompt>", model: "<resolved>", cli: "<resolved>" }`.
 
-For each result, run `pi-flow helper execute-plan/scripts/parse-coder-report --report <results[i].finalMessage path>`; route on `.status` (`DONE` / `DONE_WITH_CONCERNS` / `NEEDS_CONTEXT` / `BLOCKED`). `subagent_run_parallel` preserves input-task order.
+For each result, run `pi-flow helper execute-plan/parse-coder-report --report <results[i].finalMessage path>`; route on `.status` (`DONE` / `DONE_WITH_CONCERNS` / `NEEDS_CONTEXT` / `BLOCKED`). `subagent_run_parallel` preserves input-task order.
 
 ### Assembling worker prompts
 
-For each task, fill `$(pi-flow template execute-plan/execute-task-prompt)` via `pi-flow helper execute-plan/scripts/assemble-coder-prompt --task-spec <path-or-`-`> --context <path-or-`-`> --working-dir <abs-dir> --tdd-block <enabled|disabled> --output <filled-prompt-path>` (`enabled` inlines `tdd-block.md`; `disabled` substitutes empty). The helper enforces single-pass literal substitution and fails closed on any unreplaced placeholder.
+For each task, fill `$(pi-flow template execute-plan/execute-task-prompt)` via `pi-flow helper execute-plan/assemble-coder-prompt --task-spec <path-or-`-`> --context <path-or-`-`> --working-dir <abs-dir> --tdd-block <enabled|disabled> --output <filled-prompt-path>` (`enabled` inlines `tdd-block.md`; `disabled` substitutes empty). The helper enforces single-pass literal substitution and fails closed on any unreplaced placeholder.
 
 The filled template becomes the `coder` task prompt; it already includes self-review, escalation, code-organization, and report-format guidance — do not add these separately.
 
@@ -248,7 +248,7 @@ After the wave drains, Step 10 handles `BLOCKED` first then `DONE_WITH_CONCERNS`
 
 ### Boundary: orchestrator MUST NOT verify coder output itself
 
-> After a `coder` returns `DONE` or `DONE_WITH_CONCERNS`, the orchestrator MUST NOT run local grep / Python / assertion scripts, spot checks, or final-acceptance checks to decide whether the implementation satisfies the task. The only sanctioned path for substantive task verification is dispatching a fresh `verifier` subagent (Step 11) with the planner-authored acceptance criteria and `Verify:` recipes, then mechanically parsing the verifier's protocol output via `pi-flow helper execute-plan/scripts/parse-verifier-report`.
+> After a `coder` returns `DONE` or `DONE_WITH_CONCERNS`, the orchestrator MUST NOT run local grep / Python / assertion scripts, spot checks, or final-acceptance checks to decide whether the implementation satisfies the task. The only sanctioned path for substantive task verification is dispatching a fresh `verifier` subagent (Step 11) with the planner-authored acceptance criteria and `Verify:` recipes, then mechanically parsing the verifier's protocol output via `pi-flow helper execute-plan/parse-verifier-report`.
 > Forbidden behaviors (illustrative, not exhaustive): writing Python / grep / `Read` scripts that independently check criteria; running spot checks against implemented files to decide whether criteria pass; synthesizing a "final acceptance" script that re-checks task-specific expected strings; interpreting local command output as evidence that a task passed.
 > See `skills/_shared/orchestrator-verification-boundary.md` for the shared statement that anchors this rule across `execute-plan`, `refine-code`, and `refine-plan`.
 
@@ -258,16 +258,16 @@ After the wave drains, Step 10 handles `BLOCKED` first then `DONE_WITH_CONCERNS`
 >
 > | Activity | Helper |
 > |---|---|
-> | Plan parsing (task spec, files, criteria, recipes) | `pi-flow helper execute-plan/scripts/extract-plan-tasks` |
-> | Coder prompt assembly | `pi-flow helper execute-plan/scripts/assemble-coder-prompt` |
-> | Verifier prompt assembly | `pi-flow helper execute-plan/scripts/assemble-verifier-prompt` |
-> | Diff context generation | `pi-flow helper execute-plan/scripts/collect-diff-context` |
+> | Plan parsing (task spec, files, criteria, recipes) | `pi-flow helper execute-plan/extract-plan-tasks` |
+> | Coder prompt assembly | `pi-flow helper execute-plan/assemble-coder-prompt` |
+> | Verifier prompt assembly | `pi-flow helper execute-plan/assemble-verifier-prompt` |
+> | Diff context generation | `pi-flow helper execute-plan/collect-diff-context` |
 > | Verifier-visible file-set assembly | orchestrator-computed (union rule, Step 11.2) |
-> | Model-tier resolution | `pi-flow helper _shared/scripts/resolve-model-dispatch` |
-> | Test-runner artifact parsing | `pi-flow helper _shared/scripts/parse-test-runner-artifact` |
-> | Verifier report parsing | `pi-flow helper execute-plan/scripts/parse-verifier-report` |
-> | Per-plan test-runs cleanup (success exit only) | `pi-flow helper _shared/scripts/cleanup-test-runs` |
-> | Post-helper Python bytecode cache cleanup | `pi-flow helper _shared/scripts/cleanup-pycache` |
+> | Model-tier resolution | `pi-flow helper _shared/resolve-model-dispatch` |
+> | Test-runner artifact parsing | `pi-flow helper _shared/parse-test-runner-artifact` |
+> | Verifier report parsing | `pi-flow helper execute-plan/parse-verifier-report` |
+> | Per-plan test-runs cleanup (success exit only) | `pi-flow helper _shared/cleanup-test-runs` |
+> | Post-helper Python bytecode cache cleanup | `pi-flow helper _shared/cleanup-pycache` |
 > | Completion bookkeeping (todo close, branch finish) | native git / todo tool |
 
 ## Step 10: Wave gate: blocked and concerns handling
@@ -370,7 +370,7 @@ The gate exits when `BLOCKED_TASKS` is empty and `CONCERNED_TASKS` is either emp
 
 Verifier dispatches for the wave run in parallel, bounded by the pi-interactive-subagent `MAX_PARALLEL_HARD_CAP` cap (see Step 5). Issue all verifier subagents concurrently up to the cap and wait for all of them to return before parsing in Step 11.3.
 
-**Verifier-visible file set (`{MODIFIED_FILES}`).** For each task in the wave, run `pi-flow helper execute-plan/scripts/compute-verifier-file-set --task-files <task-files-json> --worker-files <worker-files-json> --observed-status <git-status-output-path-or-dash> --observed-diff-paths <diff-paths-json> --wave-shape <single-task|parallel-multi-task>`; consume `.verifier_visible_files` as `{MODIFIED_FILES}`. The `--observed-status` argument is the path to a file holding the verbatim `git status --porcelain` output, or `-` to stream that output via stdin (matches the helper's `PATH_OR_DASH` contract); never pass the porcelain text directly as the argument value. The prompt records that the set is orchestrator-assembled, not the worker's self-report.
+**Verifier-visible file set (`{MODIFIED_FILES}`).** For each task in the wave, run `pi-flow helper execute-plan/compute-verifier-file-set --task-files <task-files-json> --worker-files <worker-files-json> --observed-status <git-status-output-path-or-dash> --observed-diff-paths <diff-paths-json> --wave-shape <single-task|parallel-multi-task>`; consume `.verifier_visible_files` as `{MODIFIED_FILES}`. The `--observed-status` argument is the path to a file holding the verbatim `git status --porcelain` output, or `-` to stream that output via stdin (matches the helper's `PATH_OR_DASH` contract); never pass the porcelain text directly as the argument value. The prompt records that the set is orchestrator-assembled, not the worker's self-report.
 
 **Sub-task carve-out:** Step 10 split-into-sub-tasks dispatches MUST run pre-commit; their changes must remain in the working tree at Step 11 so `git diff HEAD` captures them. (Step 12's commit is the only sanctioned working-tree → committed transition.) If a sub-task's changes were committed before Step 11 (protocol violation), substitute `git diff <pre-subtask-commit>..HEAD -- <modified files>` for those criteria.
 
@@ -411,7 +411,7 @@ git commit -m "feat(plan): wave <N> - <plan_goal_summary>
 
 **Skip if:** Integration test is disabled (Step 3 settings) or no test command is available.
 
-Run the integration suite via `test-runner` (see Step 7's shared dispatch subsection) with `{ARTIFACT_PATH} = <working-dir>/docs/test-runs/<plan-name>/wave-<N>-attempt-<K>.log` (`<K>` is a 1-based attempt counter for the wave, incremented on each Debugger-first re-test) and `{PHASE_LABEL} = wave-<N>-attempt-<K>`. Run `pi-flow helper _shared/scripts/reconcile-test-run --artifact <wave-artifact-path> --mode reconcile --baseline-failures <baseline-json-path>`; consume `.current_failing_stable`, `.current_non_reconcilable`, `.current_non_baseline_stable`, and `.classification` (`pass`|`fail`). Render the [`integration-regression-gate.md`](integration-regression-gate.md) three-section summary from those fields.
+Run the integration suite via `test-runner` (see Step 7's shared dispatch subsection) with `{ARTIFACT_PATH} = <working-dir>/docs/test-runs/<plan-name>/wave-<N>-attempt-<K>.log` (`<K>` is a 1-based attempt counter for the wave, incremented on each Debugger-first re-test) and `{PHASE_LABEL} = wave-<N>-attempt-<K>`. Run `pi-flow helper _shared/reconcile-test-run --artifact <wave-artifact-path> --mode reconcile --baseline-failures <baseline-json-path>`; consume `.current_failing_stable`, `.current_non_reconcilable`, `.current_non_baseline_stable`, and `.classification` (`pass`|`fail`). Render the [`integration-regression-gate.md`](integration-regression-gate.md) three-section summary from those fields.
 
 **Pass (`.classification == "pass"`):** proceed to wave `<N+1>` (or Step 15/16 if final).
 
@@ -471,7 +471,7 @@ Options:
 
 When execution stops early: leave the plan file in `docs/plans/` for reference and report which tasks completed, failed, and remain.
 
-**Most recent integration run failures:** if any `test-runner` artifact exists (post-wave `wave-<N>-attempt-<K>.log` or `final-gate-<seq>.log`), run `pi-flow helper _shared/scripts/reconcile-test-run --artifact <most-recent-artifact-path> --mode reconcile --baseline-failures <baseline-json-path>`; render `.current_non_baseline_stable` and `.current_non_reconcilable` into the report sections below:
+**Most recent integration run failures:** if any `test-runner` artifact exists (post-wave `wave-<N>-attempt-<K>.log` or `final-gate-<seq>.log`), run `pi-flow helper _shared/reconcile-test-run --artifact <most-recent-artifact-path> --mode reconcile --baseline-failures <baseline-json-path>`; render `.current_non_baseline_stable` and `.current_non_reconcilable` into the report sections below:
 
 ```
 ### Most recent integration run failures (unresolved)
@@ -492,7 +492,7 @@ After all waves complete successfully (and if review was enabled in Step 3):
 
 1. **Gather inputs:** `BASE_SHA` = `PRE_EXECUTION_SHA` (Step 8); `HEAD_SHA` = `git rev-parse HEAD`; Description = plan Goal; Requirements = full plan; Max iterations = Step 3 setting (default 3); Working directory = current workspace; Review output path = `docs/reviews/<plan-name>-code-review`.
 2. **Invoke the `refine-code` skill** with those inputs.
-3. **Handle the result:** Run `pi-flow helper refine-code/scripts/parse-refine-code-summary --summary <path-or-`-`>` to obtain `{status, iterations, issues_found_total, issues_found_critical, issues_found_important, issues_found_minor, issues_fixed, issues_remaining, review_file, remaining_issues, failure_reason}`. Route on `status`: `approved` → include iteration count and review file in the Step 16 report; `approved_with_concerns` → also point the user at the review file's `### Outcome` reasoning; `not_approved_within_budget` → present `remaining_issues` plus the menu below; `failed` → surface `failure_reason` and stop per Step 14.
+3. **Handle the result:** Run `pi-flow helper refine-code/parse-refine-code-summary --summary <path-or-`-`>` to obtain `{status, iterations, issues_found_total, issues_found_critical, issues_found_important, issues_found_minor, issues_fixed, issues_remaining, review_file, remaining_issues, failure_reason}`. Route on `status`: `approved` → include iteration count and review file in the Step 16 report; `approved_with_concerns` → also point the user at the review file's `### Outcome` reasoning; `not_approved_within_budget` → present `remaining_issues` plus the menu below; `failed` → surface `failure_reason` and stop per Step 14.
 
    **`not_approved_within_budget` menu:**
    ```
@@ -515,7 +515,7 @@ Otherwise, always run this gate: re-run the full integration suite and confirm n
 
 **Gate protocol:**
 1. **Re-dispatch the integration suite via `test-runner`** per Step 7's shared dispatch subsection with `{ARTIFACT_PATH} = <working-dir>/docs/test-runs/<plan-name>/final-gate-<seq>.log` (where `<seq>` is a 1-based counter incremented on every gate entry) and `{PHASE_LABEL} = final-gate-<seq>`. Read back the artifact.
-2. **Compute the per-run inputs:** Run `pi-flow helper _shared/scripts/reconcile-test-run --artifact <final-gate-artifact-path> --mode reconcile --baseline-failures <baseline-json-path>`; consume `.current_failing_stable`, `.current_non_reconcilable`, `.current_non_baseline_stable`, `.classification`.
+2. **Compute the per-run inputs:** Run `pi-flow helper _shared/reconcile-test-run --artifact <final-gate-artifact-path> --mode reconcile --baseline-failures <baseline-json-path>`; consume `.current_failing_stable`, `.current_non_reconcilable`, `.current_non_baseline_stable`, `.classification`.
 3. **Gate on `current_non_baseline_stable ∪ current_non_reconcilable`:** if both are empty, the gate passes — proceed to `### 1. Cleanup`. Otherwise the plan cannot be marked complete: render the three-section [User-facing summary](integration-regression-gate.md#user-facing-summary-format) with header `⚠️ Final completion blocked: current integration failures remain.` and a trailing note that both sets must be empty, then present:
    ```
    Options:
@@ -534,7 +534,7 @@ Otherwise, always run this gate: re-run the full integration suite and confirm n
 **Precondition:** `current_non_baseline_stable ∪ current_non_reconcilable` is empty AND this run reached this substep via the final-gate success exit (never via any `(x) Stop execution` path; every stop exit leaves `docs/test-runs/<plan-name>/` in place so the user can inspect run artifacts). Delete the per-plan test-runs directory via the sanctioned helper (argument validation is the safety surface — see the helper for the exact validation contract):
 
 ```bash
-pi-flow helper _shared/scripts/cleanup-test-runs docs/test-runs/<plan-name>
+pi-flow helper _shared/cleanup-test-runs docs/test-runs/<plan-name>
 ```
 
 ### 2. Close linked todo

@@ -107,7 +107,7 @@ Set `STARTING_ERA = max_existing + 1`. If no matches found, `STARTING_ERA = 1`.
 
 Read [refine-plan-prompt.md](refine-plan-prompt.md) in this directory.
 
-Fill `refine-plan-prompt.md` by invoking `pi-flow helper refine-plan/scripts/fill-refine-plan-prompt --plan-path "<PLAN_PATH from Step 1>" --task-artifact "<Task artifact line or empty>" --source-todo "<Source todo line or empty>" --source-spec "<Source spec line or empty>" --scout-brief "<Scout brief line or empty>" --original-spec-inline <path-to-task-description-text-or--for-stdin> --structural-only-note <path-to-structural-only-note-text-or--for-stdin> --max-iterations <MAX_ITERATIONS> --starting-era <STARTING_ERA> --review-output-path <REVIEW_OUTPUT_PATH> --working-dir <WORKING_DIR> --model-matrix <path-to-model-matrix-json> --carry-over-review "<CARRY_OVER_REVIEW or empty>" --output <filled-prompt-path>`. The helper enforces single-pass literal substitution and fails closed on any unreplaced placeholder. Pass the `CARRY_OVER_REVIEW` value (path or empty string) unchanged — whatever value Step 1 received (caller-set or internally re-set by Step 10) is threaded through verbatim.
+Fill `refine-plan-prompt.md` by invoking `pi-flow helper refine-plan/fill-refine-plan-prompt --plan-path "<PLAN_PATH from Step 1>" --task-artifact "<Task artifact line or empty>" --source-todo "<Source todo line or empty>" --source-spec "<Source spec line or empty>" --scout-brief "<Scout brief line or empty>" --original-spec-inline <path-to-task-description-text-or--for-stdin> --structural-only-note <path-to-structural-only-note-text-or--for-stdin> --max-iterations <MAX_ITERATIONS> --starting-era <STARTING_ERA> --review-output-path <REVIEW_OUTPUT_PATH> --working-dir <WORKING_DIR> --model-matrix <path-to-model-matrix-json> --carry-over-review "<CARRY_OVER_REVIEW or empty>" --output <filled-prompt-path>`. The helper enforces single-pass literal substitution and fails closed on any unreplaced placeholder. Pass the `CARRY_OVER_REVIEW` value (path or empty string) unchanged — whatever value Step 1 received (caller-set or internally re-set by Step 10) is threaded through verbatim.
 
 ### Step 7.5: Compose structural-only note
 
@@ -142,7 +142,7 @@ Validate every parsed path with `test -s <path>` (non-empty regular file). On an
 
 Run this validation only on `STATUS: approved`, `STATUS: approved_with_concerns`, or `STATUS: not_approved_within_budget`; skip on `STATUS: failed` (no review file is guaranteed to exist on failure).
 
-For each review file path in the `## Review Files` list parsed in Step 9, invoke `pi-flow helper _shared/scripts/validate-review-provenance --review-file <path> --allowed-tiers crossProvider.capable,capable`. On non-zero exit, set `STATUS = failed` with reason `review provenance validation failed at <path>: <specific check>` (where `<specific check>` is the `failure` field from the script's stderr JSON) and skip to Step 11. Do NOT proceed to Step 10's commit gate after a validation failure.
+For each review file path in the `## Review Files` list parsed in Step 9, invoke `pi-flow helper _shared/validate-review-provenance --review-file <path> --allowed-tiers crossProvider.capable,capable`. On non-zero exit, set `STATUS = failed` with reason `review provenance validation failed at <path>: <specific check>` (where `<specific check>` is the `failure` field from the script's stderr JSON) and skip to Step 11. Do NOT proceed to Step 10's commit gate after a validation failure.
 
 When all paths pass validation, proceed to Step 9.7.
 
@@ -153,7 +153,7 @@ Run this validation only when the parsed `STATUS` is `approved` or `approved_wit
 Run:
 
 ```bash
-pi-flow helper execute-plan/scripts/extract-plan-tasks --plan "<PLAN_PATH from Step 1>" > /dev/null
+pi-flow helper execute-plan/extract-plan-tasks --plan "<PLAN_PATH from Step 1>" > /dev/null
 ```
 
 Plan parsing via `extract-plan-tasks.py` is a sanctioned mechanical activity per [`skills/_shared/orchestrator-verification-boundary.md`](../_shared/orchestrator-verification-boundary.md) — this is parseability validation, not a re-judgment of the plan-refiner's verdict.
@@ -189,9 +189,9 @@ On exit 0, proceed to Step 10.
 >   recomputed.
 >
 > The sanctioned post-coordinator paths are: parse `finalMessage` (Step 9), validate each
-> review file's provenance via `pi-flow helper _shared/scripts/validate-review-provenance`
+> review file's provenance via `pi-flow helper _shared/validate-review-provenance`
 > (Step 9.5), validate executable-plan parseability via
-> `pi-flow helper execute-plan/scripts/extract-plan-tasks` (Step 9.7), and route on
+> `pi-flow helper execute-plan/extract-plan-tasks` (Step 9.7), and route on
 > `STATUS:` to Step 10's commit gate. Step 9.7 MUST run before any `approved` or
 > `approved_with_concerns` verdict reaches Step 10, so that a plan declared approved by
 > this skill is always executable by the same parser `execute-plan` uses. See
@@ -200,7 +200,7 @@ On exit 0, proceed to Step 10.
 >
 > Post-helper bookkeeping: any Python bytecode caches (`__pycache__`) left behind by
 > helper-script invocations under `skills/refine-plan/scripts/` are removed via
-> `pi-flow helper _shared/scripts/cleanup-pycache <path>`, never via ad hoc
+> `pi-flow helper _shared/cleanup-pycache <path>`, never via ad hoc
 > `find … -exec rm` commands.
 
 ## Step 10

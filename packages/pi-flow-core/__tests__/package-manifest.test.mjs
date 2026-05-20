@@ -133,6 +133,39 @@ test('no python3 ~/.pi/agent/skills shell invocations remain', () => {
   assert.deepEqual(violations, [], `Found python3 ~/.pi/agent/skills/ invocations:\n${violations.join('\n')}`);
 });
 
+test('every pi-flow helper id in skill markdown has exactly one slash and resolves on disk', () => {
+  const skillsDir = pkgPath('skills');
+  const mdFiles = walkMdFiles(skillsDir).filter(
+    p => !p.includes('/tests/fixtures/') && !p.includes('/__pycache__/')
+  );
+  const violations = [];
+  const idRegex = /pi-flow helper ([^\s`'")]+)/g;
+  for (const file of mdFiles) {
+    const lines = readFileSync(file, 'utf8').split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      let m;
+      idRegex.lastIndex = 0;
+      while ((m = idRegex.exec(line)) !== null) {
+        const id = m[1];
+        const parts = id.split('/');
+        if (parts.length !== 2 || parts[0] === '' || parts[1] === '' || parts[0] === '..' || parts[1] === '..') {
+          violations.push(`${file}:${i + 1}: invalid id shape: ${id}`);
+          continue;
+        }
+        const [location, name] = parts;
+        const scriptPath = location === '_shared'
+          ? pkgPath('skills', '_shared', 'scripts', `${name}.py`)
+          : pkgPath('skills', location, 'scripts', `${name}.py`);
+        if (!existsSync(scriptPath)) {
+          violations.push(`${file}:${i + 1}: unresolved id ${id} (searched ${scriptPath})`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(violations, [], `Broken pi-flow helper ids:\n${violations.join('\n')}`);
+});
+
 test('helper-runner invocations exist in every path-rewritten skill', () => {
   const missing = [];
   for (const skill of HELPER_RUNNER_SKILLS) {
@@ -246,22 +279,13 @@ test('pi CLI discovery probe — best-effort', () => {
     return;
   }
 
-  const result = spawnSync('pi', ['-e', 'pi-flow-core'], { encoding: 'utf8' });
-  if (result.status !== 0) {
-    console.log(JSON.stringify({
-      skipped: 'pi -e pi-flow-core failed',
-      reason: 'Pi loader contract is an open question in the spec (see Open Questions #1 and #2); manifest-shape and glob-resolution checks above are the deterministic proxy',
-      stderr: result.stderr?.trim(),
-    }));
-    return;
-  }
-
-  const output = result.stdout + result.stderr;
-
-  for (const skill of SKILL_NAMES) {
-    assert.ok(
-      output.includes(skill),
-      `Expected skill '${skill}' to appear in 'pi -e pi-flow-core' output`
-    );
-  }
+  // `pi -e <path>` loads the extension at the given filesystem path. Pass the
+  // absolute package directory rather than the package name so Pi does not
+  // resolve it relative to the test runner's cwd.
+  const result = spawnSync('pi', ['-e', PKG_DIR, '--version'], { encoding: 'utf8' });
+  assert.equal(
+    result.status,
+    0,
+    `pi -e ${PKG_DIR} exited ${result.status} when pi is on PATH; stderr: ${result.stderr?.trim()}`
+  );
 });
