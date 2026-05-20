@@ -18,11 +18,13 @@
   },
   "peerDependencies": {
     "pi-interactive-subagent": "*",
-    "@earendil-works/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "*",
-    "pi-interactive-subagent": "*"
+    "pi-interactive-subagent": "*",
+    "typebox": "*"
   },
   "pi": {
     "skills": ["skills/*/SKILL.md"],

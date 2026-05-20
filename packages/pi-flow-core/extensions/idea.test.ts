@@ -47,7 +47,10 @@ function bootExtension() {
   return { commands, tools, command, tool };
 }
 
-function makeCtx(cwd: string, opts: { hasUI?: boolean; inputResult?: string } = {}) {
+function makeCtx(
+  cwd: string,
+  opts: { hasUI?: boolean; inputResult?: string | undefined; inputReturnsUndefined?: boolean } = {},
+) {
   const notifyCalls: NotifyCall[] = [];
   const inputCalls: Array<{ title: string; placeholder?: string }> = [];
   return {
@@ -59,8 +62,9 @@ function makeCtx(cwd: string, opts: { hasUI?: boolean; inputResult?: string } = 
       notify(message: string, level: NotifyLevel) {
         notifyCalls.push({ message, level });
       },
-      async input(title: string, placeholder?: string) {
+      async input(title: string, placeholder?: string): Promise<string | undefined> {
         inputCalls.push({ title, placeholder });
+        if (opts.inputReturnsUndefined) return undefined;
         return opts.inputResult ?? "";
       },
     },
@@ -143,6 +147,27 @@ test("empty-args interactive prompt captures prompted title", async () => {
   ]);
   const parsed = await readOnlyArtifact(sandbox);
   assert.equal(parsed.title, "Title from prompt");
+});
+
+test("cancelled interactive prompt (undefined result) writes nothing and notifies user", async () => {
+  const sandbox = mkSandbox("pi-flow-idea-cancel-");
+  const { command } = bootExtension();
+  const ctx = makeCtx(sandbox, { hasUI: true, inputReturnsUndefined: true });
+
+  await command.options.handler("", ctx);
+
+  assert.deepEqual(await listTodoFiles(sandbox), []);
+  assert.equal(ctx.inputCalls.length, 1);
+});
+
+test("empty interactive prompt result (user cleared field) writes nothing", async () => {
+  const sandbox = mkSandbox("pi-flow-idea-empty-prompt-");
+  const { command } = bootExtension();
+  const ctx = makeCtx(sandbox, { hasUI: true, inputResult: "   " });
+
+  await command.options.handler("", ctx);
+
+  assert.deepEqual(await listTodoFiles(sandbox), []);
 });
 
 test("empty-args without UI rejects with usage message and writes nothing", async () => {

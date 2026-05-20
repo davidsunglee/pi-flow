@@ -339,6 +339,20 @@ test('typebox is declared as a runtime dependency (not peer-only) since extensio
   );
 });
 
+test('typebox is declared in peerDependencies and devDependencies as the manifest contract requires', () => {
+  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  assert.equal(
+    pkg.peerDependencies?.typebox,
+    '*',
+    'peerDependencies.typebox must be "*"'
+  );
+  assert.equal(
+    pkg.devDependencies?.typebox,
+    '*',
+    'devDependencies.typebox must be "*"'
+  );
+});
+
 test('packaged-install smoke: extensions/idea.ts resolves typebox via pi-flow-core local node_modules', () => {
   // pnpm only links a package into a workspace's local node_modules when it's
   // declared as a direct (non-peer) dependency. If typebox were peer-only, this

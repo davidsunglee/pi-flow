@@ -157,7 +157,12 @@ export function registerIdea(pi: ExtensionAPI): void {
       let seed = args.trim();
       if (seed.length === 0) {
         if (ctx.hasUI) {
-          seed = await ctx.ui.input("Capture idea", "Title (or first line of body)");
+          const prompted = await ctx.ui.input("Capture idea", "Title (or first line of body)");
+          if (prompted === undefined || prompted.trim().length === 0) {
+            ctx.ui.notify("/flow:idea cancelled — no idea captured.", "info");
+            return;
+          }
+          seed = prompted.trim();
         } else {
           ctx.ui.notify(
             "/flow:idea requires a title or body. Usage: /flow:idea <title or prose>",
