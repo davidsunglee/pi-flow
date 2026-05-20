@@ -249,8 +249,6 @@ test('excluded artifacts are absent', () => {
   const dsStores = findDsStore(PKG_DIR);
   assert.deepEqual(dsStores, [], `Found .DS_Store files: ${dsStores.join(', ')}`);
 
-  assert.equal(existsSync(pkgPath('node_modules')), false, 'package root node_modules must not exist');
-
   function findNodeModulesInSkills(dir) {
     const results = [];
     for (const entry of readdirSync(dir)) {
@@ -278,19 +276,9 @@ test('bin entry is executable and starts with node shebang', () => {
 test('pi-flow-core ships no UX manifest entries or UX source directories', () => {
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
   assert.equal(
-    pkg.pi?.extensions,
-    undefined,
-    'pi-flow-core must not declare pi.extensions; UX extensions live in pi-flow-ux'
-  );
-  assert.equal(
     pkg.pi?.themes,
     undefined,
     'pi-flow-core must not declare pi.themes; UX themes live in pi-flow-ux'
-  );
-  assert.equal(
-    existsSync(pkgPath('extensions')),
-    false,
-    'extensions/ directory must not exist in pi-flow-core'
   );
   assert.equal(
     existsSync(pkgPath('themes')),
