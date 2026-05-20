@@ -60,40 +60,60 @@ export function parseArgs(rawArgs: string): ParsedArgs {
 const TODO_RE = /^(TODO-)?([0-9a-f]{8})$/;
 const DOCS_DIR_RE = /docs\/(briefs|specs|plans|reviews)\//;
 
+function isArtifactToken(t: string): boolean {
+  if (TODO_RE.test(t)) return true;
+  if (t.endsWith('.md') && DOCS_DIR_RE.test(t)) return true;
+  return false;
+}
+
 export function recognizeExact(skill: SkillKey, rest: string): string | undefined {
   const matrix = EXACT_INPUT_MATRIX[skill];
 
   const tokens = rest === '' ? [] : rest.split(/\s+/);
-  const firstFlagIdx = tokens.findIndex(t => t.startsWith('--'));
-  const positionalTokens = firstFlagIdx === -1 ? tokens : tokens.slice(0, firstFlagIdx);
-  const hasFlags = firstFlagIdx !== -1;
 
-  // Empty / flag-only input
-  if (positionalTokens.length === 0) {
+  let positional: string | undefined;
+  let multipleArtifacts = false;
+  let proseFound = false;
+  let prevWasFlag = false;
+  let hasFlags = false;
+
+  for (const t of tokens) {
+    if (t.startsWith('--')) {
+      hasFlags = true;
+      prevWasFlag = true;
+      continue;
+    }
+    if (isArtifactToken(t)) {
+      if (positional !== undefined) multipleArtifacts = true;
+      else positional = t;
+      prevWasFlag = false;
+      continue;
+    }
+    if (prevWasFlag) {
+      // Treat as the preceding flag's value.
+      prevWasFlag = false;
+      continue;
+    }
+    proseFound = true;
+  }
+
+  if (proseFound || multipleArtifacts) return undefined;
+
+  if (positional === undefined) {
     return matrix.empty ? rest : undefined;
   }
 
-  if (positionalTokens.length !== 1) {
-    return undefined;
-  }
-
-  const positional = positionalTokens[0];
-
-  // TODO-<8hex> or bare <8hex>
   const m = positional.match(TODO_RE);
   if (m) {
     if (!matrix.todoId) return undefined;
     return hasFlags ? rest : `TODO-${m[2]}`;
   }
 
-  // docs/<dir>/*.md
-  if (positional.endsWith('.md')) {
-    const dirMatch = positional.match(DOCS_DIR_RE);
-    if (dirMatch) {
-      const dir = dirMatch[1] as 'briefs' | 'specs' | 'plans' | 'reviews';
-      if (!matrix[dir]) return undefined;
-      return hasFlags ? rest : positional;
-    }
+  const dirMatch = positional.match(DOCS_DIR_RE);
+  if (dirMatch) {
+    const dir = dirMatch[1] as 'briefs' | 'specs' | 'plans' | 'reviews';
+    if (!matrix[dir]) return undefined;
+    return hasFlags ? rest : positional;
   }
 
   return undefined;

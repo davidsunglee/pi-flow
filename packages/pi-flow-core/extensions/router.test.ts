@@ -326,6 +326,53 @@ test('routeArgs --exact with wrong artifact dir returns exact-required-but-non-e
   assert.ok(result.reason?.includes('docs/specs/x.md'), 'reason should contain the path');
 });
 
+// Flags before artifacts / prose
+test('recognizeExact scout flag-before-prose returns undefined (prose remains)', () => {
+  assert.equal(
+    recognizeExact('scout', '--tier capable investigate auth'),
+    undefined
+  );
+});
+
+test('recognizeExact execute-plan flag-before-artifact returns rest verbatim', () => {
+  assert.equal(
+    recognizeExact('execute-plan', '--tier capable docs/plans/x.md'),
+    '--tier capable docs/plans/x.md'
+  );
+});
+
+test('recognizeExact scout flag-before-artifact (briefs) returns rest verbatim', () => {
+  assert.equal(
+    recognizeExact('scout', '--tier capable docs/briefs/x.md'),
+    '--tier capable docs/briefs/x.md'
+  );
+});
+
+test('recognizeExact scout flag-with-value then TODO id returns rest verbatim', () => {
+  assert.equal(
+    recognizeExact('scout', '--tier capable TODO-abcd1234'),
+    '--tier capable TODO-abcd1234'
+  );
+});
+
+test('routeArgs scout flag-before-prose routes as interpreted', () => {
+  const result = routeArgs('scout', '--tier capable investigate auth');
+  assert.equal(result.kind, 'interpreted');
+});
+
+test('routeArgs execute-plan --exact with flag-before-artifact routes as exact preserving flag', () => {
+  const result = routeArgs('execute-plan', '--exact --tier capable docs/plans/x.md');
+  assert.deepEqual(result, {
+    kind: 'exact',
+    prompt: 'Use the execute-plan skill. Argument: --tier capable docs/plans/x.md.',
+  });
+});
+
+test('routeArgs scout --exact with flag-before-prose returns exact-required-but-non-exact', () => {
+  const result = routeArgs('scout', '--exact --tier capable investigate auth');
+  assert.equal(result.kind, 'exact-required-but-non-exact');
+});
+
 // Whitespace normalization regressions
 test('parseArgs trims leading/trailing whitespace from rest', () => {
   const result = parseArgs('  TODO-abcd1234  ');
