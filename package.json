@@ -23,6 +23,7 @@
       "packages/pi-flow-core/skills/*/SKILL.md"
     ],
     "extensions": [
+      "packages/pi-flow-core/extensions/commands.ts",
       "packages/pi-flow-ux/extensions/footer.ts",
       "packages/pi-flow-ux/extensions/working/index.ts"
     ],

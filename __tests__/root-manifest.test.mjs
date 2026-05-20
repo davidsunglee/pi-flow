@@ -26,6 +26,7 @@ const EXPECTED_SKILL_NAMES = [
 ];
 
 const EXPECTED_ROOT_EXTENSIONS = [
+  'packages/pi-flow-core/extensions/commands.ts',
   'packages/pi-flow-ux/extensions/footer.ts',
   'packages/pi-flow-ux/extensions/working/index.ts',
 ];
@@ -88,7 +89,7 @@ test('repo root declares a Pi package manifest for git installs', () => {
   assert.deepEqual(
     pkg.pi?.extensions,
     EXPECTED_ROOT_EXTENSIONS,
-    'root pi.extensions must forward the UX extensions from the git checkout root',
+    'root pi.extensions must forward the core commands and UX extensions from the git checkout root',
   );
   assert.deepEqual(
     pkg.pi?.themes,
@@ -115,7 +116,7 @@ test('root pi.skills glob resolves to the shipped workflow skills', () => {
   assert.deepEqual(found, [...EXPECTED_SKILL_NAMES].sort());
 });
 
-test('root pi.extensions and pi.themes resolve to the shipped UX resources', () => {
+test('root pi.extensions and pi.themes resolve to the shipped command and UX resources', () => {
   const pkg = readRootPackage();
 
   assert.deepEqual(pkg.pi?.extensions, EXPECTED_ROOT_EXTENSIONS);
