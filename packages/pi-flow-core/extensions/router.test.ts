@@ -325,3 +325,46 @@ test('routeArgs --exact with wrong artifact dir returns exact-required-but-non-e
   assert.ok(result.reason?.includes('/flow:execute'), 'reason should contain /flow:execute');
   assert.ok(result.reason?.includes('docs/specs/x.md'), 'reason should contain the path');
 });
+
+// Whitespace normalization regressions
+test('parseArgs trims leading/trailing whitespace from rest', () => {
+  const result = parseArgs('  TODO-abcd1234  ');
+  assert.deepEqual(result, { exactFlag: false, rest: 'TODO-abcd1234' });
+});
+
+test('parseArgs collapses repeated spaces after --exact', () => {
+  const result = parseArgs('--exact   TODO-abcd1234');
+  assert.deepEqual(result, { exactFlag: true, rest: 'TODO-abcd1234' });
+});
+
+test('parseArgs whitespace-only input yields empty rest', () => {
+  const result = parseArgs('   ');
+  assert.deepEqual(result, { exactFlag: false, rest: '' });
+});
+
+test('parseArgs truly empty input still yields empty rest', () => {
+  const result = parseArgs('');
+  assert.deepEqual(result, { exactFlag: false, rest: '' });
+});
+
+test('routeArgs TODO-id with leading/trailing whitespace routes as exact', () => {
+  const result = routeArgs('scout', '  TODO-abcd1234  ');
+  assert.deepEqual(result, {
+    kind: 'exact',
+    prompt: 'Use the scout skill. Argument: TODO-abcd1234.',
+  });
+});
+
+test('routeArgs --exact with repeated spaces before TODO-id routes as exact', () => {
+  const result = routeArgs('scout', '--exact   TODO-abcd1234');
+  assert.deepEqual(result, {
+    kind: 'exact',
+    prompt: 'Use the scout skill. Argument: TODO-abcd1234.',
+  });
+});
+
+test('routeArgs whitespace-only args routes as exact for empty-allowed skill', () => {
+  const result = routeArgs('scout', '   ');
+  assert.equal(result.kind, 'exact');
+  assert.equal(result.prompt, 'Use the scout skill. Argument: (none).');
+});

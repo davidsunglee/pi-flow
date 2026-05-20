@@ -43,7 +43,7 @@ export const EXACT_INPUT_MATRIX: Record<
 
 export function parseArgs(rawArgs: string): ParsedArgs {
   if (rawArgs === '') return { exactFlag: false, rest: '' };
-  const tokens = rawArgs.split(/\s+/);
+  const tokens = rawArgs.trim().split(/\s+/).filter(Boolean);
   let exactFlag = false;
   const rest = tokens
     .filter(t => {
