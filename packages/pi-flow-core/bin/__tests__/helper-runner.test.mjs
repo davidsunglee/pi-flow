@@ -3,10 +3,27 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, statSync, rmSync } from 'node:fs';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const CLI = resolve(PACKAGE_ROOT, 'bin/pi-flow.mjs');
+
+const SPAWN_ENV = { ...process.env, PYTHONDONTWRITEBYTECODE: '1' };
+
+function cleanupPycache(root) {
+  if (!existsSync(root)) return;
+  for (const entry of readdirSync(root)) {
+    const full = resolve(root, entry);
+    let stat;
+    try { stat = statSync(full); } catch { continue; }
+    if (!stat.isDirectory()) continue;
+    if (entry === '__pycache__') {
+      rmSync(full, { recursive: true, force: true });
+    } else {
+      cleanupPycache(full);
+    }
+  }
+}
 
 const FIXTURE_MODEL_TIERS = resolve(
   PACKAGE_ROOT,
@@ -18,10 +35,13 @@ const FIXTURE_PLAN = resolve(
 );
 
 function run(...args) {
-  return spawnSync('node', [CLI, ...args], { encoding: 'utf8' });
+  return spawnSync('node', [CLI, ...args], { encoding: 'utf8', env: SPAWN_ENV });
 }
 
 test('helper-runner', (t) => {
+  t.before(() => cleanupPycache(resolve(PACKAGE_ROOT, 'skills')));
+  t.after(() => cleanupPycache(resolve(PACKAGE_ROOT, 'skills')));
+
   t.test('helper resolves known shared script and forwards exit code', () => {
     const r = run(
       'helper', '_shared/resolve-model-dispatch',

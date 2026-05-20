@@ -1,14 +1,41 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync, readdirSync, realpathSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, basename } from 'node:path';
 
 const PKG_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 function pkgPath(...parts) {
   return resolve(PKG_DIR, ...parts);
+}
+
+function expandGlob(pattern, baseDir) {
+  const segments = pattern.split('/');
+  let frontier = [baseDir];
+  for (const seg of segments) {
+    const next = [];
+    for (const cur of frontier) {
+      if (seg === '*') {
+        if (!existsSync(cur)) continue;
+        let entries;
+        try { entries = readdirSync(cur); } catch { continue; }
+        for (const e of entries) {
+          if (e.startsWith('_') || e.startsWith('.')) continue;
+          const full = resolve(cur, e);
+          try {
+            if (statSync(full).isDirectory()) next.push(full);
+          } catch {}
+        }
+      } else {
+        const full = resolve(cur, seg);
+        if (existsSync(full)) next.push(full);
+      }
+    }
+    frontier = next;
+  }
+  return frontier;
 }
 
 const EXPECTED_SKILL_NAMES = [
@@ -63,16 +90,10 @@ test('pi.skills glob through node_modules resolves to the 15 expected SKILL.md f
   const globPattern = pkg.pi?.skills?.[0];
   assert.ok(globPattern, 'pi.skills[0] glob must be defined in package.json');
 
-  // Pattern: node_modules/pi-flow-core/skills/*/SKILL.md
-  const coreSkillsDir = pkgPath('node_modules', 'pi-flow-core', 'skills');
-  assert.ok(existsSync(coreSkillsDir), `Skills dir must exist at ${coreSkillsDir}`);
-
-  const found = readdirSync(coreSkillsDir)
-    .filter(name => {
-      if (name.startsWith('_')) return false;
-      const skillMd = resolve(coreSkillsDir, name, 'SKILL.md');
-      return existsSync(skillMd);
-    })
+  const matches = expandGlob(globPattern, PKG_DIR);
+  const found = matches
+    .filter(p => basename(p) === 'SKILL.md')
+    .map(p => basename(dirname(p)))
     .sort();
 
   const expected = [...EXPECTED_SKILL_NAMES].sort();
@@ -174,9 +195,16 @@ test('pi loader aggregate probe — enumerates all 15 forwarded skills via loadS
   const pi = await import(pathToFileURL(libIndex).href);
   assert.equal(typeof pi.loadSkillsFromDir, 'function', 'pi library must export loadSkillsFromDir');
 
-  // Aggregate package forwards skills through node_modules/pi-flow-core/skills,
-  // matching the pi.skills glob in its package.json.
-  const coreSkillsDir = pkgPath('node_modules', 'pi-flow-core', 'skills');
+  // Derive the forwarded skills directory from the package manifest glob
+  // rather than hard-coding it, so this probe validates what the manifest
+  // actually declares.
+  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  const globPattern = pkg.pi?.skills?.[0];
+  assert.ok(globPattern, 'pi.skills[0] glob must be defined in package.json');
+  const matches = expandGlob(globPattern, PKG_DIR);
+  const skillDirs = [...new Set(matches.map(p => dirname(dirname(p))))];
+  assert.equal(skillDirs.length, 1, `manifest glob must resolve under a single skills root, got: ${skillDirs.join(', ')}`);
+  const coreSkillsDir = skillDirs[0];
   assert.ok(existsSync(coreSkillsDir), `Forwarded skills dir must exist at ${coreSkillsDir}`);
 
   const { skills, diagnostics } = pi.loadSkillsFromDir({ dir: coreSkillsDir, source: 'project' });

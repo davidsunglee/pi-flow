@@ -54,6 +54,46 @@ const HELPER_RUNNER_SKILLS = [
   'finishing-a-development-branch',
 ];
 
+function expandGlob(pattern, baseDir) {
+  // Minimal expander for patterns like "a/*/b/c" where each `*` matches a
+  // single non-hidden directory entry. Returns absolute paths of existing
+  // matches.
+  const segments = pattern.split('/');
+  let frontier = [baseDir];
+  for (const seg of segments) {
+    const next = [];
+    for (const cur of frontier) {
+      if (seg === '*') {
+        if (!existsSync(cur)) continue;
+        let entries;
+        try { entries = readdirSync(cur); } catch { continue; }
+        for (const e of entries) {
+          if (e.startsWith('.')) continue;
+          const full = resolve(cur, e);
+          try {
+            if (statSync(full).isDirectory()) next.push(full);
+          } catch {}
+        }
+      } else {
+        const full = resolve(cur, seg);
+        if (existsSync(full)) next.push(full);
+      }
+    }
+    frontier = next;
+  }
+  return frontier;
+}
+
+function skillDirsFromManifest(pkg, baseDir) {
+  const pattern = pkg.pi?.skills?.[0];
+  if (!pattern) return [];
+  const matches = expandGlob(pattern, baseDir);
+  return matches
+    .filter(p => basename(p) === 'SKILL.md')
+    .map(p => basename(dirname(p)))
+    .sort();
+}
+
 function walkMdFiles(dir) {
   const results = [];
   for (const entry of readdirSync(dir)) {
@@ -77,13 +117,8 @@ test('package.json declares keywords pi-package', () => {
 });
 
 test('pi.skills glob matches exactly 15 SKILL.md files', () => {
-  const skillsDir = pkgPath('skills');
-  const found = readdirSync(skillsDir)
-    .filter(name => {
-      const skillMd = resolve(skillsDir, name, 'SKILL.md');
-      return existsSync(skillMd);
-    })
-    .sort();
+  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  const found = skillDirsFromManifest(pkg, PKG_DIR);
   const expected = [...SKILL_NAMES].sort();
   assert.deepEqual(found, expected, `Expected skill dirs to be ${expected.join(', ')}, got ${found.join(', ')}`);
 });
@@ -245,15 +280,7 @@ test('pi manifest skills glob matches actual SKILL.md placement', () => {
   const globPattern = pkg.pi?.skills?.[0];
   assert.ok(globPattern, 'pi.skills[0] glob must be defined in package.json');
 
-  // Expand the glob manually: skills/*/SKILL.md
-  const skillsDir = pkgPath('skills');
-  const found = readdirSync(skillsDir)
-    .filter(name => {
-      const skillMd = resolve(skillsDir, name, 'SKILL.md');
-      return existsSync(skillMd);
-    })
-    .sort();
-
+  const found = skillDirsFromManifest(pkg, PKG_DIR);
   const expected = [...SKILL_NAMES].sort();
   assert.deepEqual(found, expected, `Resolved skill set must match spec's 15-name list`);
 });
@@ -308,7 +335,16 @@ test('pi loader discovery probe — enumerates all 15 packaged skills via loadSk
   const pi = await import(pathToFileURL(libIndex).href);
   assert.equal(typeof pi.loadSkillsFromDir, 'function', 'pi library must export loadSkillsFromDir');
 
-  const skillsDir = pkgPath('skills');
+  // Derive the skills directory from the package manifest glob rather than
+  // hard-coding it, so this probe validates what the manifest actually
+  // declares.
+  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  const globPattern = pkg.pi?.skills?.[0];
+  assert.ok(globPattern, 'pi.skills[0] glob must be defined in package.json');
+  const matches = expandGlob(globPattern, PKG_DIR);
+  const skillDirs = [...new Set(matches.map(p => dirname(dirname(p))))];
+  assert.equal(skillDirs.length, 1, `manifest glob must resolve under a single skills root, got: ${skillDirs.join(', ')}`);
+  const skillsDir = skillDirs[0];
   const { skills, diagnostics } = pi.loadSkillsFromDir({ dir: skillsDir, source: 'project' });
 
   const errorDiagnostics = (diagnostics || []).filter(d => d.type === 'error');
