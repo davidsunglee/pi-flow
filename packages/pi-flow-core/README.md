@@ -34,13 +34,13 @@ Workflow skills, bundled agent definitions, and helper runner for pi-flow.
 
 ```sh
 # Run a shared Python helper
-pi-flow helper _shared/utils
+pi-flow helper _shared/resolve-model-dispatch coder
 
 # Run a skill-specific helper
-pi-flow helper execute-plan/dispatch-task task.json
+pi-flow helper execute-plan/extract-plan-tasks plan.md
 
 # Resolve a template path
-TEMPLATE=$(pi-flow template fastlane/agent-template)
+TEMPLATE=$(pi-flow template fastlane/fastlane-coder-prompt)
 
 # Full usage
 pi-flow --help

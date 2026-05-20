@@ -72,43 +72,76 @@ location. Miss means miss.
 ### Shared helpers (`_shared/<name>`)
 
 ```sh
-# Run a shared utility helper
-pi-flow helper _shared/utils
+# Classify workflow drift between a spec and recommendation
+pi-flow helper _shared/classify-workflow-drift
 
-# Run a shared helper with extra arguments
-pi-flow helper _shared/format-output --json
+# Clean up __pycache__ directories under the package
+pi-flow helper _shared/cleanup-pycache
+
+# Clean up stale test-run artifacts
+pi-flow helper _shared/cleanup-test-runs
+
+# Detect the test command for a project
+pi-flow helper _shared/detect-test-command
+
+# Extract the provenance preamble from a markdown document
+pi-flow helper _shared/extract-provenance-preamble path/to/doc.md
+
+# Fill a markdown template from a JSON values file
+pi-flow helper _shared/fill-template template.md values.json
+
+# Report the git workspace status as structured JSON
+pi-flow helper _shared/git-workspace-status
+
+# Parse an artifact handoff block out of an agent report
+pi-flow helper _shared/parse-artifact-handoff report.md
+
+# Parse a test-runner artifact into structured form
+pi-flow helper _shared/parse-test-runner-artifact artifact.md
+
+# Reconcile a test-run record against on-disk artifacts
+pi-flow helper _shared/reconcile-test-run run.json
+
+# Resolve the dispatch model for a given tier
+pi-flow helper _shared/resolve-model-dispatch coder
+
+# Validate provenance preambles inside a review document
+pi-flow helper _shared/validate-review-provenance review.md
 ```
 
 ### Per-skill helpers
 
 ```sh
-# define-spec skill
-pi-flow helper define-spec/validate-spec spec.md
+# define-spec skill: detect the available mux backend
+pi-flow helper define-spec/detect-mux-backend
 
-# execute-plan skill
-pi-flow helper execute-plan/dispatch-task task.json
+# execute-plan skill: extract task definitions from a plan
+pi-flow helper execute-plan/extract-plan-tasks plan.md
 
-# fastlane skill
-pi-flow helper fastlane/build-context context.json
+# execute-plan skill: assemble the coder prompt for a task
+pi-flow helper execute-plan/assemble-coder-prompt task.json
 
-# refine-code skill
-pi-flow helper refine-code/lint-output output.txt
+# fastlane skill: recommend a workflow for a given spec
+pi-flow helper fastlane/recommend-workflow spec.md
 
-# refine-plan skill
-pi-flow helper refine-plan/diff-plan before.md after.md
+# refine-code skill: fill the refine-code prompt template
+pi-flow helper refine-code/fill-refine-code-prompt values.json
+
+# refine-plan skill: parse the refine-plan summary block
+pi-flow helper refine-plan/parse-refine-plan-summary summary.md
 ```
 
 ### Templates (`template <id>`)
 
 ```sh
 # Get path to a shared template
-pi-flow template _shared/agent-persona
+pi-flow template _shared/test-runner-dispatch
 
 # Get path to a skill-specific template (fastlane example)
-pi-flow template fastlane/agent-template
+pi-flow template fastlane/fastlane-coder-prompt
 
 # Use in a shell pipeline
-TEMPLATE=$(pi-flow template execute-plan/task-prompt)
+TEMPLATE=$(pi-flow template execute-plan/execute-task-prompt)
 cat "$TEMPLATE"
 ```
 
@@ -154,8 +187,8 @@ form. Example:
 
 ```sh
 if command -v pi-flow >/dev/null 2>&1; then
-  pi-flow helper _shared/utils "$@"
+  pi-flow helper _shared/detect-test-command "$@"
 else
-  node node_modules/pi-flow-core/bin/pi-flow.mjs helper _shared/utils "$@"
+  node node_modules/pi-flow-core/bin/pi-flow.mjs helper _shared/detect-test-command "$@"
 fi
 ```

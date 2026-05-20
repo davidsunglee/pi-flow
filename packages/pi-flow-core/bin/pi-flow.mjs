@@ -35,8 +35,8 @@ Resource ID format: <location>/<name>
   <skill>/<name>          Skill-specific helpers/templates
 
 Examples:
-  pi-flow helper _shared/utils foo bar
-  pi-flow template fastlane/agent-template
+  pi-flow helper _shared/resolve-model-dispatch coder
+  pi-flow template fastlane/fastlane-coder-prompt
 
 Fallback invocation (when bin entry is not on PATH):
   node node_modules/pi-flow-core/bin/pi-flow.mjs <args>
