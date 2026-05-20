@@ -1,7 +1,7 @@
 # Package Optional UX Layer
 
 Source: TODO-cfcb8ede
-Scout brief: docs/briefs/TODO-cfcb8ede-brief.md
+Scout brief: docs/briefs/2026-05-20-2026-05-19-ux-package-md-brief.md
 
 ## Goal
 
