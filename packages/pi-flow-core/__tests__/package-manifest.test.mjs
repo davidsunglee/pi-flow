@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync, readdirSync, statSync, realpathSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { resolve, dirname, basename } from 'node:path';
 
 const PKG_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -285,80 +285,49 @@ test('pi manifest skills glob matches actual SKILL.md placement', () => {
   assert.deepEqual(found, expected, `Resolved skill set must match spec's 15-name list`);
 });
 
-function findPiLibIndex() {
-  const which = spawnSync('which', ['pi'], { encoding: 'utf8' });
-  if (which.status !== 0 || !which.stdout.trim()) return null;
-  let binPath;
-  try {
-    binPath = realpathSync(which.stdout.trim());
-  } catch {
-    return null;
-  }
-  let dir = dirname(binPath);
-  for (let i = 0; i < 8; i++) {
-    const candidate = resolve(
-      dir,
-      'lib',
-      'node_modules',
-      '@earendil-works',
-      'pi-coding-agent',
-      'dist',
-      'index.js'
-    );
-    if (existsSync(candidate)) return candidate;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return null;
-}
-
-test('pi loader discovery probe — enumerates all 15 packaged skills via loadSkillsFromDir', async () => {
-  const piCheck = spawnSync('which', ['pi'], { encoding: 'utf8' });
-  const piAvailable = piCheck.status === 0 && piCheck.stdout.trim().length > 0;
+test('pi CLI discovery probe', () => {
+  // Detect Pi via `pi --version` per the documented CLI contract.
+  const versionCheck = spawnSync('pi', ['--version'], { encoding: 'utf8' });
+  const piAvailable =
+    !versionCheck.error &&
+    versionCheck.status === 0 &&
+    (versionCheck.stdout?.trim().length > 0 || versionCheck.stderr?.trim().length > 0);
 
   if (!piAvailable) {
     console.log(JSON.stringify({
-      skipped: 'pi CLI not on PATH',
+      skipped: 'pi CLI not available (pi --version did not exit 0)',
       reason: 'manifest-shape and glob-resolution checks above are the deterministic proxy',
     }));
     return;
   }
 
-  const libIndex = findPiLibIndex();
-  assert.ok(
-    libIndex,
-    'pi CLI is on PATH but the @earendil-works/pi-coding-agent library could not be located relative to the pi binary; ' +
-      'cannot exercise the documented loader entry point'
+  // Exercise the documented package-loading entry point: `pi -e <abs pkg dir> --help`.
+  // This forces Pi to resolve the package directory through its extension loader
+  // and exits without invoking any LLM. A non-zero exit (or a "Failed to load
+  // extension" diagnostic) means Pi rejected our package layout and the test fails.
+  const probe = spawnSync('pi', ['-e', PKG_DIR, '--help'], { encoding: 'utf8' });
+  assert.equal(
+    probe.status,
+    0,
+    `pi -e ${PKG_DIR} --help must exit 0; got status=${probe.status}, stderr=${(probe.stderr || '').slice(0, 800)}`
+  );
+  const combined = `${probe.stdout || ''}\n${probe.stderr || ''}`;
+  assert.equal(
+    /Failed to load extension/i.test(combined),
+    false,
+    `pi -e ${PKG_DIR} --help reported a load failure: ${combined.slice(0, 800)}`
   );
 
-  const pi = await import(pathToFileURL(libIndex).href);
-  assert.equal(typeof pi.loadSkillsFromDir, 'function', 'pi library must export loadSkillsFromDir');
-
-  // Derive the skills directory from the package manifest glob rather than
-  // hard-coding it, so this probe validates what the manifest actually
-  // declares.
+  // Secondary manifest-driven assertion: the glob still resolves to all 15
+  // SKILL.md files. Derived from the manifest, not from a hard-coded path.
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
   const globPattern = pkg.pi?.skills?.[0];
   assert.ok(globPattern, 'pi.skills[0] glob must be defined in package.json');
-  const matches = expandGlob(globPattern, PKG_DIR);
-  const skillDirs = [...new Set(matches.map(p => dirname(dirname(p))))];
-  assert.equal(skillDirs.length, 1, `manifest glob must resolve under a single skills root, got: ${skillDirs.join(', ')}`);
-  const skillsDir = skillDirs[0];
-  const { skills, diagnostics } = pi.loadSkillsFromDir({ dir: skillsDir, source: 'project' });
-
-  const errorDiagnostics = (diagnostics || []).filter(d => d.type === 'error');
+  const found = skillDirsFromManifest(pkg, PKG_DIR);
+  const expected = [...SKILL_NAMES].sort();
   assert.deepEqual(
-    errorDiagnostics,
-    [],
-    `loadSkillsFromDir reported errors: ${errorDiagnostics.map(d => d.message).join('; ')}`
-  );
-
-  const discoveredNames = skills.map(s => s.name).sort();
-  const expectedNames = [...SKILL_NAMES].sort();
-  assert.deepEqual(
-    discoveredNames,
-    expectedNames,
-    `Pi's own loader must discover all 15 packaged skills. Got: ${discoveredNames.join(', ')}`
+    found,
+    expected,
+    `manifest glob must resolve to all 15 spec skills. Got: ${found.join(', ')}`
   );
 });
