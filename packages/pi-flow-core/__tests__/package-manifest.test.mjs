@@ -11,23 +11,25 @@ function pkgPath(...parts) {
   return resolve(PKG_DIR, ...parts);
 }
 
-const SKILL_NAMES = [
-  'scout',
-  'define-spec',
-  'fastlane',
-  'generate-plan',
-  'refine-plan',
-  'execute-plan',
-  'refine-code',
-  'requesting-code-review',
-  'receiving-code-review',
+const EXPECTED_SKILL_NAMES = [
   'commit',
-  'test-driven-development',
-  'systematic-debugging',
-  'verification-before-completion',
-  'using-git-worktrees',
+  'define-spec',
+  'execute-plan',
+  'fastlane',
   'finishing-a-development-branch',
+  'generate-plan',
+  'receiving-code-review',
+  'refine-code',
+  'refine-plan',
+  'requesting-code-review',
+  'scout',
+  'systematic-debugging',
+  'test-driven-development',
+  'using-git-worktrees',
+  'verification-before-completion',
 ];
+
+const EXPECTED_EXTENSION_ENTRIES = ['extensions/commands.ts'];
 
 const AGENT_NAMES = [
   'code-refiner.md',
@@ -108,18 +110,34 @@ function walkMdFiles(dir) {
   return results;
 }
 
-test('package.json declares keywords pi-package', () => {
+test('package.json identifies pi-flow-core as a pi-package', () => {
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  assert.equal(pkg.name, 'pi-flow-core', 'package name must be pi-flow-core');
   assert.ok(
     Array.isArray(pkg.keywords) && pkg.keywords.includes('pi-package'),
     'keywords must include pi-package'
   );
 });
 
+test('pi.extensions manifest lists extensions/commands.ts and the file exists on disk', () => {
+  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  const entries = pkg.pi?.extensions;
+  assert.ok(Array.isArray(entries), 'pi.extensions must be an array');
+  assert.deepEqual(
+    entries,
+    EXPECTED_EXTENSION_ENTRIES,
+    `pi.extensions must equal ${JSON.stringify(EXPECTED_EXTENSION_ENTRIES)}`
+  );
+  for (const rel of EXPECTED_EXTENSION_ENTRIES) {
+    assert.ok(existsSync(pkgPath(rel)), `pi.extensions entry must exist on disk: ${rel}`);
+  }
+});
+
 test('pi.skills glob matches exactly 15 SKILL.md files', () => {
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  assert.deepEqual(pkg.pi?.skills, ['skills/*/SKILL.md']);
   const found = skillDirsFromManifest(pkg, PKG_DIR);
-  const expected = [...SKILL_NAMES].sort();
+  const expected = [...EXPECTED_SKILL_NAMES].sort();
   assert.deepEqual(found, expected, `Expected skill dirs to be ${expected.join(', ')}, got ${found.join(', ')}`);
 });
 
@@ -292,13 +310,38 @@ test('pi-flow-core ships no UX manifest entries or UX source directories', () =>
   );
 });
 
+test('package.json declares no install-time side-effect scripts', () => {
+  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  const sideEffectScripts = ['preinstall', 'install', 'postinstall', 'setup'];
+  for (const scriptName of sideEffectScripts) {
+    assert.equal(
+      pkg.scripts?.[scriptName],
+      undefined,
+      `pi-flow-core/package.json must not declare scripts.${scriptName}`
+    );
+  }
+});
+
+test('peerDependencies declares @earendil-works/pi-coding-agent', () => {
+  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  assert.ok(
+    pkg.peerDependencies?.['@earendil-works/pi-coding-agent'],
+    'peerDependencies must declare @earendil-works/pi-coding-agent'
+  );
+});
+
+test('files array includes extensions', () => {
+  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  assert.ok(pkg.files?.includes('extensions'), 'files array must include "extensions"');
+});
+
 test('pi manifest skills glob matches actual SKILL.md placement', () => {
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
   const globPattern = pkg.pi?.skills?.[0];
   assert.ok(globPattern, 'pi.skills[0] glob must be defined in package.json');
 
   const found = skillDirsFromManifest(pkg, PKG_DIR);
-  const expected = [...SKILL_NAMES].sort();
+  const expected = [...EXPECTED_SKILL_NAMES].sort();
   assert.deepEqual(found, expected, `Resolved skill set must match spec's 15-name list`);
 });
 
@@ -341,7 +384,7 @@ test('pi CLI discovery probe', () => {
   const globPattern = pkg.pi?.skills?.[0];
   assert.ok(globPattern, 'pi.skills[0] glob must be defined in package.json');
   const found = skillDirsFromManifest(pkg, PKG_DIR);
-  const expected = [...SKILL_NAMES].sort();
+  const expected = [...EXPECTED_SKILL_NAMES].sort();
   assert.deepEqual(
     found,
     expected,

@@ -111,6 +111,7 @@ test('aggregate pi manifest forwards UX extensions and the nord theme through no
   const themes = pkg.pi?.themes || [];
 
   const requiredExtensionSubstrings = [
+    'node_modules/pi-flow-core/extensions/commands',
     'node_modules/pi-flow-ux/extensions/footer',
     'node_modules/pi-flow-ux/extensions/working/index',
   ];
