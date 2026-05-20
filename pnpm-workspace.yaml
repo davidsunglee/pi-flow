@@ -5,3 +5,5 @@ allowBuilds:
   koffi: false
   protobufjs: false
 autoInstallPeers: false
+overrides:
+  pi-interactive-subagent: 'github:davidsunglee/pi-interactive-subagent#v4.0.0'
