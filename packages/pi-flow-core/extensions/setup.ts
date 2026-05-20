@@ -186,11 +186,7 @@ export async function runSetup(opts: RunSetupOptions): Promise<SetupResult> {
   }
 
   const level: "info" | "warning" | "error" =
-    conflicts.length > 0
-      ? "error"
-      : scope === "temporary" && explicitTarget !== undefined
-        ? "warning"
-        : "info";
+    conflicts.length > 0 ? "error" : "info";
   ui.notify(lines.join("\n"), level);
 
   return { created, skipped, conflicts };

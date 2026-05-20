@@ -105,7 +105,7 @@ test('node_modules/pi-flow-ux is symlinked into the aggregate package and realpa
   );
 });
 
-test('aggregate pi manifest forwards UX extensions and the nord theme through node_modules/pi-flow-ux', () => {
+test('aggregate-forwarding.test.mjs forwards core commands, UX extensions, and the nord theme through node_modules', () => {
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
   const extensions = pkg.pi?.extensions || [];
   const themes = pkg.pi?.themes || [];
