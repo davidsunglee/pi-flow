@@ -620,3 +620,42 @@ test("getWorkingCoordinator throws when the same settingsPath is rebound to a di
     );
   });
 });
+
+test("getWorkingCoordinator keys coordinators by settingsPath so different user files load distinct state", async () => {
+  await withTier(async ({ userPath, packagedPath, dir }) => {
+    const otherUserPath = path.join(dir, "other-user-working.json");
+
+    // Two different user files with distinguishable indicatorShape values.
+    await writeFile(userPath, JSON.stringify({ indicatorShape: "dot" }), "utf8");
+    await writeFile(otherUserPath, JSON.stringify({ indicatorShape: "pulse" }), "utf8");
+
+    const coordA = getWorkingCoordinator(userPath, packagedPath);
+    const coordB = getWorkingCoordinator(otherUserPath, packagedPath);
+
+    assert.notEqual(
+      coordA,
+      coordB,
+      "different settingsPath values must yield different coordinator instances",
+    );
+
+    // Drive session_start on each so each coordinator loads from its own user file.
+    const { pi: piA, emit: emitA } = makePi();
+    coordA.ensureRegistered(piA as any, false);
+    await emitA("session_start", { reason: "startup" }, makeSessionCtx());
+
+    const { pi: piB, emit: emitB } = makePi();
+    coordB.ensureRegistered(piB as any, false);
+    await emitB("session_start", { reason: "startup" }, makeSessionCtx());
+
+    assert.equal(
+      coordA.getSnapshot().settings.indicatorShape,
+      "dot",
+      "first coordinator must load from its own settingsPath",
+    );
+    assert.equal(
+      coordB.getSnapshot().settings.indicatorShape,
+      "pulse",
+      "second coordinator must load from its own settingsPath, not coordA's",
+    );
+  });
+});

@@ -458,34 +458,34 @@ class WorkingCoordinator {
   }
 }
 
-let sharedCoordinator: WorkingCoordinator | undefined;
-let sharedSettingsPath: string | undefined;
-let sharedPackageDefaultPath: string | undefined;
+// Keyed by user `settingsPath` so callers using distinct user settings files
+// each get their own coordinator. Rebinding the same `settingsPath` to a
+// different `packageDefaultPath` still throws — that case is almost always a
+// programming error (e.g. two host bundles disagreeing on where the packaged
+// baseline lives) and would silently mask the second baseline.
+const coordinatorsBySettingsPath = new Map<
+  string,
+  { packageDefaultPath: string; coordinator: WorkingCoordinator }
+>();
 
 export function getWorkingCoordinator(
   settingsPath: string = DEFAULT_SETTINGS_PATH,
   packageDefaultPath: string = PACKAGE_DEFAULT_SETTINGS_PATH,
 ): WorkingCoordinator {
-  if (sharedCoordinator) {
-    if (sharedSettingsPath === settingsPath && sharedPackageDefaultPath !== packageDefaultPath) {
-      // Reinitialization with the same user path but a different packaged
-      // baseline is almost always a programming error — e.g. two host bundles
-      // disagreeing on where the packaged file lives — and would silently mask
-      // the second baseline. Surface it loudly.
+  const existing = coordinatorsBySettingsPath.get(settingsPath);
+  if (existing) {
+    if (existing.packageDefaultPath !== packageDefaultPath) {
       throw new Error(
-        `getWorkingCoordinator: settingsPath=${settingsPath} already bound to packageDefaultPath=${sharedPackageDefaultPath}, refusing to rebind to ${packageDefaultPath}`,
+        `getWorkingCoordinator: settingsPath=${settingsPath} already bound to packageDefaultPath=${existing.packageDefaultPath}, refusing to rebind to ${packageDefaultPath}`,
       );
     }
-    return sharedCoordinator;
+    return existing.coordinator;
   }
-  sharedCoordinator = new WorkingCoordinator(settingsPath, packageDefaultPath);
-  sharedSettingsPath = settingsPath;
-  sharedPackageDefaultPath = packageDefaultPath;
-  return sharedCoordinator;
+  const coordinator = new WorkingCoordinator(settingsPath, packageDefaultPath);
+  coordinatorsBySettingsPath.set(settingsPath, { packageDefaultPath, coordinator });
+  return coordinator;
 }
 
 export function resetWorkingCoordinatorForTests(): void {
-  sharedCoordinator = undefined;
-  sharedSettingsPath = undefined;
-  sharedPackageDefaultPath = undefined;
+  coordinatorsBySettingsPath.clear();
 }
