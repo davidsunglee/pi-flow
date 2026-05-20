@@ -140,8 +140,8 @@ test('matrix: define-spec rejects docs/reviews/*.md', () => {
   assert.equal(recognizeExact('define-spec', 'docs/reviews/x.md'), undefined);
 });
 
-test('matrix: generate-plan accepts docs/specs/*.md', () => {
-  assert.equal(recognizeExact('generate-plan', 'docs/specs/x.md'), 'docs/specs/x.md');
+test('matrix: generate-plan rejects docs/specs/*.md', () => {
+  assert.equal(recognizeExact('generate-plan', 'docs/specs/x.md'), undefined);
 });
 
 test('matrix: generate-plan rejects docs/plans/*.md', () => {
@@ -273,11 +273,49 @@ test('routeArgs prose returns interpreted with correct prompt', () => {
   assert.deepEqual(result, { kind: 'interpreted', prompt: expected });
 });
 
-test('routeArgs generate-plan --exact docs/specs/x.md returns exact with correct prompt', () => {
+test('routeArgs generate-plan --exact docs/specs/x.md is rejected per matrix', () => {
   const result = routeArgs('generate-plan', '--exact docs/specs/example.md');
+  assert.equal(result.kind, 'exact-required-but-non-exact');
+  assert.ok(result.reason?.includes('/flow:plan'), 'reason should contain /flow:plan');
+  assert.ok(result.reason?.includes('docs/specs/example.md'), 'reason should contain the path');
+});
+
+// Flag pass-through on exact-shaped inputs
+test('recognizeExact TODO-id with trailing boolean flag preserves flag verbatim', () => {
+  assert.equal(
+    recognizeExact('scout', 'TODO-abcd1234 --dry-run'),
+    'TODO-abcd1234 --dry-run'
+  );
+});
+
+test('recognizeExact docs path with trailing value flag preserves flag verbatim', () => {
+  assert.equal(
+    recognizeExact('execute-plan', 'docs/plans/x.md --tier capable'),
+    'docs/plans/x.md --tier capable'
+  );
+});
+
+test('recognizeExact flag-only input routes as empty for empty-allowed skill', () => {
+  assert.equal(recognizeExact('scout', '--tier capable'), '--tier capable');
+});
+
+test('recognizeExact flag-only input is rejected for skill that disallows empty', () => {
+  assert.equal(recognizeExact('execute-plan', '--tier capable'), undefined);
+});
+
+test('routeArgs --exact TODO-id with flag routes as exact preserving flag', () => {
+  const result = routeArgs('scout', '--exact TODO-abcd1234 --dry-run');
   assert.deepEqual(result, {
     kind: 'exact',
-    prompt: 'Use the generate-plan skill. Argument: docs/specs/example.md.',
+    prompt: 'Use the scout skill. Argument: TODO-abcd1234 --dry-run.',
+  });
+});
+
+test('routeArgs --exact docs path with value flag routes as exact preserving flag', () => {
+  const result = routeArgs('execute-plan', '--exact docs/plans/x.md --tier capable');
+  assert.deepEqual(result, {
+    kind: 'exact',
+    prompt: 'Use the execute-plan skill. Argument: docs/plans/x.md --tier capable.',
   });
 });
 

@@ -15,7 +15,7 @@ type NotifyCall = { message: string; level: NotifyLevel };
 const EXPECTED_DESCRIPTIONS = {
   "flow:scout": "Run scout. Routes a TODO-<id>, brief path, or freeform request to the scout skill.",
   "flow:spec": "Run define-spec. Routes a TODO-<id>, spec path, or freeform request to the define-spec skill.",
-  "flow:plan": "Run generate-plan. Routes a TODO-<id>, spec path, brief path, or freeform request to the generate-plan skill.",
+  "flow:plan": "Run generate-plan. Routes a TODO-<id>, brief path, or freeform request to the generate-plan skill.",
   "flow:refine-plan": "Run refine-plan against a plan file.",
   "flow:execute": "Run execute-plan against a plan file.",
   "flow:refine-code": "Run refine-code against a review.",

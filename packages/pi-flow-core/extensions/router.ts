@@ -34,7 +34,7 @@ export const EXACT_INPUT_MATRIX: Record<
 > = {
   'scout':         { empty: true,  todoId: true,  briefs: true,  specs: false, plans: false, reviews: false },
   'define-spec':   { empty: true,  todoId: true,  briefs: false, specs: true,  plans: false, reviews: false },
-  'generate-plan': { empty: true,  todoId: true,  briefs: true,  specs: true,  plans: false, reviews: false },
+  'generate-plan': { empty: true,  todoId: true,  briefs: true,  specs: false, plans: false, reviews: false },
   'refine-plan':   { empty: false, todoId: false, briefs: false, specs: false, plans: true,  reviews: false },
   'execute-plan':  { empty: false, todoId: false, briefs: false, specs: false, plans: true,  reviews: false },
   'refine-code':   { empty: false, todoId: false, briefs: false, specs: false, plans: false, reviews: true  },
@@ -63,22 +63,27 @@ const DOCS_DIR_RE = /docs\/(briefs|specs|plans|reviews)\//;
 export function recognizeExact(skill: SkillKey, rest: string): string | undefined {
   const matrix = EXACT_INPUT_MATRIX[skill];
 
-  // Separate positional part from flag-only tokens
   const tokens = rest === '' ? [] : rest.split(/\s+/);
-  const positionalTokens = tokens.filter(t => !t.startsWith('--'));
-  const positional = positionalTokens.join(' ');
+  const firstFlagIdx = tokens.findIndex(t => t.startsWith('--'));
+  const positionalTokens = firstFlagIdx === -1 ? tokens : tokens.slice(0, firstFlagIdx);
+  const hasFlags = firstFlagIdx !== -1;
 
   // Empty / flag-only input
-  if (positional === '') {
+  if (positionalTokens.length === 0) {
     return matrix.empty ? rest : undefined;
   }
 
+  if (positionalTokens.length !== 1) {
+    return undefined;
+  }
+
+  const positional = positionalTokens[0];
+
   // TODO-<8hex> or bare <8hex>
-  if (positionalTokens.length === 1) {
-    const m = positionalTokens[0].match(TODO_RE);
-    if (m) {
-      return matrix.todoId ? `TODO-${m[2]}` : undefined;
-    }
+  const m = positional.match(TODO_RE);
+  if (m) {
+    if (!matrix.todoId) return undefined;
+    return hasFlags ? rest : `TODO-${m[2]}`;
   }
 
   // docs/<dir>/*.md
@@ -86,7 +91,8 @@ export function recognizeExact(skill: SkillKey, rest: string): string | undefine
     const dirMatch = positional.match(DOCS_DIR_RE);
     if (dirMatch) {
       const dir = dirMatch[1] as 'briefs' | 'specs' | 'plans' | 'reviews';
-      return matrix[dir] ? positional : undefined;
+      if (!matrix[dir]) return undefined;
+      return hasFlags ? rest : positional;
     }
   }
 
