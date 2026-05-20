@@ -1,6 +1,6 @@
 {
   "name": "pi-flow-ux",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Optional UX layer for pi-flow: footer extension, working indicator/message, Nord theme, and packaged working defaults.",
