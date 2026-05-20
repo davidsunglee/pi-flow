@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve, dirname, basename } from 'node:path';
 
 const PKG_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -258,34 +258,71 @@ test('pi manifest skills glob matches actual SKILL.md placement', () => {
   assert.deepEqual(found, expected, `Resolved skill set must match spec's 15-name list`);
 });
 
-test('pi CLI discovery probe — best-effort', () => {
+function findPiLibIndex() {
+  const which = spawnSync('which', ['pi'], { encoding: 'utf8' });
+  if (which.status !== 0 || !which.stdout.trim()) return null;
+  let binPath;
+  try {
+    binPath = realpathSync(which.stdout.trim());
+  } catch {
+    return null;
+  }
+  let dir = dirname(binPath);
+  for (let i = 0; i < 8; i++) {
+    const candidate = resolve(
+      dir,
+      'lib',
+      'node_modules',
+      '@earendil-works',
+      'pi-coding-agent',
+      'dist',
+      'index.js'
+    );
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+test('pi loader discovery probe — enumerates all 15 packaged skills via loadSkillsFromDir', async () => {
   const piCheck = spawnSync('which', ['pi'], { encoding: 'utf8' });
   const piAvailable = piCheck.status === 0 && piCheck.stdout.trim().length > 0;
 
   if (!piAvailable) {
     console.log(JSON.stringify({
       skipped: 'pi CLI not on PATH',
-      reason: 'Pi loader contract is an open question in the spec (see Open Questions #1 and #2); manifest-shape and glob-resolution checks above are the deterministic proxy',
+      reason: 'manifest-shape and glob-resolution checks above are the deterministic proxy',
     }));
     return;
   }
 
-  const versionCheck = spawnSync('pi', ['--version'], { encoding: 'utf8' });
-  if (versionCheck.status !== 0) {
-    console.log(JSON.stringify({
-      skipped: 'pi CLI not functional',
-      reason: 'Pi loader contract is an open question in the spec (see Open Questions #1 and #2); manifest-shape and glob-resolution checks above are the deterministic proxy',
-    }));
-    return;
-  }
+  const libIndex = findPiLibIndex();
+  assert.ok(
+    libIndex,
+    'pi CLI is on PATH but the @earendil-works/pi-coding-agent library could not be located relative to the pi binary; ' +
+      'cannot exercise the documented loader entry point'
+  );
 
-  // `pi -e <path>` loads the extension at the given filesystem path. Pass the
-  // absolute package directory rather than the package name so Pi does not
-  // resolve it relative to the test runner's cwd.
-  const result = spawnSync('pi', ['-e', PKG_DIR, '--version'], { encoding: 'utf8' });
-  assert.equal(
-    result.status,
-    0,
-    `pi -e ${PKG_DIR} exited ${result.status} when pi is on PATH; stderr: ${result.stderr?.trim()}`
+  const pi = await import(pathToFileURL(libIndex).href);
+  assert.equal(typeof pi.loadSkillsFromDir, 'function', 'pi library must export loadSkillsFromDir');
+
+  const skillsDir = pkgPath('skills');
+  const { skills, diagnostics } = pi.loadSkillsFromDir({ dir: skillsDir, source: 'project' });
+
+  const errorDiagnostics = (diagnostics || []).filter(d => d.type === 'error');
+  assert.deepEqual(
+    errorDiagnostics,
+    [],
+    `loadSkillsFromDir reported errors: ${errorDiagnostics.map(d => d.message).join('; ')}`
+  );
+
+  const discoveredNames = skills.map(s => s.name).sort();
+  const expectedNames = [...SKILL_NAMES].sort();
+  assert.deepEqual(
+    discoveredNames,
+    expectedNames,
+    `Pi's own loader must discover all 15 packaged skills. Got: ${discoveredNames.join(', ')}`
   );
 });

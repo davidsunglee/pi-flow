@@ -73,7 +73,7 @@ location. Miss means miss.
 
 ```sh
 # Classify workflow drift between a spec and recommendation
-pi-flow helper _shared/classify-workflow-drift
+pi-flow helper _shared/classify-workflow-drift --brief-path scout-brief.md
 
 # Clean up __pycache__ directories under the package
 pi-flow helper _shared/cleanup-pycache
@@ -85,28 +85,28 @@ pi-flow helper _shared/cleanup-test-runs
 pi-flow helper _shared/detect-test-command
 
 # Extract the provenance preamble from a markdown document
-pi-flow helper _shared/extract-provenance-preamble path/to/doc.md
+pi-flow helper _shared/extract-provenance-preamble --file path/to/doc.md --mode spec
 
 # Fill a markdown template from a JSON values file
-pi-flow helper _shared/fill-template template.md values.json
+pi-flow helper _shared/fill-template --template template.md --placeholders-json values.json --output -
 
 # Report the git workspace status as structured JSON
 pi-flow helper _shared/git-workspace-status
 
 # Parse an artifact handoff block out of an agent report
-pi-flow helper _shared/parse-artifact-handoff report.md
+pi-flow helper _shared/parse-artifact-handoff --marker test_run --final-message report.md
 
 # Parse a test-runner artifact into structured form
-pi-flow helper _shared/parse-test-runner-artifact artifact.md
+pi-flow helper _shared/parse-test-runner-artifact --artifact artifact.md
 
 # Reconcile a test-run record against on-disk artifacts
-pi-flow helper _shared/reconcile-test-run run.json
+pi-flow helper _shared/reconcile-test-run --artifact artifact.md --mode capture
 
 # Resolve the dispatch model for a given tier
-pi-flow helper _shared/resolve-model-dispatch coder
+pi-flow helper _shared/resolve-model-dispatch --tier capable --agent coder
 
 # Validate provenance preambles inside a review document
-pi-flow helper _shared/validate-review-provenance review.md
+pi-flow helper _shared/validate-review-provenance --review-file review.md --allowed-tiers capable
 ```
 
 ### Per-skill helpers
@@ -116,19 +116,19 @@ pi-flow helper _shared/validate-review-provenance review.md
 pi-flow helper define-spec/detect-mux-backend
 
 # execute-plan skill: extract task definitions from a plan
-pi-flow helper execute-plan/extract-plan-tasks plan.md
+pi-flow helper execute-plan/extract-plan-tasks --plan plan.md
 
 # execute-plan skill: assemble the coder prompt for a task
-pi-flow helper execute-plan/assemble-coder-prompt task.json
+pi-flow helper execute-plan/assemble-coder-prompt --task-spec task.md --context context.md --working-dir .
 
 # fastlane skill: recommend a workflow for a given spec
-pi-flow helper fastlane/recommend-workflow spec.md
+pi-flow helper fastlane/recommend-workflow --spec-path spec.md
 
 # refine-code skill: fill the refine-code prompt template
-pi-flow helper refine-code/fill-refine-code-prompt values.json
+pi-flow helper refine-code/fill-refine-code-prompt --plan-goal goal.md --plan-contents plan.md --base-sha HEAD
 
 # refine-plan skill: parse the refine-plan summary block
-pi-flow helper refine-plan/parse-refine-plan-summary summary.md
+pi-flow helper refine-plan/parse-refine-plan-summary --summary summary.md
 ```
 
 ### Templates (`template <id>`)
