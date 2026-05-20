@@ -14,18 +14,36 @@ This package contains optional UX polish that extends the core pi-flow experienc
 
 ## Standalone install and use
 
-You can install `pi-flow-ux` as a standalone Pi package without the aggregate:
+You can install `pi-flow-ux` as a standalone Pi package without the aggregate. Pi package sources must be one of: `npm:<pkg>`, a git URL (with `git:` prefix or a protocol URL), or a local/absolute path — bare names like `"pi-flow-ux"` are not valid sources.
+
+Once the package is published to npm:
 
 ```sh
-npm install pi-flow-ux
-# or pin from git
+pi install npm:pi-flow-ux
 ```
 
-Reference it in your Pi `settings.json`:
+While the package is private or unpublished, install it directly from git or a local checkout:
+
+```sh
+pi install git:github.com/your-org/pi-flow-ux@main
+pi install /absolute/path/to/pi-flow-ux
+```
+
+To trial it for a single Pi run without writing to settings, use `-e` with a valid source form:
+
+```sh
+pi -e npm:pi-flow-ux
+pi -e git:github.com/your-org/pi-flow-ux@main
+```
+
+Or reference the package in your Pi `settings.json` using one of the supported source forms:
 
 ```jsonc
 {
-  "packages": ["pi-flow-ux"]
+  // pick one source form
+  "packages": ["npm:pi-flow-ux"]
+  // "packages": ["git:github.com/your-org/pi-flow-ux@main"]
+  // "packages": ["/absolute/path/to/pi-flow-ux"]
 }
 ```
 
@@ -37,10 +55,13 @@ After Pi loads the package, the following resources become available:
 
 ## Aggregate install and use
 
-`pi-flow` is the recommended aggregate package that includes `pi-flow-ux` resources forwarded through `node_modules/pi-flow-ux/`. Install the aggregate to get UX resources alongside workflow skills:
+`pi-flow` is the recommended aggregate package that includes `pi-flow-ux` resources forwarded through `node_modules/pi-flow-ux/`. Install the aggregate via Pi to get UX resources alongside workflow skills:
 
 ```sh
-npm install pi-flow
+pi install npm:pi-flow
+# or, while private/unpublished:
+pi install git:github.com/your-org/pi-flow@main
+pi install /absolute/path/to/pi-flow
 ```
 
 The aggregate forwards UX resources automatically through its `pi` manifest:
@@ -54,19 +75,15 @@ The aggregate forwards UX resources automatically through its `pi` manifest:
 
 ## Nord theme activation
 
-The Nord theme is discoverable by Pi after the package is loaded. To activate it, use the Pi theme command or update your Pi settings:
-
-```sh
-pi theme nord
-```
-
-Or set it persistently in Pi `settings.json`:
+The Nord theme is discoverable by Pi after the package is loaded. To activate it, either pick it interactively via `/settings` inside Pi, or set it persistently in Pi `settings.json`:
 
 ```jsonc
 {
   "theme": "nord"
 }
 ```
+
+Pi has no `pi theme` subcommand — theme selection is always via the `theme` setting (interactively through `/settings`, or by editing `settings.json` directly). See the Pi themes docs for details.
 
 Pi discovers the theme by scanning the `node_modules/pi-flow-ux/themes/` directory for theme definitions named `nord.json`.
 
@@ -77,8 +94,15 @@ The working indicator and message are configured through a three-tier system wit
 ### Configuration tiers (precedence, highest to lowest)
 
 1. **User override:** `~/.pi/agent/working.json` — user-level configuration that takes precedence over all other tiers
-2. **Packaged default:** `node_modules/pi-flow-ux/working.json` (or equivalent from your installed pi-flow-ux version) — curated Nord-tuned defaults, applied when user settings are absent or incomplete
-3. **Code default:** hardcoded defaults in the extension if both user and packaged files are missing or malformed
+2. **Packaged default:** `node_modules/pi-flow-ux/working.json` (or equivalent from your installed pi-flow-ux version) — curated Nord-tuned defaults, applied when user settings are absent or fields are missing
+3. **Code default:** hardcoded defaults in the extension, used when both the user and packaged files are missing
+
+### Failure semantics
+
+- **Missing user file → packaged default.** No `~/.pi/agent/working.json` is fine; packaged defaults apply.
+- **Malformed user JSON → packaged default.** Invalid user JSON falls back to packaged defaults until the user file is corrected or removed.
+- **Missing packaged file → code default.** A missing packaged `working.json` (e.g., during local development) falls back to hardcoded code defaults.
+- **Malformed packaged JSON → fail loudly.** Invalid packaged JSON throws on startup rather than silently degrading to code defaults, so a broken release surfaces immediately instead of masking corruption.
 
 ### User override path: `~/.pi/agent/working.json`
 
@@ -126,10 +150,13 @@ Saved to `~/.pi/agent/working.json`, this overrides the active color while all o
 
 ## Minimal/headless use
 
-If you prefer the workflow skills without UX enhancements, install `pi-flow-core` directly instead:
+If you prefer the workflow skills without UX enhancements, install `pi-flow-core` directly instead, using one of Pi's supported source forms:
 
 ```sh
-npm install pi-flow-core
+pi install npm:pi-flow-core
+# or, while private/unpublished:
+pi install git:github.com/your-org/pi-flow-core@main
+pi install /absolute/path/to/pi-flow-core
 ```
 
 `pi-flow-core` is the independent skill package with no theme, footer, working indicator, or packaged defaults—suitable for headless, script-driven, or minimal CLI environments.
