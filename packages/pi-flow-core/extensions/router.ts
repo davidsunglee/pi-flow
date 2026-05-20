@@ -34,7 +34,7 @@ export const EXACT_INPUT_MATRIX: Record<
 > = {
   'scout':         { empty: true,  todoId: true,  briefs: true,  specs: false, plans: false, reviews: false },
   'define-spec':   { empty: true,  todoId: true,  briefs: false, specs: true,  plans: false, reviews: false },
-  'generate-plan': { empty: true,  todoId: true,  briefs: true,  specs: false, plans: false, reviews: false },
+  'generate-plan': { empty: true,  todoId: true,  briefs: true,  specs: true,  plans: false, reviews: false },
   'refine-plan':   { empty: false, todoId: false, briefs: false, specs: false, plans: true,  reviews: false },
   'execute-plan':  { empty: false, todoId: false, briefs: false, specs: false, plans: true,  reviews: false },
   'refine-code':   { empty: false, todoId: false, briefs: false, specs: false, plans: false, reviews: true  },

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname, basename } from 'node:path';
 
@@ -327,6 +328,30 @@ test('peerDependencies declares @earendil-works/pi-coding-agent', () => {
   assert.ok(
     pkg.peerDependencies?.['@earendil-works/pi-coding-agent'],
     'peerDependencies must declare @earendil-works/pi-coding-agent'
+  );
+});
+
+test('typebox is declared as a runtime dependency (not peer-only) since extensions/idea.ts imports it at runtime', () => {
+  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  assert.ok(
+    pkg.dependencies?.typebox,
+    'typebox must be in dependencies; idea.ts imports it at runtime and a production install must resolve it without relying on devDependencies or peer hoisting'
+  );
+});
+
+test('packaged-install smoke: extensions/idea.ts resolves typebox via pi-flow-core local node_modules', () => {
+  // pnpm only links a package into a workspace's local node_modules when it's
+  // declared as a direct (non-peer) dependency. If typebox were peer-only, this
+  // symlink would not exist and a production install would fail to load idea.ts.
+  const localTypebox = pkgPath('node_modules', 'typebox');
+  assert.ok(
+    existsSync(localTypebox),
+    `typebox must be installed under pi-flow-core/node_modules for a production install; missing: ${localTypebox}`
+  );
+  const requireFromCore = createRequire(pkgPath('extensions', 'idea.ts'));
+  assert.doesNotThrow(
+    () => requireFromCore.resolve('typebox'),
+    `extensions/idea.ts must be able to resolve typebox from pi-flow-core's own node_modules`
   );
 });
 

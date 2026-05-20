@@ -140,8 +140,8 @@ test('matrix: define-spec rejects docs/reviews/*.md', () => {
   assert.equal(recognizeExact('define-spec', 'docs/reviews/x.md'), undefined);
 });
 
-test('matrix: generate-plan rejects docs/specs/*.md', () => {
-  assert.equal(recognizeExact('generate-plan', 'docs/specs/x.md'), undefined);
+test('matrix: generate-plan accepts docs/specs/*.md', () => {
+  assert.equal(recognizeExact('generate-plan', 'docs/specs/x.md'), 'docs/specs/x.md');
 });
 
 test('matrix: generate-plan rejects docs/plans/*.md', () => {
@@ -271,6 +271,14 @@ test('routeArgs prose returns interpreted with correct prompt', () => {
     'Use the scout skill to handle the following user request.\n\nUser wrote: investigate auth\n\nResolve the correct artifact path or identifier for the skill. If the request is unambiguous, invoke the skill directly. If the request is ambiguous, ask at most one clarifying question before invoking the skill.';
   const result = routeArgs('scout', 'investigate auth');
   assert.deepEqual(result, { kind: 'interpreted', prompt: expected });
+});
+
+test('routeArgs generate-plan --exact docs/specs/x.md returns exact with correct prompt', () => {
+  const result = routeArgs('generate-plan', '--exact docs/specs/example.md');
+  assert.deepEqual(result, {
+    kind: 'exact',
+    prompt: 'Use the generate-plan skill. Argument: docs/specs/example.md.',
+  });
 });
 
 test('routeArgs --exact with wrong artifact dir returns exact-required-but-non-exact', () => {

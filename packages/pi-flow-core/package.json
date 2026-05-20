@@ -13,14 +13,15 @@
     "test": "pnpm run test:node && pnpm run test:helpers",
     "check": "pnpm run test"
   },
+  "dependencies": {
+    "typebox": "*"
+  },
   "peerDependencies": {
     "pi-interactive-subagent": "*",
-    "@earendil-works/pi-coding-agent": "*",
-    "typebox": "*"
+    "@earendil-works/pi-coding-agent": "*"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "*",
-    "typebox": "*",
     "pi-interactive-subagent": "*"
   },
   "pi": {
