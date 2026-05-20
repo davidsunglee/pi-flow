@@ -13,6 +13,9 @@ importers:
       pi-flow-core:
         specifier: workspace:*
         version: link:../pi-flow-core
+      pi-flow-ux:
+        specifier: workspace:*
+        version: link:../pi-flow-ux
 
   packages/pi-flow-core: {}
 
