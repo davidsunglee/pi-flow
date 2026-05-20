@@ -69,7 +69,10 @@ if (subcommand === 'helper') {
     process.exit(2);
   }
 
-  const child = spawnSync('python3', [scriptPath, ...rest.slice(1)], { stdio: 'inherit' });
+  const child = spawnSync('python3', [scriptPath, ...rest.slice(1)], {
+    stdio: 'inherit',
+    env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+  });
   process.exit(child.status ?? 1);
 }
 

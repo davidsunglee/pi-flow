@@ -137,4 +137,34 @@ test('helper-runner', (t) => {
     assert.equal(r.status, 2);
     assert.ok(r.stderr.length > 0); // stderr usage hint
   });
+
+  t.test('helper invocation writes no __pycache__ under skills/ even when caller env lacks PYTHONDONTWRITEBYTECODE', () => {
+    cleanupPycache(resolve(PACKAGE_ROOT, 'skills'));
+    const callerEnv = { ...process.env };
+    delete callerEnv.PYTHONDONTWRITEBYTECODE;
+    const r = spawnSync(
+      'node',
+      [CLI, 'helper', 'execute-plan/extract-plan-tasks', '--plan', FIXTURE_PLAN],
+      { encoding: 'utf8', env: callerEnv }
+    );
+    assert.equal(r.status, 0, `helper must succeed: ${r.stderr}`);
+    function findPycache(dir) {
+      const results = [];
+      for (const entry of readdirSync(dir)) {
+        const full = resolve(dir, entry);
+        let stat;
+        try { stat = statSync(full); } catch { continue; }
+        if (!stat.isDirectory()) continue;
+        if (entry === '__pycache__') results.push(full);
+        else results.push(...findPycache(full));
+      }
+      return results;
+    }
+    const found = findPycache(resolve(PACKAGE_ROOT, 'skills'));
+    assert.deepEqual(
+      found,
+      [],
+      `pi-flow helper must not leave __pycache__ artifacts; found: ${found.join(', ')}`
+    );
+  });
 });
