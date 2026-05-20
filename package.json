@@ -2,9 +2,15 @@
   "name": "pi-flow-workspace",
   "private": true,
   "type": "module",
-  "keywords": ["pi-package"],
-  "bin": { "pi-flow": "./packages/pi-flow-core/bin/pi-flow.mjs" },
-  "engines": { "node": ">=20" },
+  "keywords": [
+    "pi-package"
+  ],
+  "bin": {
+    "pi-flow": "./packages/pi-flow-core/bin/pi-flow.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "test": "pnpm run test:root && pnpm -r --workspace-concurrency=1 run test",
     "test:root": "node --test __tests__/*.test.mjs",
@@ -12,5 +18,10 @@
     "test:node": "pnpm run test:root && pnpm -r --workspace-concurrency=1 run test:node",
     "check": "pnpm run test:root && pnpm -r --workspace-concurrency=1 run check"
   },
-  "pi": { "skills": ["packages/pi-flow-core/skills/*/SKILL.md"] }
+  "pi": {
+    "skills": [
+      "packages/pi-flow-core/skills/*/SKILL.md"
+    ]
+  },
+  "version": "0.1.0"
 }
