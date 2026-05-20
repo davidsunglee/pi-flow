@@ -10,7 +10,7 @@
     "skills",
     "monorepo"
   ],
-  "status": "open",
+  "status": "done",
   "created_at": "2026-05-18T00:00:00.000Z"
 }
 
@@ -171,3 +171,5 @@ Audit and fix references that assume the old personal config layout:
 ## Notes
 
 This extraction should prefer a maintainable package boundary over preserving the old `pi-config` layout. Treat `../pi-config` as source material, not as a runtime dependency or an API contract.
+
+Completed via plan: docs/plans/2026-05-19-cfcb8ede.md
