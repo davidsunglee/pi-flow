@@ -75,11 +75,77 @@ test('package.json declares pi-flow-core as workspace dependency', () => {
   );
 });
 
+test('package.json declares pi-flow-ux as workspace dependency', () => {
+  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  assert.equal(
+    pkg.dependencies?.['pi-flow-ux'],
+    'workspace:*',
+    'dependencies["pi-flow-ux"] must equal "workspace:*"'
+  );
+});
+
 test('package.json keywords includes pi-package', () => {
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
   assert.ok(
     Array.isArray(pkg.keywords) && pkg.keywords.includes('pi-package'),
     'keywords must include "pi-package"'
+  );
+});
+
+test('node_modules/pi-flow-ux is symlinked into the aggregate package and realpaths into packages/pi-flow-ux', () => {
+  const nmUxPath = pkgPath('node_modules', 'pi-flow-ux');
+  assert.ok(existsSync(nmUxPath), 'node_modules/pi-flow-ux must exist after pnpm install');
+  const realPath = realpathSync(nmUxPath);
+  const workspaceRoot = resolve(PKG_DIR, '..', '..');
+  const expectedUnder = resolve(workspaceRoot, 'packages', 'pi-flow-ux');
+  assert.equal(
+    realPath,
+    expectedUnder,
+    `realpath of node_modules/pi-flow-ux (${realPath}) must resolve to packages/pi-flow-ux`
+  );
+});
+
+test('aggregate pi manifest forwards UX extensions and the nord theme through node_modules/pi-flow-ux', () => {
+  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  const extensions = pkg.pi?.extensions || [];
+  const themes = pkg.pi?.themes || [];
+
+  const requiredExtensionSubstrings = [
+    'node_modules/pi-flow-ux/extensions/footer',
+    'node_modules/pi-flow-ux/extensions/working/index',
+  ];
+  for (const needle of requiredExtensionSubstrings) {
+    assert.ok(
+      extensions.some(e => e.includes(needle)),
+      `pi.extensions must forward "${needle}"; got ${JSON.stringify(extensions)}`
+    );
+  }
+
+  assert.ok(
+    themes.some(t => t.includes('node_modules/pi-flow-ux') && t.endsWith('nord.json')),
+    `pi.themes must forward node_modules/pi-flow-ux/themes/nord.json; got ${JSON.stringify(themes)}`
+  );
+
+  // Each forwarded path must resolve to a real file inside packages/pi-flow-ux.
+  for (const entry of [...extensions, ...themes]) {
+    const full = pkgPath(entry);
+    assert.ok(
+      existsSync(full),
+      `forwarded resource entry must resolve to a real file: ${entry} (looked at ${full})`
+    );
+  }
+});
+
+test('aggregate package does not contain its own extensions/ or themes/ source', () => {
+  assert.equal(
+    existsSync(pkgPath('extensions')),
+    false,
+    'extensions/ must not exist at the aggregate package root'
+  );
+  assert.equal(
+    existsSync(pkgPath('themes')),
+    false,
+    'themes/ must not exist at the aggregate package root'
   );
 });
 

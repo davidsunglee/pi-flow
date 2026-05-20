@@ -275,6 +275,35 @@ test('bin entry is executable and starts with node shebang', () => {
   assert.equal(firstLine, '#!/usr/bin/env node', 'First line must be #!/usr/bin/env node');
 });
 
+test('pi-flow-core ships no UX manifest entries or UX source directories', () => {
+  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  assert.equal(
+    pkg.pi?.extensions,
+    undefined,
+    'pi-flow-core must not declare pi.extensions; UX extensions live in pi-flow-ux'
+  );
+  assert.equal(
+    pkg.pi?.themes,
+    undefined,
+    'pi-flow-core must not declare pi.themes; UX themes live in pi-flow-ux'
+  );
+  assert.equal(
+    existsSync(pkgPath('extensions')),
+    false,
+    'extensions/ directory must not exist in pi-flow-core'
+  );
+  assert.equal(
+    existsSync(pkgPath('themes')),
+    false,
+    'themes/ directory must not exist in pi-flow-core'
+  );
+  assert.equal(
+    existsSync(pkgPath('working.json')),
+    false,
+    'working.json must not exist in pi-flow-core (UX default lives in pi-flow-ux)'
+  );
+});
+
 test('pi manifest skills glob matches actual SKILL.md placement', () => {
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
   const globPattern = pkg.pi?.skills?.[0];
