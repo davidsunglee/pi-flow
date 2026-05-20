@@ -7,7 +7,9 @@ import path from "node:path";
 import {
   DEFAULT_WORKING_COLOR,
   DEFAULT_WORKING_SETTINGS,
+  PACKAGE_DEFAULT_SETTINGS_PATH,
   getWorkingCoordinator,
+  loadPackagedDefaultSettings,
   loadSavedWorkingSettings,
   saveWorkingSettings,
   resetWorkingCoordinatorForTests,
@@ -459,4 +461,162 @@ test("thinking still overrides toolUse when the broadened lifecycle is active", 
   } finally {
     resetWorkingCoordinatorForTests();
   }
+});
+
+// Three-tier merge tests: code default ← packaged baseline ← user override.
+// The coordinator's session_start handler is the integration point that
+// composes the three tiers, so these tests drive it directly.
+
+const PACKAGED_BASELINE = {
+  indicatorShape: "pulse",
+  active: { color: "#11AA22", gleam: false, rainbow: false },
+  toolUse: { color: "#3344CC", gleam: true, rainbow: false },
+  thinking: { color: "#995577", gleam: true, rainbow: true },
+};
+
+async function withTier(
+  fn: (paths: { userPath: string; packagedPath: string; dir: string }) => Promise<void>,
+): Promise<void> {
+  const dir = await makeTmpDir();
+  try {
+    resetWorkingCoordinatorForTests();
+    await fn({
+      userPath: path.join(dir, "user-working.json"),
+      packagedPath: path.join(dir, "packaged-working.json"),
+      dir,
+    });
+  } finally {
+    resetWorkingCoordinatorForTests();
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+function makeSessionCtx() {
+  return {
+    ui: {
+      setStatus() {},
+      notify() {},
+    },
+  };
+}
+
+async function bootSession(userPath: string, packagedPath: string) {
+  const coordinator = getWorkingCoordinator(userPath, packagedPath);
+  const { pi, emit } = makePi();
+  coordinator.ensureRegistered(pi as any, true);
+  await emit("session_start", { reason: "startup" }, makeSessionCtx());
+  return { coordinator, emit };
+}
+
+test("PACKAGE_DEFAULT_SETTINGS_PATH resolves to the packaged working.json next to the package root", () => {
+  // The path should end with packages/pi-flow-ux/working.json so the runtime
+  // picks up the baseline shipped with the workspace package.
+  assert.match(PACKAGE_DEFAULT_SETTINGS_PATH.replace(/\\/g, "/"), /packages\/pi-flow-ux\/working\.json$/);
+});
+
+test("session_start with no user and no package settings falls back to the code default", async () => {
+  await withTier(async ({ userPath, packagedPath }) => {
+    const { coordinator } = await bootSession(userPath, packagedPath);
+    assert.deepEqual(coordinator.getSnapshot().settings, DEFAULT_WORKING_SETTINGS);
+  });
+});
+
+test("session_start with only a packaged baseline adopts the packaged default", async () => {
+  await withTier(async ({ userPath, packagedPath }) => {
+    await writeFile(packagedPath, JSON.stringify(PACKAGED_BASELINE), "utf8");
+    const { coordinator } = await bootSession(userPath, packagedPath);
+    assert.deepEqual(coordinator.getSnapshot().settings, PACKAGED_BASELINE);
+  });
+});
+
+test("session_start with a full user file lets the user win over the packaged baseline", async () => {
+  await withTier(async ({ userPath, packagedPath }) => {
+    await writeFile(packagedPath, JSON.stringify(PACKAGED_BASELINE), "utf8");
+    const userSettings = {
+      indicatorShape: "spinner",
+      active: { color: "#FFAA00", gleam: true, rainbow: true },
+      toolUse: { color: "#FF00AA", gleam: false, rainbow: true },
+      thinking: { color: "#00FFAA", gleam: false, rainbow: false },
+    };
+    await writeFile(userPath, JSON.stringify(userSettings), "utf8");
+
+    const { coordinator } = await bootSession(userPath, packagedPath);
+    assert.deepEqual(coordinator.getSnapshot().settings, userSettings);
+  });
+});
+
+test("partial user settings overlay the packaged baseline field-by-field", async () => {
+  await withTier(async ({ userPath, packagedPath }) => {
+    await writeFile(packagedPath, JSON.stringify(PACKAGED_BASELINE), "utf8");
+    // User only overrides indicatorShape; every other field should be inherited
+    // from the packaged baseline rather than reverting to code defaults.
+    await writeFile(userPath, JSON.stringify({ indicatorShape: "dot" }), "utf8");
+
+    const { coordinator } = await bootSession(userPath, packagedPath);
+    const settings = coordinator.getSnapshot().settings;
+    assert.equal(settings.indicatorShape, "dot", "user field overrides");
+    assert.deepEqual(settings.active, PACKAGED_BASELINE.active, "active comes from packaged baseline");
+    assert.deepEqual(settings.toolUse, PACKAGED_BASELINE.toolUse, "toolUse comes from packaged baseline");
+    assert.deepEqual(settings.thinking, PACKAGED_BASELINE.thinking, "thinking comes from packaged baseline");
+  });
+});
+
+test("malformed user JSON falls back to the packaged baseline", async () => {
+  await withTier(async ({ userPath, packagedPath }) => {
+    await writeFile(packagedPath, JSON.stringify(PACKAGED_BASELINE), "utf8");
+    await writeFile(userPath, "{ not valid json", "utf8");
+
+    const { coordinator } = await bootSession(userPath, packagedPath);
+    assert.deepEqual(coordinator.getSnapshot().settings, PACKAGED_BASELINE);
+  });
+});
+
+test("malformed packaged JSON throws loudly during session_start", async () => {
+  await withTier(async ({ userPath, packagedPath }) => {
+    await writeFile(packagedPath, "{ not valid json", "utf8");
+    await assert.rejects(() => loadPackagedDefaultSettings(packagedPath));
+
+    // Booting a session against a malformed package file should not swallow the
+    // error — surface it to the host instead of silently degrading.
+    resetWorkingCoordinatorForTests();
+    const coordinator = getWorkingCoordinator(userPath, packagedPath);
+    const { pi, emit } = makePi();
+    coordinator.ensureRegistered(pi as any, true);
+    await assert.rejects(() => emit("session_start", { reason: "startup" }, makeSessionCtx()));
+  });
+});
+
+test("/working mutations persist only to the user path and never mutate the packaged file", async () => {
+  await withTier(async ({ userPath, packagedPath }) => {
+    const packagedSource = JSON.stringify(PACKAGED_BASELINE, null, 2);
+    await writeFile(packagedPath, packagedSource, "utf8");
+    const { stat } = await import("node:fs/promises");
+    const beforeMtime = (await stat(packagedPath)).mtimeMs;
+
+    await bootSession(userPath, packagedPath);
+    // The coordinator's `/working` command handler routes persistence through
+    // `saveWorkingSettings(this.settingsPath, …)`. Replay that same call here
+    // to assert the packaged file is never touched by a config mutation.
+    await saveWorkingSettings(userPath, {
+      ...PACKAGED_BASELINE,
+      indicatorShape: "dot",
+    });
+
+    const userParsed = JSON.parse(await readFile(userPath, "utf8"));
+    assert.equal(userParsed.indicatorShape, "dot", "user file picks up the mutation");
+
+    const packagedAfter = await readFile(packagedPath, "utf8");
+    assert.equal(packagedAfter, packagedSource, "packaged file content unchanged");
+    assert.equal((await stat(packagedPath)).mtimeMs, beforeMtime, "packaged file mtime unchanged");
+  });
+});
+
+test("getWorkingCoordinator throws when the same settingsPath is rebound to a different packageDefaultPath", async () => {
+  await withTier(async ({ userPath, packagedPath, dir }) => {
+    getWorkingCoordinator(userPath, packagedPath);
+    assert.throws(
+      () => getWorkingCoordinator(userPath, path.join(dir, "other-packaged.json")),
+      /refusing to rebind/,
+    );
+  });
 });

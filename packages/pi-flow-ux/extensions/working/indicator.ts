@@ -22,13 +22,16 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import { buildWorkingIndicator } from "./effects.ts";
-import { DEFAULT_SETTINGS_PATH, getWorkingCoordinator } from "./working.ts";
+import { DEFAULT_SETTINGS_PATH, PACKAGE_DEFAULT_SETTINGS_PATH, getWorkingCoordinator } from "./working.ts";
 
-export { DEFAULT_SETTINGS_PATH } from "./working.ts";
+export { DEFAULT_SETTINGS_PATH, PACKAGE_DEFAULT_SETTINGS_PATH } from "./working.ts";
 
-export function createExtension(settingsPath: string = DEFAULT_SETTINGS_PATH) {
+export function createExtension(
+  settingsPath: string = DEFAULT_SETTINGS_PATH,
+  packageDefaultPath: string = PACKAGE_DEFAULT_SETTINGS_PATH,
+) {
   return function (pi: ExtensionAPI): void {
-    const coordinator = getWorkingCoordinator(settingsPath);
+    const coordinator = getWorkingCoordinator(settingsPath, packageDefaultPath);
     coordinator.ensureRegistered(pi, true);
 
     let ctxRef: ExtensionContext | undefined;

@@ -1,12 +1,15 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import { MESSAGE_ANIMATION_INTERVAL_MS, renderWorkingMessageFrame, shouldAnimateStyle } from "./effects.ts";
-import { DEFAULT_SETTINGS_PATH, getWorkingCoordinator } from "./working.ts";
+import { DEFAULT_SETTINGS_PATH, PACKAGE_DEFAULT_SETTINGS_PATH, getWorkingCoordinator } from "./working.ts";
 import { pickRandomWorkingMessage } from "./messages.ts";
 
-export function createExtension(settingsPath: string = DEFAULT_SETTINGS_PATH) {
+export function createExtension(
+  settingsPath: string = DEFAULT_SETTINGS_PATH,
+  packageDefaultPath: string = PACKAGE_DEFAULT_SETTINGS_PATH,
+) {
   return function (pi: ExtensionAPI) {
-    const coordinator = getWorkingCoordinator(settingsPath);
+    const coordinator = getWorkingCoordinator(settingsPath, packageDefaultPath);
     coordinator.ensureRegistered(pi, false);
 
     let currentMessage: string | undefined;

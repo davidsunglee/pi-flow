@@ -35,6 +35,10 @@ const VALID_COMMAND_STATES: readonly WorkingCommandState[] = ["active", "tool-us
 const VALID_INDICATOR_SHAPES: readonly IndicatorShape[] = ["dot", "pulse", "spinner"];
 
 export const DEFAULT_SETTINGS_PATH = path.join(os.homedir(), ".pi", "agent", "working.json");
+// Resolves to packages/pi-flow-ux/working.json when this module is loaded from
+// source. Acts as the packaged baseline that the runtime layers user settings
+// on top of.
+export const PACKAGE_DEFAULT_SETTINGS_PATH = path.join(import.meta.dirname, "..", "..", "working.json");
 export const DEFAULT_WORKING_SETTINGS: WorkingSettings = {
   indicatorShape: "spinner",
   active: { color: DEFAULT_WORKING_COLOR, gleam: false, rainbow: false },
@@ -72,9 +76,8 @@ function normalizeStyle(value: unknown, fallback: WorkingStyle): WorkingStyle {
   };
 }
 
-export function normalizeWorkingSettings(value: unknown): WorkingSettings {
-  const fallback = cloneDefaultSettings();
-  if (!isPlainObject(value)) return fallback;
+export function normalizeWorkingSettings(value: unknown, fallback: WorkingSettings = DEFAULT_WORKING_SETTINGS): WorkingSettings {
+  if (!isPlainObject(value)) return cloneSettings(fallback);
   return {
     indicatorShape: isIndicatorShape(value.indicatorShape) ? value.indicatorShape : fallback.indicatorShape,
     active: normalizeStyle(value.active, fallback.active),
@@ -83,7 +86,7 @@ export function normalizeWorkingSettings(value: unknown): WorkingSettings {
   };
 }
 
-export async function loadSavedWorkingSettings(filePath: string): Promise<WorkingSettings | undefined> {
+export async function loadSavedWorkingSettings(filePath: string, fallback: WorkingSettings = DEFAULT_WORKING_SETTINGS): Promise<WorkingSettings | undefined> {
   let raw: string;
   try {
     raw = await fs.readFile(filePath, "utf8");
@@ -99,7 +102,28 @@ export async function loadSavedWorkingSettings(filePath: string): Promise<Workin
   }
 
   if (!isPlainObject(parsed)) return undefined;
-  return normalizeWorkingSettings(parsed);
+  return normalizeWorkingSettings(parsed, fallback);
+}
+
+// Loads the packaged baseline shipped alongside the working extension. Returns
+// `undefined` only when the package file is missing; malformed packaged JSON
+// throws so a broken release surfaces loudly instead of silently degrading to
+// code defaults.
+export async function loadPackagedDefaultSettings(
+  packagePath: string,
+): Promise<WorkingSettings | undefined> {
+  let raw: string;
+  try {
+    raw = await fs.readFile(packagePath, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw err;
+  }
+  const parsed: unknown = JSON.parse(raw);
+  if (!isPlainObject(parsed)) {
+    throw new Error(`${packagePath}: top-level JSON must be an object`);
+  }
+  return normalizeWorkingSettings(parsed, DEFAULT_WORKING_SETTINGS);
 }
 
 export async function saveWorkingSettings(filePath: string, settings: WorkingSettings): Promise<void> {
@@ -180,6 +204,7 @@ function extractToolCallId(value: unknown): string | undefined {
 
 class WorkingCoordinator {
   private readonly settingsPath: string;
+  private readonly packageDefaultPath: string;
   private settings: WorkingSettings = cloneDefaultSettings();
   private activeTurn = false;
   private thinking = false;
@@ -194,8 +219,9 @@ class WorkingCoordinator {
   private runtimeRegistered = false;
   private commandRegistered = false;
 
-  constructor(settingsPath: string) {
+  constructor(settingsPath: string, packageDefaultPath: string) {
     this.settingsPath = settingsPath;
+    this.packageDefaultPath = packageDefaultPath;
   }
 
   getSnapshot(): WorkingSnapshot {
@@ -225,8 +251,14 @@ class WorkingCoordinator {
         // builds do not write this key, but older installations might still
         // have an entry in their footer cache until they reload.
         ctx.ui.setStatus(FOOTER_STATUS_KEY, undefined);
-        const saved = await loadSavedWorkingSettings(this.settingsPath);
-        this.settings = saved ?? cloneDefaultSettings();
+        // Three-tier merge: code default ← packaged baseline ← user override.
+        // Each layer fills in fields the layer above did not specify; the
+        // packaged baseline is the fallback for normalizing user JSON so that
+        // partial user files leave packaged values intact.
+        const packaged = await loadPackagedDefaultSettings(this.packageDefaultPath);
+        const baseline = packaged ?? cloneDefaultSettings();
+        const user = await loadSavedWorkingSettings(this.settingsPath, baseline);
+        this.settings = user ?? baseline;
         this.emit();
       });
 
@@ -427,14 +459,33 @@ class WorkingCoordinator {
 }
 
 let sharedCoordinator: WorkingCoordinator | undefined;
+let sharedSettingsPath: string | undefined;
+let sharedPackageDefaultPath: string | undefined;
 
-export function getWorkingCoordinator(settingsPath: string = DEFAULT_SETTINGS_PATH): WorkingCoordinator {
-  if (!sharedCoordinator) {
-    sharedCoordinator = new WorkingCoordinator(settingsPath);
+export function getWorkingCoordinator(
+  settingsPath: string = DEFAULT_SETTINGS_PATH,
+  packageDefaultPath: string = PACKAGE_DEFAULT_SETTINGS_PATH,
+): WorkingCoordinator {
+  if (sharedCoordinator) {
+    if (sharedSettingsPath === settingsPath && sharedPackageDefaultPath !== packageDefaultPath) {
+      // Reinitialization with the same user path but a different packaged
+      // baseline is almost always a programming error — e.g. two host bundles
+      // disagreeing on where the packaged file lives — and would silently mask
+      // the second baseline. Surface it loudly.
+      throw new Error(
+        `getWorkingCoordinator: settingsPath=${settingsPath} already bound to packageDefaultPath=${sharedPackageDefaultPath}, refusing to rebind to ${packageDefaultPath}`,
+      );
+    }
+    return sharedCoordinator;
   }
+  sharedCoordinator = new WorkingCoordinator(settingsPath, packageDefaultPath);
+  sharedSettingsPath = settingsPath;
+  sharedPackageDefaultPath = packageDefaultPath;
   return sharedCoordinator;
 }
 
 export function resetWorkingCoordinatorForTests(): void {
   sharedCoordinator = undefined;
+  sharedSettingsPath = undefined;
+  sharedPackageDefaultPath = undefined;
 }

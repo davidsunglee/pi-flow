@@ -7,7 +7,7 @@
   "keywords": ["pi-package"],
   "files": ["extensions", "themes", "working.json"],
   "scripts": {
-    "test:node": "find __tests__ -name '*.test.mjs' -print0 | xargs -0 node --test",
+    "test:node": "find __tests__ extensions \\( -name '*.test.mjs' -o -name '*.test.ts' \\) -print0 | xargs -0 node --experimental-strip-types --test",
     "test": "pnpm run test:node",
     "check": "pnpm run test"
   },

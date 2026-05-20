@@ -22,7 +22,13 @@ async function withTmpDir(fn: (dir: string) => Promise<void>): Promise<void> {
   }
 }
 
-function bootExtensions(settingsPath: string) {
+function bootExtensions(
+  settingsPath: string,
+  // Same isolation strategy as indicator.test.ts: point the packaged baseline
+  // at a missing sibling file so the message tests rely on code defaults
+  // unless they explicitly opt in to a packaged file.
+  packageDefaultPath: string = path.join(path.dirname(settingsPath), "package-default-missing.json"),
+) {
   const handlers = new Map<string, EventHandler[]>();
   let command: CommandDef | undefined;
   const pi = {
@@ -36,8 +42,8 @@ function bootExtensions(settingsPath: string) {
     },
   };
 
-  createWorkingMessageExtension(settingsPath)(pi as any);
-  createWorkingIndicatorExtension(settingsPath)(pi as any);
+  createWorkingMessageExtension(settingsPath, packageDefaultPath)(pi as any);
+  createWorkingIndicatorExtension(settingsPath, packageDefaultPath)(pi as any);
 
   assert.ok(command, "working command should be registered");
   return {

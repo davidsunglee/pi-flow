@@ -25,7 +25,13 @@ async function withTmpFile(fn: (filePath: string, dir: string) => Promise<void>)
   }
 }
 
-function bootExtension(settingsPath: string): { emit: (event: string, payload: any, ctx: any) => Promise<void>; command: CommandDef } {
+function bootExtension(
+  settingsPath: string,
+  // Default the packaged baseline to a sibling path that does not exist, so
+  // these tests fall through to the in-code default instead of accidentally
+  // depending on the real packaged working.json shipped with the package.
+  packageDefaultPath: string = path.join(path.dirname(settingsPath), "package-default-missing.json"),
+): { emit: (event: string, payload: any, ctx: any) => Promise<void>; command: CommandDef } {
   const handlers = new Map<string, EventHandler[]>();
   let command: CommandDef | undefined;
 
@@ -40,7 +46,7 @@ function bootExtension(settingsPath: string): { emit: (event: string, payload: a
     },
   };
 
-  createExtension(settingsPath)(stubPi as any);
+  createExtension(settingsPath, packageDefaultPath)(stubPi as any);
   assert.ok(command, "working command should be registered");
 
   return {
