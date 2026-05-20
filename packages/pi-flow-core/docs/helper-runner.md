@@ -75,11 +75,11 @@ location. Miss means miss.
 # Classify workflow drift between a spec and recommendation
 pi-flow helper _shared/classify-workflow-drift --brief-path scout-brief.md
 
-# Clean up __pycache__ directories under the package
-pi-flow helper _shared/cleanup-pycache
+# Clean up __pycache__ directories under a given path
+pi-flow helper _shared/cleanup-pycache skills/fastlane/scripts
 
-# Clean up stale test-run artifacts
-pi-flow helper _shared/cleanup-test-runs
+# Clean up stale test-run artifacts for a specific plan
+pi-flow helper _shared/cleanup-test-runs docs/test-runs/<plan-name>
 
 # Detect the test command for a project
 pi-flow helper _shared/detect-test-command

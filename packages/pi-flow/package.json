@@ -5,6 +5,8 @@
   "type": "module",
   "description": "Aggregate install package for pi-flow workflow resources.",
   "keywords": ["pi-package"],
+  "bin": { "pi-flow": "./bin/pi-flow.mjs" },
+  "files": ["bin"],
   "dependencies": { "pi-flow-core": "workspace:*" },
   "peerDependencies": { "pi-interactive-subagent": "*" },
   "scripts": {

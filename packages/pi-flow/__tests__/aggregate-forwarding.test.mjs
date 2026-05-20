@@ -1,9 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync, readdirSync, realpathSync, statSync } from 'node:fs';
+import {
+  readFileSync,
+  existsSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { resolve, dirname, basename } from 'node:path';
+import { resolve, dirname, basename, join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const PKG_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -142,6 +152,63 @@ test('neither package declares install-time side-effect hooks', () => {
       undefined,
       `pi-flow-core/package.json must not declare scripts.${scriptName}`
     );
+  }
+});
+
+test('aggregate install exposes pi-flow runner in node_modules/.bin', () => {
+  // Reproduces the consumer-install shape described in the review finding:
+  // `pnpm add <abs path to packages/pi-flow>` in a fresh consumer must produce
+  // a usable `node_modules/.bin/pi-flow` entry, not just a nested binary under
+  // `node_modules/pi-flow/node_modules/.bin/`.
+  const pnpmAvailable = spawnSync('pnpm', ['--version'], { encoding: 'utf8' });
+  if (pnpmAvailable.error || pnpmAvailable.status !== 0) {
+    console.log(JSON.stringify({ skipped: 'pnpm not available' }));
+    return;
+  }
+
+  const tmpDir = mkdtempSync(join(tmpdir(), 'pi-flow-install-'));
+  try {
+    writeFileSync(
+      join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'pi-flow-install-probe', version: '0.0.0', private: true }) + '\n',
+    );
+    // `--ignore-workspace` keeps the temp consumer from being adopted into the
+    // pi-flow workspace; `--prefer-offline` avoids gratuitous registry hits.
+    const install = spawnSync(
+      'pnpm',
+      ['add', PKG_DIR, '--ignore-workspace', '--prefer-offline'],
+      { cwd: tmpDir, encoding: 'utf8' },
+    );
+    assert.equal(
+      install.status,
+      0,
+      `pnpm add ${PKG_DIR} failed: status=${install.status}, stderr=${(install.stderr || '').slice(0, 800)}`,
+    );
+
+    const binDir = join(tmpDir, 'node_modules', '.bin');
+    const binPath = join(binDir, 'pi-flow');
+    const binEntries = existsSync(binDir) ? readdirSync(binDir) : [];
+    assert.ok(
+      existsSync(binPath),
+      `node_modules/.bin/pi-flow must exist after aggregate install. Found bin entries: ${binEntries.join(', ')}`,
+    );
+
+    const probe = spawnSync(binPath, ['template', '_shared/test-runner-dispatch'], {
+      cwd: tmpDir,
+      encoding: 'utf8',
+    });
+    assert.equal(
+      probe.status,
+      0,
+      `node_modules/.bin/pi-flow template _shared/test-runner-dispatch must exit 0; got status=${probe.status}, stderr=${(probe.stderr || '').slice(0, 800)}`,
+    );
+    assert.match(
+      probe.stdout || '',
+      /test-runner-dispatch\.md\n?$/,
+      `pi-flow template stdout should print the resolved template path; got: ${(probe.stdout || '').slice(0, 400)}`,
+    );
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
   }
 });
 
