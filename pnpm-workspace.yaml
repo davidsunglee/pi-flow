@@ -1,7 +1,7 @@
 packages:
   - "packages/*"
 allowBuilds:
-  '@google/genai': set this to true or false
-  koffi: set this to true or false
-  protobufjs: set this to true or false
+  '@google/genai': false
+  koffi: false
+  protobufjs: false
 autoInstallPeers: false

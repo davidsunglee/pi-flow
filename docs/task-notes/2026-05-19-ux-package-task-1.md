@@ -125,6 +125,27 @@ No compiled `.js` entry points are needed. No build or prepublish step is requir
 
 ---
 
+## V3 — Transitive Build-Script Approvals
+
+**Decision: all three transitive packages set to `false` (build scripts disabled).**
+
+Three transitive packages require build-script approval via `allowBuilds` in `pnpm-workspace.yaml`:
+
+| Package | Transitive path |
+|---|---|
+| `@google/genai` | `pi-flow-ux` devDep `@earendil-works/pi-coding-agent` → `@earendil-works/pi-ai` → `@google/genai` |
+| `protobufjs` | Transitive through `@google/genai` |
+| `koffi` | `pi-flow-ux` devDep `@earendil-works/pi-tui` (used dynamically for Windows VT input / Shift+Tab support; absence is caught and handled at runtime) |
+
+**Rationale:** Conservative/security-friendly default. None of these lifecycle scripts are required for normal development on macOS/Linux:
+- `@google/genai` declares a no-op `preinstall` script.
+- `protobufjs` declares a `postinstall` version-scheme compatibility check.
+- `koffi` installs native FFI prebuilds, but Pi TUI uses it only for Windows VT input / Shift+Tab support and catches its absence gracefully.
+
+**Can revisit:** `koffi: true` only if Windows TUI runtime support becomes a requirement.
+
+---
+
 ## Source path used for Pi inspection
 
 ```
