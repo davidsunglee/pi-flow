@@ -29,7 +29,7 @@ The following errors were identified by the plan reviewer. Address each one:
 - A `Plan artifact: <path>` line in `## Provenance` is always present. Read the existing plan file in full from disk before editing — this is the plan you are editing in place. The plan body is NOT inlined here.
 - If a `Task artifact: <path>` line appears in `## Provenance`, that file on disk is the authoritative original task specification. Read it in full from disk for reference. Do not assume its body is quoted anywhere in this prompt.
 - If a `Scout brief: docs/briefs/<filename>` line appears in `## Provenance`, read that brief from disk as well and treat it as primary reference context. If the brief file is missing on disk, note it and continue — do not abort.
-- If no `Task artifact:` line appears, the original task description is contained inline in `## Original Spec (inline)` above (todo/freeform case).
+- If no `Task artifact:` line appears, the original task description is contained inline in `## Original Spec (inline)` above (idea/freeform case).
 - If both `Task artifact:` is present and `## Original Spec (inline)` is non-empty, prefer the on-disk artifact as authoritative and ignore the inline section.
 
 ## Output

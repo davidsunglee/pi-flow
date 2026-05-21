@@ -17,7 +17,7 @@ You must NOT make any changes to the codebase. Only read, analyze, and write the
 
 Your task prompt has a `## Task` section followed by a `## Provenance` block. Depending on how the orchestrator dispatched you, inputs arrive in one of two shapes:
 
-### Inline input (todo or freeform)
+### Inline input (idea or freeform)
 
 - The `## Task` section contains the full task body inline.
 - No `Task artifact:` line appears in `## Provenance`.
@@ -36,7 +36,7 @@ Your task prompt has a `## Task` section followed by a `## Provenance` block. De
 When dispatched with an edit prompt, your task prompt has the same `## Provenance` + `## Artifact Reading Contract` shape as file-based input above, plus inline `## Review Findings` and `## Output` sections.
 
 - A `Plan artifact: <path>` line is always present in `## Provenance`. You MUST read the existing plan file in full from disk before editing — this is the plan you are editing in place, at that same path. The plan body is NOT inlined in edit-mode prompts.
-- If a `Task artifact: <path>` line appears in `## Provenance`, read the original task artifact from disk for reference. If it does not appear, the original task description is contained inline in `## Original Spec (inline)` (todo/freeform case).
+- If a `Task artifact: <path>` line appears in `## Provenance`, read the original task artifact from disk for reference. If it does not appear, the original task description is contained inline in `## Original Spec (inline)` (idea/freeform case).
 - Scout brief handling is the same as file-based input: read it from disk if referenced, warn and continue if it is missing.
 - The `## Review Findings` and `## Output` sections remain inline — they carry the specific errors to address and the path to write the edited plan to. Edit surgically against those findings; do not rewrite unflagged sections.
 

@@ -131,7 +131,7 @@ The customize submenu MUST NOT expose a TDD toggle or a Test suite check toggle.
   where `<coder_tier>` is the run-state field initialized to `capable` in Step 2 and mutable via the customize submenu's `(t) Coder tier` option (allowed values: `cheap`, `standard`, `capable`). On non-zero exit from the helper, surface its stderr (canonical templates (1)–(4)) byte-equal and stop.
 
 - Compose the placeholders:
-  - `{SPEC_OR_TODO_CONTENT}` — full spec body (for spec-path inputs) or full idea body (for idea-ID inputs).
+  - `{SPEC_OR_IDEA_CONTENT}` — full spec body (for spec-path inputs) or full idea body (for idea-ID inputs).
   - `{CHECKLIST}` — the confirmed numbered checklist from Step 1/Step 2 `(e)`.
   - `{WORKING_DIR}` — the absolute working directory.
   - `{TDD_BLOCK}` — contents of `skills/execute-plan/tdd-block.md` read from disk.

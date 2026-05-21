@@ -203,7 +203,7 @@ Important waived (appended to plan): <count appended on approved_with_concerns p
 <one-line reason; only present when STATUS: failed>
 
 ## Structural-Only Label
-This run was structural-only — no original spec/todo coverage was checked.
+This run was structural-only — no original spec/idea coverage was checked.
 ```
 
 **`## Failure Reason`** appears only on `STATUS: failed`.

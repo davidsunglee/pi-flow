@@ -4,7 +4,7 @@ Prompt template dispatched to the single fastlane `coder` subagent. Fill placeho
 
 ## Task Description
 
-{SPEC_OR_TODO_CONTENT}
+{SPEC_OR_IDEA_CONTENT}
 
 ## Implementation Checklist
 

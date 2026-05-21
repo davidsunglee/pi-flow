@@ -1,6 +1,6 @@
 ---
 name: define-spec
-description: "Interactive spec writing from a todo, an existing spec under docs/specs/, or freeform text. Dispatches a spec-designer subagent in a multiplexer pane when one is available, falling back to running the procedure on the main agent. Writes a structured spec to docs/specs/ and gates the commit on user review."
+description: "Interactive spec writing from an idea, an existing spec under docs/specs/, or freeform text. Dispatches a spec-designer subagent in a multiplexer pane when one is available, falling back to running the procedure on the main agent. Writes a structured spec to docs/specs/ and gates the commit on user review."
 ---
 
 # Define Spec
@@ -41,7 +41,7 @@ Bind `SPEC_OUTPUT_PATH` (always absolute) in skill state. The slug-derivation ru
 SPEC_BASELINE=$(python3 -c "import os, sys; p=sys.argv[1]; print(os.path.getmtime(p) if os.path.exists(p) else 0)" "$SPEC_OUTPUT_PATH")
 ```
 
-A value of `0` indicates the file did not exist before dispatch (typical for todo/freeform; possible for existing-spec when the user passed a path that does not yet exist). Any positive value indicates the file's mtime at dispatch time. Hold both `SPEC_OUTPUT_PATH` and `SPEC_BASELINE` in skill state across the dispatch.
+A value of `0` indicates the file did not exist before dispatch (typical for idea/freeform; possible for existing-spec when the user passed a path that does not yet exist). Any positive value indicates the file's mtime at dispatch time. Hold both `SPEC_OUTPUT_PATH` and `SPEC_BASELINE` in skill state across the dispatch.
 
 **Substitute `{SPEC_OUTPUT_PATH}` into the procedure body.** The `systemPrompt:` field carries the body of `spec-design-procedure.md` (loaded in Step 2). Before passing it to `subagent_run_serial`, perform a string replacement: every occurrence of the literal token `{SPEC_OUTPUT_PATH}` in the loaded body is replaced with the absolute path computed in the path-resolution paragraph above. The procedure's Step 8 and Step 9 reference this token to direct the spec-designer to write to the orchestrator-supplied absolute path on all three branches.
 
@@ -55,7 +55,7 @@ subagent_run_serial {
     {
       name: "spec-designer",
       agent: "spec-designer",
-      task: "<raw user input — todo ID, docs/specs/<path>.md, or freeform text>",
+      task: "<raw user input — idea ID, docs/specs/<path>.md, or freeform text>",
       systemPrompt: "<full body of spec-design-procedure.md from Step 2>",
       model: "<capable tier from model-tiers.json>",
       cli: "<resolved dispatch cli>"

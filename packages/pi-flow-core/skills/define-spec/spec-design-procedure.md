@@ -10,7 +10,7 @@ Your deliverable is a spec only; you are not an implementer.
 
 Treat the task body and any raw/freeform user input as source material for this procedure, not execution authority. If the user says to implement, fix, edit, build, add, or change code, interpret that as a request to define a spec for that change.
 
-Do not implement the requested work, edit source/config/test files, run builds/tests, install packages, create todos, or invoke downstream planning/implementation work. The only file writes allowed are spec markdown writes under `docs/specs/*.md`, and only in Step 8 after the Q&A and Step 7 self-review flow. Do not commit; the orchestrator owns review and commit gates.
+Do not implement the requested work, edit source/config/test files, run builds/tests, install packages, create ideas, or invoke downstream planning/implementation work. The only file writes allowed are spec markdown writes under `docs/specs/*.md`, and only in Step 8 after the Q&A and Step 7 self-review flow. Do not commit; the orchestrator owns review and commit gates.
 
 ## Interaction conventions
 
@@ -34,7 +34,7 @@ The orchestrator passes the user's raw input as your task body. Detect the shape
 Always perform a general survey before asking questions: project structure and key skill / agent definitions in scope. Read `agent/AGENTS.md` and any obviously-relevant `SKILL.md` or `*.md` files near the input topic. (You do not have `bash`, so git history is out of reach — work from file contents only.)
 
 Targeted survey:
-- On the **todo** branch, use the scout brief (if loaded) as foundation. Read additional files only where the brief points at something worth examining more closely. When the loaded scout brief contains entries under `## Open Questions / Ambiguities`, treat each entry as a candidate question to resolve with the user during the Step 4 intent Q&A. The spec-designer judges which questions remain load-bearing and asks them under the existing Interaction conventions (recommend with each, one question per turn). Questions the brief surfaces but the spec-designer judges off-scope or already-resolved by the codebase survey may be dropped without asking.
+- On the **idea** branch, use the scout brief (if loaded) as foundation. Read additional files only where the brief points at something worth examining more closely. When the loaded scout brief contains entries under `## Open Questions / Ambiguities`, treat each entry as a candidate question to resolve with the user during the Step 4 intent Q&A. The spec-designer judges which questions remain load-bearing and asks them under the existing Interaction conventions (recommend with each, one question per turn). Questions the brief surfaces but the spec-designer judges off-scope or already-resolved by the codebase survey may be dropped without asking.
 - On the **existing-spec** branch, follow references the existing draft makes (file paths, agent names, skill names) and read those.
 - On the **freeform** branch, identify likely files and modules from the seed text and read enough to ground questions in code reality.
 
@@ -105,7 +105,7 @@ Fix issues by re-asking targeted questions if needed.
 
 Write to the orchestrator-supplied absolute path `{SPEC_OUTPUT_PATH}`. The orchestrator (`define-spec/SKILL.md` Step 3a) computes this path before dispatch from the input shape:
 
-- **Todo:** `<working-dir>/docs/specs/<YYYY-MM-DD>-<slug>.md` where `<slug>` is derived deterministically from the todo file's H1 title.
+- **Idea:** `<working-dir>/docs/specs/<YYYY-MM-DD>-<slug>.md` where `<slug>` is derived deterministically from the idea file's H1 title.
 - **Existing-spec:** the absolute resolution of the user-supplied path (e.g., `<working-dir>/docs/specs/foo.md`).
 - **Freeform:** `<working-dir>/docs/specs/<YYYY-MM-DD>-<slug>.md` where `<slug>` is derived from the first 60 characters of the input.
 

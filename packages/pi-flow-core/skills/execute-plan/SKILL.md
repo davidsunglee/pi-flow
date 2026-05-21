@@ -525,7 +525,7 @@ Otherwise, always run this gate: re-run the full integration suite and confirm n
    Empty sections render as `(none)`. No continue option by design (matches the Step 12 final-wave menu).
 4. **Menu actions:**
    - **(d) Debug failures now:** Follow [`integration-regression-debugging.md`](integration-regression-debugging.md) using the **Step 16 (final-gate)** parameter row. `change_range` = `BASE_SHA..HEAD_SHA` (`BASE_SHA` = `PRE_EXECUTION_SHA` from Step 8, `HEAD_SHA` = `git rev-parse HEAD`); `suspect_universe` = every plan task whose `**Files:**` scope intersects `git diff --name-only BASE_SHA HEAD_SHA`; `re_test_callback` re-enters this gate at step 1. Repeat until both gate-blocking sets are empty or the user picks `(x)`. Each attempt counts toward Step 13's retry budget.
-   - **(x) Stop execution:** halt. Report via Step 14 (list unresolved `current_non_baseline_stable` and `current_non_reconcilable` from the most recent final-gate artifact). Do NOT close the todo or run branch completion. `docs/test-runs/<plan-name>/` is preserved.
+   - **(x) Stop execution:** halt. Report via Step 14 (list unresolved `current_non_baseline_stable` and `current_non_reconcilable` from the most recent final-gate artifact). Do NOT close the idea or run branch completion. `docs/test-runs/<plan-name>/` is preserved.
 
 **Blocking guarantee:** `### 1. Cleanup`, `### 2. Close linked idea`, and `### 4. Branch completion` MUST NOT execute while either set is non-empty. The only exits are gate-pass or `(x)`.
 

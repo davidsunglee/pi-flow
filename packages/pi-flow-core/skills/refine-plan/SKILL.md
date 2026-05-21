@@ -17,7 +17,7 @@ Collect the following from the caller (user, `generate-plan`, or another skill):
 |-------|----------|---------|--------|
 | `PLAN_PATH` | yes | — | Caller positional argument (path to the plan file) |
 | `TASK_ARTIFACT` | no | derived from plan preamble | Auto-discovered from the plan's `**Spec:**` line; override with `--task-artifact <path>` |
-| `TASK_DESCRIPTION` | no | empty | Set via `--task-description <text>` — the inline body of the original spec/todo. Used as the coverage source when no on-disk task artifact is available; callers like `generate-plan` pass this through for todo/freeform inputs |
+| `TASK_DESCRIPTION` | no | empty | Set via `--task-description <text>` — the inline body of the original spec/idea. Used as the coverage source when no on-disk task artifact is available; callers like `generate-plan` pass this through for idea/freeform inputs |
 | `SOURCE_SPEC` | no | derived from plan preamble | Auto-discovered from the plan's `**Spec:**` line; supplementary metadata and, when the file exists, the default source for `TASK_ARTIFACT` |
 | `SOURCE_IDEA` | no | derived from plan preamble | Auto-discovered from the plan's `**Source:**` line; override with `--source-idea IDEA-<id>`. Supplementary metadata only — not a coverage source on its own |
 | `SCOUT_BRIEF` | no | derived from plan preamble | Auto-discovered from the plan's `**Scout brief:**` line; override with `--scout-brief <path>`. Supplementary reference context, not a coverage source on its own |
@@ -60,7 +60,7 @@ Continue without that field.
 After Step 3, the skill must have a usable coverage source for the plan reviewer unless `STRUCTURAL_ONLY` is `true`. A coverage source is one of:
 
 - (a) a non-empty `TASK_ARTIFACT` resolved to an existing on-disk file, or
-- (b) a non-empty `TASK_DESCRIPTION` (inline body of the original spec/todo).
+- (b) a non-empty `TASK_DESCRIPTION` (inline body of the original spec/idea).
 
 If `STRUCTURAL_ONLY` is `false` AND both `TASK_ARTIFACT` and `TASK_DESCRIPTION` are empty, stop with:
 
@@ -68,7 +68,7 @@ If `STRUCTURAL_ONLY` is `false` AND both `TASK_ARTIFACT` and `TASK_DESCRIPTION` 
 refine-plan: no coverage source available and --structural-only not set. Provide --task-artifact <path>, --task-description <text>, or pass --structural-only to opt in to a coverage-blind review.
 ```
 
-`SOURCE_IDEA`, `SOURCE_SPEC`, and `SCOUT_BRIEF` are pointer/metadata fields and do **not** satisfy this gate on their own — the reviewer needs an actual body (`TASK_DESCRIPTION`) or an on-disk artifact (`TASK_ARTIFACT`) to perform Spec/Todo Coverage. Otherwise proceed.
+`SOURCE_IDEA`, `SOURCE_SPEC`, and `SCOUT_BRIEF` are pointer/metadata fields and do **not** satisfy this gate on their own — the reviewer needs an actual body (`TASK_DESCRIPTION`) or an on-disk artifact (`TASK_ARTIFACT`) to perform Spec/Idea Coverage. Otherwise proceed.
 
 ## Step 5: Read model matrix
 
@@ -114,7 +114,7 @@ Fill `refine-plan-prompt.md` by invoking `pi-flow helper refine-plan/fill-refine
 Before invoking the Step 7 helper, write the note below to a temp file and pass it via `--structural-only-note` when `STRUCTURAL_ONLY` is true; pass an empty file or `/dev/null` when false. Do not manually replace `{STRUCTURAL_ONLY_NOTE}` after the helper runs.
 
 ```
-This is a structural-only review run. No original spec or todo is available. The plan-reviewer must skip the Spec/Todo Coverage check and include the literal phrase "Structural-only review — no spec/todo coverage check performed." inside the `### Outcome` section's `**Reasoning:**` line (the Summary section no longer exists in the new output format).
+This is a structural-only review run. No original spec or idea is available. The plan-reviewer must skip the Spec/Idea Coverage check and include the literal phrase "Structural-only review — no spec/idea coverage check performed." inside the `### Outcome` section's `**Reasoning:**` line (the Summary section no longer exists in the new output format).
 ```
 
 ## Step 8: Dispatch plan-refiner

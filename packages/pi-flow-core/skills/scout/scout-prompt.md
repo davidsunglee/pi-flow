@@ -21,7 +21,7 @@ Generated at: {GENERATED_AT_ISO}
 Git SHA: {GIT_HEAD_SHA}
 Model: {MODEL_PROVIDER_AND_NAME}
 
-These four values must appear verbatim in the brief preamble, immediately below the H1 title line, in the exact key order documented in `## Brief format` below: `Source:` (todo branch only), `Generated at:`, `Git SHA:`, `Model:`.
+These four values must appear verbatim in the brief preamble, immediately below the H1 title line, in the exact key order documented in `## Brief format` below: `Source:` (idea branch only), `Generated at:`, `Git SHA:`, `Model:`.
 
 ## Procedure
 

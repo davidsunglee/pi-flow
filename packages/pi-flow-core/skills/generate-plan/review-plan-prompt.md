@@ -3,7 +3,7 @@
 You are reviewing a generated implementation plan for structural correctness before execution begins.
 
 **Your task:**
-1. Compare the plan against the original spec/todo to verify full coverage
+1. Compare the plan against the original spec/idea to verify full coverage
 2. Check dependency declarations for accuracy
 3. Assess task sizing and cross-task consistency
 4. Evaluate acceptance criteria quality
@@ -35,20 +35,20 @@ You are reviewing a generated implementation plan for structural correctness bef
 - If a `Task artifact: <path>` line appears in `## Provenance`, the original task specification lives on disk at that path. Read it in full before reviewing. Do not assume its body is quoted anywhere in this prompt.
 - If a `Scout brief: docs/briefs/<filename>` line appears in `## Provenance`, read that brief file from disk as well and treat it as primary context alongside the task artifact.
 - If a referenced scout brief file is missing on disk, note it in your review and continue — do not abort.
-- If no `Task artifact:` line is present, the original task description is contained inline in the `## Original Spec (inline)` section above and is self-contained (this is the todo/freeform case).
+- If no `Task artifact:` line is present, the original task description is contained inline in the `## Original Spec (inline)` section above and is self-contained (this is the idea/freeform case).
 - If both `Task artifact:` is present and `## Original Spec (inline)` is non-empty, prefer the on-disk artifact as authoritative. The inline section must be empty in that case; if it is not, report an inconsistency in your review but continue using the on-disk artifact.
 - If the `## Structural-Only Mode` section is non-empty (i.e. {STRUCTURAL_ONLY_NOTE} was filled), treat the absence of both `Task artifact:` and `## Original Spec (inline)` content as expected — this is a structural-only review. Do NOT report an inconsistency in this case. Follow the instructions in `## Structural-Only Mode`.
 
 ## Review Checklist
 
-**Spec/Todo Coverage:**
-If the `## Structural-Only Mode` section is non-empty, skip this Spec/Todo Coverage block entirely and do not list any coverage findings — there is no original spec/todo to compare against.
+**Spec/Idea Coverage:**
+If the `## Structural-Only Mode` section is non-empty, skip this Spec/Idea Coverage block entirely and do not list any coverage findings — there is no original spec/idea to compare against.
 - Does every requirement in the original spec have a corresponding task?
 - Are there tasks that don't map to any requirement (scope creep)?
 - List any gaps: requirement → missing task.
 
 **Re-review compatibility:**
-- If the plan contains a trailing `## Review Notes` section, disregard it during this review. That section is review meta-data appended by the refiner from a prior `Approved with concerns` outcome, not plan content. Do NOT factor it into Spec/Todo Coverage analysis or task-sizing assessments.
+- If the plan contains a trailing `## Review Notes` section, disregard it during this review. That section is review meta-data appended by the refiner from a prior `Approved with concerns` outcome, not plan content. Do NOT factor it into Spec/Idea Coverage analysis or task-sizing assessments.
 
 **Dependency Accuracy:**
 - For each task, check: does it reference outputs (filenames, paths, interfaces, data) from another task?
@@ -115,7 +115,7 @@ The verdict line MUST be written exactly in the form `**Verdict:** <label>` (bol
 
 Use exactly one of the three verdict labels above. Critical findings always force `Not approved`; you may not downgrade them. `Approved with concerns` is appropriate ONLY when there are zero Critical findings AND there are one or more Important findings that you judge acceptable to ship without forced remediation (for example: the concern is out of scope for the current change, is a follow-up task, or is a low-impact deviation). When you choose `Approved with concerns`, the `**Reasoning:**` line MUST explicitly name each Important finding being waived and the rationale for waiving it. `Approved` requires zero Critical AND zero Important findings.
 
-If this is a structural-only review (per `## Structural-Only Mode`), include the literal phrase "Structural-only review — no spec/todo coverage check performed." inside this `**Reasoning:**` line.
+If this is a structural-only review (per `## Structural-Only Mode`), include the literal phrase "Structural-only review — no spec/idea coverage check performed." inside this `**Reasoning:**` line.
 
 ### Strengths
 
