@@ -287,7 +287,7 @@ class TestExtractProvenancePreamble(unittest.TestCase):
         finally:
             os.unlink(path)
 
-    def test_spec_mode_rejects_legacy_todo_scout_brief(self):
+    def test_spec_mode_rejects_legacy_prefixed_scout_brief(self):
         legacy = "TO" + "DO-12345678-brief.md"
         content = f"# Title\n\nScout brief: docs/briefs/{legacy}\n\n## Real heading\n"
         path = write_tmp(content)

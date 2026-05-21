@@ -13,9 +13,9 @@ type NotifyLevel = "info" | "warning" | "error";
 type NotifyCall = { message: string; level: NotifyLevel };
 
 const EXPECTED_DESCRIPTIONS = {
-  "flow:scout": "Run scout. Routes a IDEA-<id>, brief path, or freeform request to the scout skill.",
-  "flow:spec": "Run define-spec. Routes a IDEA-<id>, spec path, or freeform request to the define-spec skill.",
-  "flow:plan": "Run generate-plan. Routes a IDEA-<id>, brief path, or freeform request to the generate-plan skill.",
+  "flow:scout": "Run scout. Routes an IDEA-<id>, brief path, or freeform request to the scout skill.",
+  "flow:spec": "Run define-spec. Routes an IDEA-<id>, spec path, or freeform request to the define-spec skill.",
+  "flow:plan": "Run generate-plan. Routes an IDEA-<id>, brief path, or freeform request to the generate-plan skill.",
   "flow:refine-plan": "Run refine-plan against a plan file.",
   "flow:execute": "Run execute-plan against a plan file.",
   "flow:refine-code": "Run refine-code against a review.",

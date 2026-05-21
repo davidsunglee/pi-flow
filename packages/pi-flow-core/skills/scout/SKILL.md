@@ -19,7 +19,7 @@ Examine the user's slash-command input (excluding any `--tier` argument) and cla
 - Set the brief output path to `docs/briefs/IDEA-<raw-id>-brief.md`.
 - Call the built-in `idea` tool with `action: "read"`, `id: "<raw-id>"` to fetch the artifact. The tool's `details` payload contains a structured `IdeaArtifact` object (`id`, `title`, `tags`, `status`, `createdAt`, `body`). Use `details.title` as the idea title and `details.body` as the body. If the title is empty, fall back to the first `# ` heading in the body that is outside any fenced code block (skip lines between matching ` ``` ` fences so headings inside examples cannot be selected). If neither source yields a non-empty title, stop with `IDEA-<raw-id> has no usable title — cannot dispatch scout.` Pass the full body through to the prompt as `{TODO_BODY_OR_FREEFORM_TEXT}` (the placeholder name is retained; only the source of its value changes).
 
-**Freeform branch** — any input that does not match the todo regex.
+**Freeform branch** — any input that does not match the idea regex.
 
 - Derive a kebab-case slug from the seed text (lowercase, spaces and punctuation replaced by hyphens, leading/trailing hyphens removed, max ~40 characters).
 - Set the brief output path to `docs/briefs/<YYYY-MM-DD>-<slug>-brief.md` using today's date in UTC (e.g., `2026-05-06`).
