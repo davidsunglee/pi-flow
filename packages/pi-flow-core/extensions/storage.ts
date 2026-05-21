@@ -12,24 +12,20 @@ export interface IdeaArtifact {
   body: string;
 }
 
-export async function getTodoDir(cwd: string): Promise<string> {
+export async function getIdeaDir(cwd: string): Promise<string> {
   const result = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd, encoding: "utf8" });
   if (result.status === 0 && result.stdout) {
-    return path.join(result.stdout.trim(), "docs", "todos");
+    return path.join(result.stdout.trim(), "docs", "ideas");
   }
-  return path.join(cwd, "docs", "todos");
+  return path.join(cwd, "docs", "ideas");
 }
 
 export function generateIdeaId(): string {
   return crypto.randomBytes(4).toString("hex");
 }
 
-export function isLegacyTodoId(value: string): boolean {
-  return /^(TODO-)?[0-9a-f]{8}$/i.test(value);
-}
-
 export function normalizeIdeaId(value: string): string | undefined {
-  const stripped = value.replace(/^TODO-/i, "").toLowerCase();
+  const stripped = value.replace(/^IDEA-/i, "").toLowerCase();
   if (/^[0-9a-f]{8}$/.test(stripped)) return stripped;
   return undefined;
 }

@@ -14,7 +14,7 @@ The following errors were identified by the plan reviewer. Address each one:
 
 {TASK_ARTIFACT}
 
-{SOURCE_TODO}
+{SOURCE_IDEA}
 
 {SOURCE_SPEC}
 

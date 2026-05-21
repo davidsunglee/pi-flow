@@ -2,7 +2,7 @@
 """Fill placeholders in the refine-plan prompt template.
 
 Supports thirteen placeholders:
-  {PLAN_PATH}, {TASK_ARTIFACT}, {SOURCE_TODO}, {SOURCE_SPEC}, {SCOUT_BRIEF},
+  {PLAN_PATH}, {TASK_ARTIFACT}, {SOURCE_IDEA}, {SOURCE_SPEC}, {SCOUT_BRIEF},
   {ORIGINAL_SPEC_INLINE}, {STRUCTURAL_ONLY_NOTE}, {MAX_ITERATIONS},
   {STARTING_ERA}, {REVIEW_OUTPUT_PATH}, {WORKING_DIR}, {MODEL_MATRIX},
   {CARRY_OVER_REVIEW}
@@ -48,7 +48,7 @@ def main():
 Placeholders:
   PLAN_PATH - Path to the plan file
   TASK_ARTIFACT - Task artifact content
-  SOURCE_TODO - Source TODO content
+  SOURCE_IDEA - Source IDEA content
   SOURCE_SPEC - Source specification content
   SCOUT_BRIEF - Scout brief content
   ORIGINAL_SPEC_INLINE - Original spec inline (path or -)
@@ -72,7 +72,7 @@ Placeholders:
         "--task-artifact", required=True, help="Task artifact content"
     )
     parser.add_argument(
-        "--source-todo", required=True, help="Source TODO content"
+        "--source-idea", required=True, help="Source IDEA content"
     )
     parser.add_argument(
         "--source-spec", required=True, help="Source specification content"
@@ -145,7 +145,7 @@ Placeholders:
     placeholders = {
         "{PLAN_PATH}": args.plan_path,
         "{TASK_ARTIFACT}": args.task_artifact,
-        "{SOURCE_TODO}": args.source_todo,
+        "{SOURCE_IDEA}": args.source_idea,
         "{SOURCE_SPEC}": args.source_spec,
         "{SCOUT_BRIEF}": args.scout_brief,
         "{ORIGINAL_SPEC_INLINE}": original_spec_inline,

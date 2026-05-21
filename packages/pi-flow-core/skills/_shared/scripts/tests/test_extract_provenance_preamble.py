@@ -37,7 +37,7 @@ class TestExtractProvenancePreamble(unittest.TestCase):
         result = run(["--file", SPEC_CLEAN, "--mode", "spec"])
         self.assertEqual(result.returncode, 0)
         data = json.loads(result.stdout)
-        self.assertEqual(data["source_todo"], "TODO-12345678")
+        self.assertEqual(data["source_idea"], "IDEA-12345678")
 
     def test_spec_mode_extracts_scout_brief(self):
         result = run(["--file", SPEC_CLEAN, "--mode", "spec"])
@@ -53,14 +53,14 @@ class TestExtractProvenancePreamble(unittest.TestCase):
 
     def test_spec_mode_ignores_lines_after_40_lines(self):
         lines = ["Arbitrary line {}\n".format(i) for i in range(44)]
-        lines.append("Source: TODO-abcdef01\n")
+        lines.append("Source: IDEA-abcdef01\n")
         lines.append("Trailing line\n")
         path = write_tmp("".join(lines))
         try:
             result = run(["--file", path, "--mode", "spec"])
             self.assertEqual(result.returncode, 0)
             data = json.loads(result.stdout)
-            self.assertIsNone(data["source_todo"])
+            self.assertIsNone(data["source_idea"])
         finally:
             os.unlink(path)
 
@@ -93,23 +93,23 @@ class TestExtractProvenancePreamble(unittest.TestCase):
         finally:
             os.unlink(path)
 
-    def test_source_todo_non_hex_silently_ignored(self):
-        path = write_tmp("# Title\n\nSource: TODO-zzzzzzzz\n")
+    def test_source_idea_non_hex_silently_ignored(self):
+        path = write_tmp("# Title\n\nSource: IDEA-zzzzzzzz\n")
         try:
             result = run(["--file", path, "--mode", "spec"])
             self.assertEqual(result.returncode, 0)
             data = json.loads(result.stdout)
-            self.assertIsNone(data["source_todo"])
+            self.assertIsNone(data["source_idea"])
         finally:
             os.unlink(path)
 
-    def test_source_todo_wrong_length_silently_ignored(self):
-        path = write_tmp("# Title\n\nSource: TODO-1234\n")
+    def test_source_idea_wrong_length_silently_ignored(self):
+        path = write_tmp("# Title\n\nSource: IDEA-1234\n")
         try:
             result = run(["--file", path, "--mode", "spec"])
             self.assertEqual(result.returncode, 0)
             data = json.loads(result.stdout)
-            self.assertIsNone(data["source_todo"])
+            self.assertIsNone(data["source_idea"])
         finally:
             os.unlink(path)
 
@@ -127,7 +127,7 @@ class TestExtractProvenancePreamble(unittest.TestCase):
         result = run(["--file", NO_PROVENANCE, "--mode", "brief"])
         self.assertEqual(result.returncode, 0)
         data = json.loads(result.stdout)
-        self.assertIsNone(data["source_todo"])
+        self.assertIsNone(data["source_idea"])
         self.assertIsNone(data["scout_brief"])
         self.assertIsNone(data["git_sha"])
 
@@ -155,14 +155,14 @@ class TestExtractProvenancePreamble(unittest.TestCase):
         finally:
             os.unlink(path)
 
-    def test_spec_mode_extracts_bold_source_todo(self):
-        content = "# Title\n\n**Source:** TODO-abcdef01\n\n## Real heading\n"
+    def test_spec_mode_extracts_bold_source_idea(self):
+        content = "# Title\n\n**Source:** IDEA-abcdef01\n\n## Real heading\n"
         path = write_tmp(content)
         try:
             result = run(["--file", path, "--mode", "spec"])
             self.assertEqual(result.returncode, 0)
             data = json.loads(result.stdout)
-            self.assertEqual(data["source_todo"], "TODO-abcdef01")
+            self.assertEqual(data["source_idea"], "IDEA-abcdef01")
         finally:
             os.unlink(path)
 
@@ -204,7 +204,7 @@ class TestExtractProvenancePreamble(unittest.TestCase):
             "# Title\n"
             "\n"
             "```markdown\n"
-            "**Source:** TODO-abcdef01\n"
+            "**Source:** IDEA-abcdef01\n"
             "**Scout brief:** docs/briefs/sample.md\n"
             "```\n"
             "\n"
@@ -215,53 +215,53 @@ class TestExtractProvenancePreamble(unittest.TestCase):
             result = run(["--file", path, "--mode", "spec"])
             self.assertEqual(result.returncode, 0)
             data = json.loads(result.stdout)
-            self.assertIsNone(data["source_todo"])
+            self.assertIsNone(data["source_idea"])
             self.assertIsNone(data["scout_brief"])
         finally:
             os.unlink(path)
 
     def test_spec_mode_malformed_asterisks_rejected(self):
         # Test single asterisks
-        content = "*Source:* TODO-abcdef01\n\n## Real heading\n"
+        content = "*Source:* IDEA-abcdef01\n\n## Real heading\n"
         path = write_tmp(content)
         try:
             result = run(["--file", path, "--mode", "spec"])
             self.assertEqual(result.returncode, 0)
             data = json.loads(result.stdout)
-            self.assertIsNone(data["source_todo"])
+            self.assertIsNone(data["source_idea"])
         finally:
             os.unlink(path)
 
         # Test open without close
-        content = "**Source: TODO-abcdef01\n\n## Real heading\n"
+        content = "**Source: IDEA-abcdef01\n\n## Real heading\n"
         path = write_tmp(content)
         try:
             result = run(["--file", path, "--mode", "spec"])
             self.assertEqual(result.returncode, 0)
             data = json.loads(result.stdout)
-            self.assertIsNone(data["source_todo"])
+            self.assertIsNone(data["source_idea"])
         finally:
             os.unlink(path)
 
         # Test close without open
-        content = "Source:** TODO-abcdef01\n\n## Real heading\n"
+        content = "Source:** IDEA-abcdef01\n\n## Real heading\n"
         path = write_tmp(content)
         try:
             result = run(["--file", path, "--mode", "spec"])
             self.assertEqual(result.returncode, 0)
             data = json.loads(result.stdout)
-            self.assertIsNone(data["source_todo"])
+            self.assertIsNone(data["source_idea"])
         finally:
             os.unlink(path)
 
         # Test mismatched count
-        content = "*Source:** TODO-abcdef01\n\n## Real heading\n"
+        content = "*Source:** IDEA-abcdef01\n\n## Real heading\n"
         path = write_tmp(content)
         try:
             result = run(["--file", path, "--mode", "spec"])
             self.assertEqual(result.returncode, 0)
             data = json.loads(result.stdout)
-            self.assertIsNone(data["source_todo"])
+            self.assertIsNone(data["source_idea"])
         finally:
             os.unlink(path)
 
@@ -276,6 +276,17 @@ class TestExtractProvenancePreamble(unittest.TestCase):
         finally:
             os.unlink(path)
 
+    def test_spec_mode_rejects_legacy_todo_prefix(self):
+        content = "# Title\n\nSource: TODO-12345678\n\n## Real heading\n"
+        path = write_tmp(content)
+        try:
+            result = run(["--file", path, "--mode", "spec"])
+            self.assertEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+            self.assertIsNone(data["source_idea"])
+        finally:
+            os.unlink(path)
+
 
 class TestSpecModeFencedHeading(unittest.TestCase):
 
@@ -283,7 +294,7 @@ class TestSpecModeFencedHeading(unittest.TestCase):
         result = run(["--file", SPEC_FENCED_HEADING, "--mode", "spec"])
         self.assertEqual(result.returncode, 0)
         data = json.loads(result.stdout)
-        self.assertEqual(data["source_todo"], "TODO-12345678")
+        self.assertEqual(data["source_idea"], "IDEA-12345678")
         self.assertEqual(data["scout_brief"], "docs/briefs/sample.md")
 
     def test_fenced_heading_does_not_terminate_scan_real_after_fence(self):
@@ -296,7 +307,7 @@ class TestSpecModeFencedHeading(unittest.TestCase):
             "## Fake Heading Inside Fence\n"
             "```\n"
             "\n"
-            "Source: TODO-12345678\n"
+            "Source: IDEA-12345678\n"
             "\n"
             "Scout brief: docs/briefs/sample.md\n"
             "\n"
@@ -309,7 +320,7 @@ class TestSpecModeFencedHeading(unittest.TestCase):
             result = run(["--file", path, "--mode", "spec"])
             self.assertEqual(result.returncode, 0)
             data = json.loads(result.stdout)
-            self.assertEqual(data["source_todo"], "TODO-12345678")
+            self.assertEqual(data["source_idea"], "IDEA-12345678")
             self.assertEqual(data["scout_brief"], "docs/briefs/sample.md")
         finally:
             os.unlink(path)
@@ -321,7 +332,7 @@ class TestSpecModeFencedHeading(unittest.TestCase):
             "Some intro text.\n"
             "\n"
             "```markdown\n"
-            "Source: TODO-aaaaaaaa\n"
+            "Source: IDEA-aaaaaaaa\n"
             "Scout brief: docs/briefs/fake.md\n"
             "```\n"
             "\n"
@@ -334,7 +345,7 @@ class TestSpecModeFencedHeading(unittest.TestCase):
             result = run(["--file", path, "--mode", "spec"])
             self.assertEqual(result.returncode, 0)
             data = json.loads(result.stdout)
-            self.assertIsNone(data["source_todo"])
+            self.assertIsNone(data["source_idea"])
             self.assertIsNone(data["scout_brief"])
         finally:
             os.unlink(path)

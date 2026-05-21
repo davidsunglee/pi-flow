@@ -2,8 +2,8 @@
 """Extract provenance metadata from the preamble of spec or brief files.
 
 Supported line shapes (scanned within the bounded preamble region):
-  Source: TODO-<8 hex chars>        — captured as source_todo (spec mode)
-    (also accepted as **Source:** TODO-<8 hex chars>)
+  Source: IDEA-<8 hex chars>        — captured as source_idea (spec mode)
+    (also accepted as **Source:** IDEA-<8 hex chars>)
   Scout brief: docs/briefs/<file>   — captured as scout_brief (spec mode)
     (also accepted as **Scout brief:** docs/briefs/<file>)
   Git SHA: <40 hex chars>           — captured as git_sha (brief mode)
@@ -32,7 +32,7 @@ import sys
 from fence_aware import compute_in_fence_lines
 
 
-_RE_SOURCE = re.compile(r"^(?:Source:|\*\*Source:\*\*) (TODO-[0-9a-f]{8})$")
+_RE_SOURCE = re.compile(r"^(?:Source:|\*\*Source:\*\*) (IDEA-[0-9a-f]{8})$")
 _RE_SCOUT = re.compile(r"^(?:Scout brief:|\*\*Scout brief:\*\*) (docs/briefs/[^/]+)$")
 _RE_GIT_SHA_LINE = re.compile(r"^(?:Git SHA:|\*\*Git SHA:\*\*) (.+)$")
 _RE_GIT_SHA_VALUE = re.compile(r"^[0-9a-f]{40}$")
@@ -87,7 +87,7 @@ def main():
         sys.stderr.write("\n")
         sys.exit(2)
 
-    source_todo = None
+    source_idea = None
     scout_brief = None
     git_sha = None
 
@@ -100,7 +100,7 @@ def main():
 
         m = _RE_SOURCE.match(line)
         if m:
-            source_todo = m.group(1)
+            source_idea = m.group(1)
             continue
 
         m = _RE_SCOUT.match(line)
@@ -123,7 +123,7 @@ def main():
 
     json.dump(
         {
-            "source_todo": source_todo,
+            "source_idea": source_idea,
             "scout_brief": scout_brief,
             "git_sha": git_sha,
             "mode": args.mode,

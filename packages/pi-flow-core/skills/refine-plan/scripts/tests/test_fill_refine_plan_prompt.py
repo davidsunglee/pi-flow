@@ -44,7 +44,7 @@ Plan: {PLAN_PATH}
 
 Artifact: {TASK_ARTIFACT}
 
-Todo: {SOURCE_TODO}
+Idea: {SOURCE_IDEA}
 
 Spec: {SOURCE_SPEC}
 
@@ -74,7 +74,7 @@ Carry: {CARRY_OVER_REVIEW}
                 "--template", template_file,
                 "--plan-path", "/path/to/plan.md",
                 "--task-artifact", "Task artifact content",
-                "--source-todo", "Source todo content",
+                "--source-idea", "Source todo content",
                 "--source-spec", "Source spec content",
                 "--scout-brief", "Scout brief content",
                 "--original-spec-inline", spec_file,
@@ -111,7 +111,7 @@ Carry: {CARRY_OVER_REVIEW}
             # Verify no remaining placeholders
             self.assertNotIn("{PLAN_PATH}", content)
             self.assertNotIn("{TASK_ARTIFACT}", content)
-            self.assertNotIn("{SOURCE_TODO}", content)
+            self.assertNotIn("{SOURCE_IDEA}", content)
             self.assertNotIn("{SOURCE_SPEC}", content)
             self.assertNotIn("{SCOUT_BRIEF}", content)
             self.assertNotIn("{ORIGINAL_SPEC_INLINE}", content)
@@ -144,7 +144,7 @@ class TestInputMissingOrUnreadable(unittest.TestCase):
                 "--template", REAL_TEMPLATE,
                 "--plan-path", "/path/to/plan.md",
                 "--task-artifact", "Task artifact",
-                "--source-todo", "Source todo",
+                "--source-idea", "Source todo",
                 "--source-spec", "Source spec",
                 "--scout-brief", "Scout brief",
                 "--original-spec-inline", "/nonexistent",
@@ -191,7 +191,7 @@ class TestUnreplacedPlaceholder(unittest.TestCase):
                 "--template", template_file,
                 "--plan-path", "/path/to/plan.md",
                 "--task-artifact", "Task artifact",
-                "--source-todo", "Source todo",
+                "--source-idea", "Source todo",
                 "--source-spec", "Source spec",
                 "--scout-brief", "Scout brief",
                 "--original-spec-inline", spec_file,
@@ -238,7 +238,7 @@ class TestEmptyStringSubstitution(unittest.TestCase):
                 "--template", template_file,
                 "--plan-path", "/path/to/plan.md",
                 "--task-artifact", "",
-                "--source-todo", "Source todo",
+                "--source-idea", "Source todo",
                 "--source-spec", "Source spec",
                 "--scout-brief", "Scout brief",
                 "--original-spec-inline", spec_file,
@@ -272,7 +272,7 @@ class TestNoRecursiveExpansion(unittest.TestCase):
 
     def test_owned_placeholder_in_value_is_preserved(self):
         """A value containing another owned placeholder is inserted literally."""
-        template_content = "Artifact: {TASK_ARTIFACT}; Todo: {SOURCE_TODO}"
+        template_content = "Artifact: {TASK_ARTIFACT}; Idea: {SOURCE_IDEA}"
         template_file = write_temp_file(template_content)
         spec_file = write_temp_file("Original spec")
         note_file = write_temp_file("Note")
@@ -285,8 +285,8 @@ class TestNoRecursiveExpansion(unittest.TestCase):
             rc, stdout, stderr = run_script(
                 "--template", template_file,
                 "--plan-path", "/path/to/plan.md",
-                "--task-artifact", "{SOURCE_TODO}",
-                "--source-todo", "Source todo value",
+                "--task-artifact", "{SOURCE_IDEA}",
+                "--source-idea", "Source idea value",
                 "--source-spec", "Source spec",
                 "--scout-brief", "Scout brief",
                 "--original-spec-inline", spec_file,
@@ -303,7 +303,7 @@ class TestNoRecursiveExpansion(unittest.TestCase):
             self.assertEqual(rc, 0, f"Script failed with stderr: {stderr}")
             with open(output_file, "r") as f:
                 content = f.read()
-            self.assertIn("Artifact: {SOURCE_TODO}; Todo: Source todo value", content)
+            self.assertIn("Artifact: {SOURCE_IDEA}; Idea: Source idea value", content)
         finally:
             for f in [template_file, spec_file, note_file, matrix_file, output_file]:
                 if os.path.exists(f):
@@ -312,7 +312,7 @@ class TestNoRecursiveExpansion(unittest.TestCase):
     def test_no_recursive_expansion(self):
         """Test passing value with placeholder; assert no recursive expansion."""
         # Create a template with all 13 placeholders to avoid "unreplaced" error
-        template_content = """{PLAN_PATH} {TASK_ARTIFACT} {SOURCE_TODO} {SOURCE_SPEC} {SCOUT_BRIEF} {ORIGINAL_SPEC_INLINE} {STRUCTURAL_ONLY_NOTE} {MAX_ITERATIONS} {STARTING_ERA} {REVIEW_OUTPUT_PATH} {WORKING_DIR} {MODEL_MATRIX} {CARRY_OVER_REVIEW}"""
+        template_content = """{PLAN_PATH} {TASK_ARTIFACT} {SOURCE_IDEA} {SOURCE_SPEC} {SCOUT_BRIEF} {ORIGINAL_SPEC_INLINE} {STRUCTURAL_ONLY_NOTE} {MAX_ITERATIONS} {STARTING_ERA} {REVIEW_OUTPUT_PATH} {WORKING_DIR} {MODEL_MATRIX} {CARRY_OVER_REVIEW}"""
         template_file = write_temp_file(template_content)
         spec_file = write_temp_file("Original spec")
         note_file = write_temp_file("Note")
@@ -326,7 +326,7 @@ class TestNoRecursiveExpansion(unittest.TestCase):
                 "--template", template_file,
                 "--plan-path", "/path/to/plan.md",
                 "--task-artifact", "Task artifact",
-                "--source-todo", "see {OTHER}",
+                "--source-idea", "see {OTHER}",
                 "--source-spec", "Source spec",
                 "--scout-brief", "Scout brief",
                 "--original-spec-inline", spec_file,
@@ -372,7 +372,7 @@ class TestStartingEraStringified(unittest.TestCase):
                 "--template", template_file,
                 "--plan-path", "/path/to/plan.md",
                 "--task-artifact", "Task artifact",
-                "--source-todo", "Source todo",
+                "--source-idea", "Source todo",
                 "--source-spec", "Source spec",
                 "--scout-brief", "Scout brief",
                 "--original-spec-inline", spec_file,
@@ -418,7 +418,7 @@ class TestOutputDashWritesStdout(unittest.TestCase):
                     "--template", template_file,
                     "--plan-path", "/path/to/plan.md",
                     "--task-artifact", "Task artifact",
-                    "--source-todo", "Source todo",
+                    "--source-idea", "Source todo",
                     "--source-spec", "Source spec",
                     "--scout-brief", "Scout brief",
                     "--original-spec-inline", spec_file,
@@ -471,7 +471,7 @@ class TestCarryOverReviewPopulated(unittest.TestCase):
                 "--template", template_file,
                 "--plan-path", "/path/to/plan.md",
                 "--task-artifact", "Task artifact",
-                "--source-todo", "Source todo",
+                "--source-idea", "Source todo",
                 "--source-spec", "Source spec",
                 "--scout-brief", "Scout brief",
                 "--original-spec-inline", spec_file,
@@ -514,7 +514,7 @@ class TestHelp(unittest.TestCase):
         placeholders = [
             "PLAN_PATH",
             "TASK_ARTIFACT",
-            "SOURCE_TODO",
+            "SOURCE_IDEA",
             "SOURCE_SPEC",
             "SCOUT_BRIEF",
             "ORIGINAL_SPEC_INLINE",

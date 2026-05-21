@@ -2,7 +2,7 @@
 
 Some intro text.
 
-Source: TODO-12345678
+Source: IDEA-12345678
 
 Scout brief: docs/briefs/sample.md
 
@@ -10,7 +10,7 @@ Some preamble explaining the work.
 
 ```markdown
 ## Fake Heading Inside Fence
-Source: TODO-deadbeef
+Source: IDEA-deadbeef
 Scout brief: docs/briefs/fake.md
 ```
 

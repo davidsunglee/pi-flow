@@ -77,7 +77,7 @@ def main():
     )
     parser.add_argument("--plan-path", required=True, help="Plan path")
     parser.add_argument("--task-artifact", required=True, help="Task artifact line or empty string")
-    parser.add_argument("--source-todo", required=True, help="Source todo line or empty string")
+    parser.add_argument("--source-idea", required=True, help="Source idea line or empty string")
     parser.add_argument("--source-spec", required=True, help="Source spec line or empty string")
     parser.add_argument("--scout-brief", required=True, help="Scout brief line or empty string")
     parser.add_argument(
@@ -100,7 +100,7 @@ def main():
         "REVIEW_FINDINGS": review_findings,
         "PLAN_ARTIFACT": f"Plan artifact: {args.plan_path}",
         "TASK_ARTIFACT": args.task_artifact,
-        "SOURCE_TODO": args.source_todo,
+        "SOURCE_IDEA": args.source_idea,
         "SOURCE_SPEC": args.source_spec,
         "SCOUT_BRIEF": args.scout_brief,
         "ORIGINAL_SPEC_INLINE": original_spec_inline,

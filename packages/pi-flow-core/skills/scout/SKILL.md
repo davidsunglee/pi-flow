@@ -13,11 +13,11 @@ This skill orchestrates a fresh-context scout subagent that writes a structured 
 
 Examine the user's slash-command input (excluding any `--tier` argument) and classify it as one of two shapes:
 
-**Todo branch** — the input matches the regex `^TODO-([0-9a-f]{8})$` exactly (case-sensitive, 8 lowercase hex digits only).
+**Idea branch** — after trimming surrounding whitespace and lowercasing the input, the result matches the regex `^IDEA-([0-9a-f]{8})$` case-insensitively (so `IDEA-BBE89373`, `idea-bbe89373`, and `IDEA-bbe89373` all match, resolving to canonical lowercase `bbe89373`). The captured raw id is the 8-char lowercase hex segment.
 
-- Extract `<raw-id>` from the captured group (e.g., `TODO-bbe89373` → `bbe89373`).
-- Set the brief output path to `docs/briefs/TODO-<raw-id>-brief.md`.
-- Read `docs/todos/<raw-id>.md` and extract the todo title and full body. Todo files in this repo begin with a JSON metadata block (an opening `{` on line 1 through its matching closing `}`); parse that block and use its `title` field as the todo title. If the JSON block is absent or has no usable `title`, fall back to the first `# ` heading that is **outside any fenced code block** (skip lines between matching ` ``` ` fences so headings inside examples cannot be selected). If neither source yields a non-empty title, stop with `docs/todos/<raw-id>.md has no usable title — cannot dispatch scout.` The todo body is the full file contents (metadata block included) and is passed through to the prompt as `{TODO_BODY_OR_FREEFORM_TEXT}`.
+- Extract `<raw-id>` from the captured group (e.g., `IDEA-bbe89373` → `bbe89373`, `IDEA-BBE89373` → `bbe89373`).
+- Set the brief output path to `docs/briefs/IDEA-<raw-id>-brief.md`.
+- Call the built-in `idea` tool with `action: "read"`, `id: "<raw-id>"` to fetch the artifact. The tool's `details` payload contains a structured `IdeaArtifact` object (`id`, `title`, `tags`, `status`, `createdAt`, `body`). Use `details.title` as the idea title and `details.body` as the body. If the title is empty, fall back to the first `# ` heading in the body that is outside any fenced code block (skip lines between matching ` ``` ` fences so headings inside examples cannot be selected). If neither source yields a non-empty title, stop with `IDEA-<raw-id> has no usable title — cannot dispatch scout.` Pass the full body through to the prompt as `{TODO_BODY_OR_FREEFORM_TEXT}` (the placeholder name is retained; only the source of its value changes).
 
 **Freeform branch** — any input that does not match the todo regex.
 
@@ -47,15 +47,15 @@ Prompt the user using the variant from the table below:
 
 | Branch | SHA equals HEAD | Prompt |
 |--------|-----------------|--------|
-| Todo | Yes | `A brief for TODO-<id> already exists at <path> at the current HEAD SHA. (o)verwrite or (k)eep?` |
-| Todo | No (or unreadable) | `A brief for TODO-<id> already exists at <path> (generated at SHA <brief-sha>; HEAD is now <head-sha>). (o)verwrite or (k)eep?` |
+| Idea | Yes | `A brief for IDEA-<id> already exists at <path> at the current HEAD SHA. (o)verwrite or (k)eep?` |
+| Idea | No (or unreadable) | `A brief for IDEA-<id> already exists at <path> (generated at SHA <brief-sha>; HEAD is now <head-sha>). (o)verwrite or (k)eep?` |
 | Freeform | Yes | `A brief already exists at <path> at the current HEAD SHA. (o)verwrite or (k)eep?` |
 | Freeform | No (or unreadable) | `A brief already exists at <path> (generated at SHA <brief-sha>; HEAD is now <head-sha>). (o)verwrite or (k)eep?` |
 
 **On `o` / `overwrite`:** dispatch normally (proceed to Step 4). The agent overwrites the file at the same path. The commit gate's `(r) Re-run` semantics still apply on the next gate.
 
 **On `k` / `keep`:**
-- **Todo branch:** report the existing path and offer the continuation prompt `Run /define-spec TODO-<id> next? (y/n)`. Do NOT dispatch the scout agent.
+- **Idea branch:** report the existing path and offer the continuation prompt `Run /define-spec IDEA-<id> next? (y/n)`. Do NOT dispatch the scout agent.
 - **Freeform branch:** report the existing path and stop with no continuation offer.
 
 If the user types neither `o` nor `k`, re-prompt once. On a second unrecognized response, stop.
@@ -67,13 +67,13 @@ Read `skills/scout/scout-prompt.md` from disk and substitute every placeholder:
 | Placeholder | Value |
 |-------------|-------|
 | `{WORKING_DIR}` | Absolute path of the current working directory |
-| `{TODO_BODY_OR_FREEFORM_TEXT}` | Full todo body on the todo branch; seed text on the freeform branch |
+| `{TODO_BODY_OR_FREEFORM_TEXT}` | Full idea body on the idea branch; seed text on the freeform branch |
 | `{OUTPUT_PATH}` | Absolute path of the target brief file |
 | `{GENERATED_AT_ISO}` | Current UTC time in ISO 8601 format (e.g., `2026-05-06T12:34:56Z`) |
 | `{GIT_HEAD_SHA}` | Output of `git rev-parse HEAD` (40-character SHA) |
 | `{MODEL_PROVIDER_AND_NAME}` | The `<provider>/<model>` string resolved in Step 2 |
-| `{SOURCE_PROVENANCE}` | `Source: TODO-<raw-id>` on the todo branch; empty string on the freeform branch |
-| `{TASK_TITLE}` | The todo title resolved in Step 1 (JSON metadata `title`, with the fenced-code-aware first-`# ` fallback) on the todo branch; a short title derived from the seed text on the freeform branch |
+| `{SOURCE_PROVENANCE}` | `Source: IDEA-<raw-id>` on the idea branch; empty string on the freeform branch |
+| `{TASK_TITLE}` | The idea title resolved in Step 1 (`details.title` from the `idea` tool, with the fenced-code-aware first-`# ` fallback) on the idea branch; a short title derived from the seed text on the freeform branch |
 
 ## Step 5: Dispatch via subagent_run_serial
 
@@ -140,16 +140,16 @@ If the user types none of `c`, `r`, or `x`, re-prompt once. On a second unrecogn
 
 ## Step 8: Continuation offer
 
-After a successful commit on the **todo branch only**, offer:
+After a successful commit on the **idea branch only**, offer:
 
 ```
-Run /define-spec TODO-<id> next? (y/n)
+Run /define-spec IDEA-<id> next? (y/n)
 ```
 
-On `y`: invoke `/define-spec TODO-<id>`.
+On `y`: invoke `/define-spec IDEA-<id>`.
 On `n`: stop.
 
-The freeform branch does **not** offer continuation — there is no todo ID to hand off.
+The freeform branch does **not** offer continuation — there is no idea ID to hand off.
 
 ## Edge cases
 

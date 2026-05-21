@@ -268,7 +268,7 @@ After the wave drains, Step 10 handles `BLOCKED` first then `DONE_WITH_CONCERNS`
 > | Verifier report parsing | `pi-flow helper execute-plan/parse-verifier-report` |
 > | Per-plan test-runs cleanup (success exit only) | `pi-flow helper _shared/cleanup-test-runs` |
 > | Post-helper Python bytecode cache cleanup | `pi-flow helper _shared/cleanup-pycache` |
-> | Completion bookkeeping (todo close, branch finish) | native git / todo tool |
+> | Completion bookkeeping (idea close, branch finish) | native git / idea tool |
 
 ## Step 10: Wave gate: blocked and concerns handling
 
@@ -527,7 +527,7 @@ Otherwise, always run this gate: re-run the full integration suite and confirm n
    - **(d) Debug failures now:** Follow [`integration-regression-debugging.md`](integration-regression-debugging.md) using the **Step 16 (final-gate)** parameter row. `change_range` = `BASE_SHA..HEAD_SHA` (`BASE_SHA` = `PRE_EXECUTION_SHA` from Step 8, `HEAD_SHA` = `git rev-parse HEAD`); `suspect_universe` = every plan task whose `**Files:**` scope intersects `git diff --name-only BASE_SHA HEAD_SHA`; `re_test_callback` re-enters this gate at step 1. Repeat until both gate-blocking sets are empty or the user picks `(x)`. Each attempt counts toward Step 13's retry budget.
    - **(x) Stop execution:** halt. Report via Step 14 (list unresolved `current_non_baseline_stable` and `current_non_reconcilable` from the most recent final-gate artifact). Do NOT close the todo or run branch completion. `docs/test-runs/<plan-name>/` is preserved.
 
-**Blocking guarantee:** `### 1. Cleanup`, `### 2. Close linked todo`, and `### 4. Branch completion` MUST NOT execute while either set is non-empty. The only exits are gate-pass or `(x)`.
+**Blocking guarantee:** `### 1. Cleanup`, `### 2. Close linked idea`, and `### 4. Branch completion` MUST NOT execute while either set is non-empty. The only exits are gate-pass or `(x)`.
 
 ### 1. Cleanup
 
@@ -537,19 +537,19 @@ Otherwise, always run this gate: re-run the full integration suite and confirm n
 pi-flow helper _shared/cleanup-test-runs docs/test-runs/<plan-name>
 ```
 
-### 2. Close linked todo
+### 2. Close linked idea
 
-Scan the plan for a line matching `**Source:** TODO-<id>`. If found:
-1. Extract the todo ID (e.g., `TODO-5735f43b`).
-2. Read the todo via the `todo` tool.
-3. If it exists and is not already "done": update status to "done", append `\nCompleted via plan: docs/plans/<plan-filename>.md` to the body, and record the ID for the summary report.
-4. If the todo is missing, already done, or unreadable: skip silently.
+Scan the plan for a line matching `**Source:** IDEA-<id>`. If found:
+1. Extract the idea ID (e.g., `IDEA-5735f43b`).
+2. Read the idea via the built-in `idea` tool (`action: "read"`, `id: "<id>"`).
+3. If it exists and is not already "done": call the built-in `idea` tool with `action: "update"`, `id: "<id>"`, `status: "done"`, and `body: "<existing body + \nCompleted via plan: docs/plans/<plan-filename>.md>"`. Record the ID for the summary report.
+4. If the idea is missing, already done, or unreadable: skip silently.
 
-Skip the entire substep if no `**Source:** TODO-<id>` line exists.
+Skip the entire substep if no `**Source:** IDEA-<id>` line exists.
 
 ### 3. Report summary
 
-Report: number of tasks completed, concerns noted, review status/notes (if performed), total time taken, and any closed todo (e.g., "Closed TODO-5735f43b").
+Report: number of tasks completed, concerns noted, review status/notes (if performed), total time taken, and any closed idea (e.g., "Closed IDEA-5735f43b").
 
 ### 4. Branch completion (if applicable)
 

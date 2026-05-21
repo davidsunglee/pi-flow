@@ -96,7 +96,7 @@ class TestClassifyWorkflowDrift(unittest.TestCase):
             expected_body = (
                 f"Scout brief at `{brief}` was generated at SHA `{sha1}`; HEAD is now `{sha2}`. "
                 "Intervening commits modified only workflow artifacts (`docs/briefs/`, `docs/specs/`, "
-                "`docs/todos/`, `docs/plans/`). Treating as expected workflow drift and continuing."
+                "`docs/ideas/`, `docs/plans/`). Treating as expected workflow drift and continuing."
             )
             self.assertEqual(data["message_body"], expected_body)
         finally:
@@ -214,7 +214,7 @@ class TestClassifyWorkflowDrift(unittest.TestCase):
             expected = (
                 f"Scout brief at `{brief}` was generated at SHA `{sha1}`; HEAD is now `{sha2}`. "
                 "Intervening commits modified only workflow artifacts (`docs/briefs/`, `docs/specs/`, "
-                "`docs/todos/`, `docs/plans/`). Treating as expected workflow drift and continuing."
+                "`docs/ideas/`, `docs/plans/`). Treating as expected workflow drift and continuing."
             )
             self.assertEqual(data["message_body"], expected)
         finally:

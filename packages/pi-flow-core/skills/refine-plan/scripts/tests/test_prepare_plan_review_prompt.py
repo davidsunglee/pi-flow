@@ -34,7 +34,7 @@ class TestPreparePlanReviewPrompt(unittest.TestCase):
             proc = run_script(
                 "--plan-path", "docs/plans/example-plan.md",
                 "--task-artifact", "Task artifact: docs/tasks/example.md",
-                "--source-todo", "Source todo: TODO-1234",
+                "--source-idea", "Source idea: IDEA-1234",
                 "--source-spec", "Source spec: docs/specs/example.md",
                 "--scout-brief", "Scout brief: docs/briefs/example.md",
                 "--original-spec-inline", original_spec,
@@ -86,7 +86,7 @@ class TestPreparePlanReviewPrompt(unittest.TestCase):
             proc = run_script(
                 "--plan-path", "docs/plans/example-plan.md",
                 "--task-artifact", "Task artifact: docs/tasks/example.md",
-                "--source-todo", "Source todo: TODO-1234",
+                "--source-idea", "Source idea: IDEA-1234",
                 "--source-spec", "Source spec: {PLAN_ARTIFACT}",
                 "--scout-brief", "Scout brief: docs/briefs/example.md",
                 "--original-spec-inline", original_spec,
@@ -126,7 +126,7 @@ class TestPreparePlanReviewPrompt(unittest.TestCase):
             first = run_script(
                 "--plan-path", "docs/plans/example-plan.md",
                 "--task-artifact", "",
-                "--source-todo", "",
+                "--source-idea", "",
                 "--source-spec", "",
                 "--scout-brief", "",
                 "--original-spec-inline", original_spec,
@@ -140,7 +140,7 @@ class TestPreparePlanReviewPrompt(unittest.TestCase):
             second = run_script(
                 "--plan-path", "docs/plans/example-plan.md",
                 "--task-artifact", "",
-                "--source-todo", "",
+                "--source-idea", "",
                 "--source-spec", "",
                 "--scout-brief", "",
                 "--original-spec-inline", original_spec,

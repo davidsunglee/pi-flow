@@ -15,7 +15,7 @@ You are reviewing a generated implementation plan for structural correctness bef
 
 {TASK_ARTIFACT}
 
-{SOURCE_TODO}
+{SOURCE_IDEA}
 
 {SOURCE_SPEC}
 

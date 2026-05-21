@@ -10,7 +10,7 @@ Workflow skills, bundled agent definitions, slash commands, and helper runner fo
 - **Python helpers** — per-skill and shared scripts under `skills/*/scripts/`, invoked by `pi-flow helper <id>`.
 - **Bundled agent definitions** — pre-built agent YAMLs under `agents/`, linked into `.pi/agents/` or `~/.pi/agent/agents/` by `/flow:setup`.
 - **Slash commands** — `/flow:setup`, `/flow:idea`, and the 7 workflow `/flow:*` dispatch commands exposed by `extensions/commands.ts`.
-- **Idea storage and tooling** — the `idea` tool plus `/flow:idea`, both backed by `docs/todos/<8hex>.md` artifacts.
+- **Idea storage and tooling** — the `idea` tool plus `/flow:idea`, both backed by `docs/ideas/<8hex>.md` artifacts.
 - **Helper-runner CLI** (`pi-flow`) — resolves logical resource IDs against the installed package and dispatches to helpers or templates. See [docs/helper-runner.md](docs/helper-runner.md).
 - **Model-tier example** — `model-tiers.example.json` as a starting point for local model-tier configuration. See [docs/model-tier-setup.md](docs/model-tier-setup.md).
 
@@ -35,10 +35,10 @@ See [docs/helper-runner.md](docs/helper-runner.md) for the complete contract, re
 ## Commands
 
 - `/flow:setup` — symlink bundled agent definitions into the `pi-interactive-subagent` discovery directory for the current install scope.
-- `/flow:idea` — create or update a TODO artifact in `docs/todos/` and report it as `TODO-<id>`.
-- `/flow:scout` — route a TODO, brief path, or prose request to the `scout` skill.
-- `/flow:spec` — route a TODO, spec path, or prose request to the `define-spec` skill.
-- `/flow:plan` — route a TODO, brief/spec path, or prose request to the `generate-plan` skill.
+- `/flow:idea` — create or update an IDEA artifact in `docs/ideas/` and report it as `IDEA-<id>`.
+- `/flow:scout` — route an IDEA, brief path, or prose request to the `scout` skill.
+- `/flow:spec` — route an IDEA, spec path, or prose request to the `define-spec` skill.
+- `/flow:plan` — route an IDEA, brief/spec path, or prose request to the `generate-plan` skill.
 - `/flow:refine-plan` — route a plan file or prose request to the `refine-plan` skill.
 - `/flow:execute` — route a plan file or prose request to the `execute-plan` skill.
 - `/flow:refine-code` — route a review file or prose request to the `refine-code` skill.
@@ -46,7 +46,7 @@ See [docs/helper-runner.md](docs/helper-runner.md) for the complete contract, re
 
 ### Exact vs interpreted input
 
-Workflow commands accept either an exact artifact-shaped argument or freeform prose. Exact inputs are routed directly to the named skill: a `TODO-<8hex>` ID, a `docs/<dir>/<file>.md` path, or no arguments when the skill accepts an empty invocation. Any other argument is treated as prose and forwarded to the agent with a structured prompt telling it to use the target skill, resolve the argument, and ask one clarification if needed. Pass `--exact` or `--no-interpret` to suppress that fallback; non-exact input then fails with a usage error instead of invoking the LLM.
+Workflow commands accept either an exact artifact-shaped argument or freeform prose. Exact inputs are routed directly to the named skill: an `IDEA-<8hex>` ID, a `docs/<dir>/<file>.md` path, or no arguments when the skill accepts an empty invocation. Any other argument is treated as prose and forwarded to the agent with a structured prompt telling it to use the target skill, resolve the argument, and ask one clarification if needed. Pass `--exact` or `--no-interpret` to suppress that fallback; non-exact input then fails with a usage error instead of invoking the LLM.
 
 ### /flow:setup
 
@@ -56,9 +56,23 @@ The command walks every bundled `agents/*.md` file and attempts to create the ma
 
 ### /flow:idea and the `idea` tool
 
-`/flow:idea` writes legacy-compatible `docs/todos/<8hex>.md` artifacts consisting of a JSON metadata block followed by the markdown body, then reports the artifact as `TODO-<id>` so existing workflow skills keep working unchanged. The `idea` LLM tool operates on the same storage with `action: list | read | create | update` and accepts either `TODO-<id>` or bare `<id>` identifiers. The durable `IDEA-<id>` rebrand is tracked separately by `TODO-d9644bc0`.
+`/flow:idea` writes `docs/ideas/<8hex>.md` artifacts consisting of a JSON metadata block followed by the markdown body, then reports the artifact as `IDEA-<id>`. The `idea` LLM tool operates on the same storage with `action: list | read | create | update` and accepts either `IDEA-<id>` or bare `<id>` identifiers. Identifiers using the legacy-prefix form are no longer recognized — see the migration section below for the one-time user migration step.
 
 `/flow:setup` is required after installation so `pi-interactive-subagent` can discover the bundled `pi-flow-core/agents/*.md` definitions. Subagent-backed workflows — `scout`, `define-spec`, `generate-plan`, `execute-plan`, `refine-plan`, `refine-code`, and `fastlane` — also depend on `pi-interactive-subagent` being installed alongside this package, which is why it is already declared as a peer dependency.
+
+### Migration from docs/todos/
+
+pi-flow's durable-intent artifacts were previously surfaced as `TODO-<id>` and stored under `docs/todos/<8hex>.md`. The rebrand renames the visible identifier to `IDEA-<id>` and the storage directory to `docs/ideas/` — this avoids clashing with the generic "todo" terminology used by other LLM checklist/planning tools and plugins.
+
+**One-time user migration (per project):**
+
+```sh
+mv docs/todos docs/ideas
+```
+
+Run this once per project that previously used `/flow:idea`. The migration is documented but not executed by `pi-flow` itself; the rebrand is a hard cutover with no compatibility window — pi-flow no longer reads `docs/todos/` or accepts `TODO-<id>` as an artifact-token shape. Existing artifact filenames (bare 8-hex) and on-disk JSON metadata are unchanged; only the parent directory and the user-facing prefix change.
+
+Preamble lines in existing on-disk specs, plans, briefs, or reviews that say `Source: TODO-<id>` or `Scout brief: docs/briefs/TODO-<id>-brief.md` will no longer be parsed by `pi-flow`'s provenance extractor (which now matches only `IDEA-<id>` / `docs/briefs/IDEA-<id>-brief.md`). pi-flow does not rewrite these preambles automatically — manually update them, or treat affected artifacts as historical (the plan/spec content still reads correctly to humans, but downstream workflows like execute-plan's "close linked idea" substep will silently skip).
 
 ## Model Tiers
 

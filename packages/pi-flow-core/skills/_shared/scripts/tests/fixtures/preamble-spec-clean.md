@@ -2,7 +2,7 @@
 
 Some intro text.
 
-Source: TODO-12345678
+Source: IDEA-12345678
 
 Scout brief: docs/briefs/sample.md
 
@@ -12,6 +12,6 @@ More arbitrary preamble text here.
 ## Introduction
 
 ```markdown
-Source: TODO-99999999
+Source: IDEA-99999999
 Git SHA: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 ```

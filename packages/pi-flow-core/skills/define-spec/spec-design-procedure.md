@@ -25,7 +25,7 @@ The orchestrator passes the user's raw input as your task body. Detect the shape
 
 | Shape | Pattern | Behavior |
 | --- | --- | --- |
-| **Todo ID** | after trimming surrounding whitespace and lowercasing the input, the result matches `^TODO-[0-9a-f]{8}$` case-insensitively — so `TODO-BD750B75` and `TODO-bd750b75 ` (trailing space) both match (resolving to canonical lowercase `bd750b75`), while `bd750b75` (no prefix) and `/define-spec TODO-bd750b75` (slash-command leak) still fall through to freeform | Extract the captured 8-char hex as the **raw todo id** (`<raw-id>`) — the part *without* the `TODO-` prefix. Todo files are stored on disk by raw hex filename: read `docs/todos/<raw-id>.md` to get the title and full body (e.g. input `TODO-075cf515` → read `docs/todos/075cf515.md`). Do **not** read `docs/todos/TODO-<raw-id>.md` — that path does not exist. (When dispatched as the `spec-designer` subagent, the agent's tool surface intentionally omits `todo` — direct file read is the expected path. On the orchestrator's inline branch the `todo` tool may be available; either way, reading the file directly is correct.) Set provenance to `Source: TODO-<raw-id>` (the prefix is re-added in the provenance line). Check whether `docs/briefs/TODO-<raw-id>-brief.md` exists; if it does, read it as scout context and set the `Scout brief:` provenance line. If it does not exist, proceed without — do not fail. |
+| **Idea ID** | after trimming surrounding whitespace and lowercasing the input, the result matches `^IDEA-[0-9a-f]{8}$` case-insensitively — so `IDEA-BD750B75` and `IDEA-bd750b75 ` (trailing space) both match (resolving to canonical lowercase `bd750b75`), while `bd750b75` (no prefix) and `/define-spec IDEA-bd750b75` (slash-command leak) still fall through to freeform | Extract the captured 8-char hex as the **raw idea id** (`<raw-id>`) — the part *without* the `IDEA-` prefix. Idea files are stored on disk by raw hex filename: read `docs/ideas/<raw-id>.md` to get the title and full body (e.g. input `IDEA-075cf515` → read `docs/ideas/075cf515.md`). Do **not** read `docs/ideas/IDEA-<raw-id>.md` — that path does not exist. (When dispatched as the `spec-designer` subagent, the agent's tool surface intentionally omits `idea` — direct file read is the expected path, even though the `idea` tool may be available on the orchestrator's inline branch. Either way, reading the file directly is correct.) Set provenance to `Source: IDEA-<raw-id>` (the prefix is re-added in the provenance line). Check whether `docs/briefs/IDEA-<raw-id>-brief.md` exists; if it does, read it as scout context and set the `Scout brief:` provenance line. If it does not exist, proceed without — do not fail. |
 | **Existing-spec path** | string ends in `.md` and is **either** (a) a relative path that begins with `docs/specs/`, **or** (b) an absolute path that contains the segment `/docs/specs/` (e.g. `/Users/.../<repo>/docs/specs/foo.md` — this is the form the orchestrator's `SPEC_ARTIFACT: <absolute path>` emits and the review prompt's Refine option replays back in), **and** the file exists on disk | Read the existing draft. Treat it as starting context. Preserve its preamble lines (`Source:`, `Scout brief:`) verbatim on rewrite. Q&A focuses on filling gaps and refining unclear sections. **Overwrite the absolute path** `{SPEC_OUTPUT_PATH}` at the end — the orchestrator pre-computes and passes this path; do not generate your own filename. The spec self-review pass (Step 7) is mandatory. |
 | **Freeform text** | anything else | Use the text as a seed. Do not look up a scout brief. Do not emit a `Source:` or `Scout brief:` preamble. Run the full Q&A. |
 
@@ -116,8 +116,8 @@ Spec template (omit any section labeled OPTIONAL whose round did not run):
 ~~~markdown
 # <Title>
 
-Source: TODO-<id>                            <- ONLY on the todo branch
-Scout brief: docs/briefs/TODO-<id>-brief.md   <- ONLY when a scout brief was loaded
+Source: IDEA-<id>                            <- ONLY on the idea branch
+Scout brief: docs/briefs/IDEA-<id>-brief.md   <- ONLY when a scout brief was loaded
 
 ## Goal
 
@@ -169,7 +169,7 @@ Anything surfaced during exploration that couldn't be resolved.
 Section ordering rules:
 - The `## Approach` section, when present, sits **between** `## Constraints` and `## Acceptance Criteria`.
 - When the architecture round did not run, omit the `## Approach` section entirely (header included). Downstream consumers detect by section presence.
-- Provenance preamble (`Source:`, `Scout brief:`) lines, when present, sit immediately under the H1 title and above `## Goal`. They are exact-match — copy the literal `Source: TODO-<id>` and `Scout brief: docs/briefs/TODO-<id>-brief.md` strings, with no abbreviation.
+- Provenance preamble (`Source:`, `Scout brief:`) lines, when present, sit immediately under the H1 title and above `## Goal`. They are exact-match — copy the literal `Source: IDEA-<id>` and `Scout brief: docs/briefs/IDEA-<id>-brief.md` strings, with no abbreviation.
 - Existing template sections (`Goal`, `Context`, `Requirements`, `Constraints`, `Acceptance Criteria`, `Non-Goals`, `Open Questions`) are unchanged from prior specs.
 
 Create the `docs/specs/` directory if it does not exist.

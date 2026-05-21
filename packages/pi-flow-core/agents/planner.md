@@ -92,7 +92,7 @@ Write the plan to the output path specified in your task prompt (create the dire
 - **Architecture summary**: How the pieces fit together
 - **Tech stack**: Languages, frameworks, key dependencies
 
-**Source:** `TODO-<id>` — Include when a `Source todo: TODO-<id>` line is provided in the task prompt. Omit otherwise.
+**Source:** `IDEA-<id>` — Include when a `Source idea: IDEA-<id>` line is provided in the task prompt. Omit otherwise.
 **Spec:** `docs/specs/<filename>` — Include when a `Source spec: docs/specs/<filename>` line is provided in the task prompt. Omit otherwise.
 **Scout brief:** `docs/briefs/<filename>` — Include when a `Scout brief: docs/briefs/<filename>` line is provided in the task prompt. Omit otherwise.
 

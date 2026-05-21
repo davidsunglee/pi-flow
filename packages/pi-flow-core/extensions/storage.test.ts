@@ -7,14 +7,13 @@ import path from "node:path";
 
 import {
   generateIdeaId,
-  isLegacyTodoId,
   normalizeIdeaId,
   formatIdeaArtifact,
   parseIdeaArtifact,
   readIdea,
   writeIdea,
   listIdeas,
-  getTodoDir,
+  getIdeaDir,
   type IdeaArtifact,
 } from "./storage.ts";
 
@@ -71,36 +70,20 @@ test("parseIdeaArtifact returns undefined for malformed input", () => {
   assert.equal(parseIdeaArtifact('{"no_id": true}'), undefined);
 });
 
-test("isLegacyTodoId accepts TODO-cfcb8ede", () => {
-  assert.equal(isLegacyTodoId("TODO-cfcb8ede"), true);
-});
-
-test("isLegacyTodoId accepts cfcb8ede (bare hex)", () => {
-  assert.equal(isLegacyTodoId("cfcb8ede"), true);
-});
-
-test("isLegacyTodoId rejects TODO-abc (too short)", () => {
-  assert.equal(isLegacyTodoId("TODO-abc"), false);
-});
-
-test("isLegacyTodoId rejects cfcb8edf-extra (too long)", () => {
-  assert.equal(isLegacyTodoId("cfcb8edf-extra"), false);
-});
-
-test("isLegacyTodoId rejects cfcb8edg (non-hex char)", () => {
-  assert.equal(isLegacyTodoId("cfcb8edg"), false);
-});
-
-test("normalizeIdeaId returns cfcb8ede for TODO-cfcb8ede", () => {
-  assert.equal(normalizeIdeaId("TODO-cfcb8ede"), "cfcb8ede");
+test("normalizeIdeaId returns cfcb8ede for IDEA-cfcb8ede", () => {
+  assert.equal(normalizeIdeaId("IDEA-cfcb8ede"), "cfcb8ede");
 });
 
 test("normalizeIdeaId returns cfcb8ede for cfcb8ede", () => {
   assert.equal(normalizeIdeaId("cfcb8ede"), "cfcb8ede");
 });
 
-test("normalizeIdeaId returns cfcb8ede for TODO-CFCB8EDE (case insensitive)", () => {
-  assert.equal(normalizeIdeaId("TODO-CFCB8EDE"), "cfcb8ede");
+test("normalizeIdeaId returns cfcb8ede for IDEA-CFCB8EDE (case insensitive)", () => {
+  assert.equal(normalizeIdeaId("IDEA-CFCB8EDE"), "cfcb8ede");
+});
+
+test("normalizeIdeaId returns undefined for TODO-cfcb8ede", () => {
+  assert.equal(normalizeIdeaId("TODO-cfcb8ede"), undefined);
 });
 
 test("normalizeIdeaId returns undefined for garbage", () => {
@@ -157,11 +140,11 @@ test("readIdea returns undefined for an unknown id", async () => {
   }
 });
 
-test("readIdea accepts TODO-prefixed id", async () => {
+test("readIdea accepts IDEA-prefixed id", async () => {
   const dir = makeTmpDir();
   try {
     await writeIdea(dir, SAMPLE);
-    const read = await readIdea(dir, `TODO-${SAMPLE.id}`);
+    const read = await readIdea(dir, `IDEA-${SAMPLE.id}`);
     assert.ok(read !== undefined);
     assert.equal(read!.id, SAMPLE.id);
   } finally {
@@ -214,11 +197,11 @@ test("listIdeas ignores files that don't match the id pattern", async () => {
   }
 });
 
-test("getTodoDir returns <cwd>/docs/todos in a sandbox not inside a git repo", async () => {
+test("getIdeaDir returns <cwd>/docs/ideas in a sandbox not inside a git repo", async () => {
   const dir = makeTmpDir();
   try {
-    const result = await getTodoDir(dir);
-    assert.equal(result, path.join(dir, "docs", "todos"));
+    const result = await getIdeaDir(dir);
+    assert.equal(result, path.join(dir, "docs", "ideas"));
   } finally {
     removeTmpDir(dir);
   }

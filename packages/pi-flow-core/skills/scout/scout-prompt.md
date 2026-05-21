@@ -52,13 +52,13 @@ Required preamble shape:
 ```
 # Scout Brief: {TASK_TITLE}
 
-Source: TODO-<id>
+Source: IDEA-<id>
 Generated at: {GENERATED_AT_ISO}
 Git SHA: {GIT_HEAD_SHA}
 Model: {MODEL_PROVIDER_AND_NAME}
 ```
 
-The `Source: TODO-<id>` line appears only on the todo branch (when `{SOURCE_PROVENANCE}` is non-empty); omit it entirely on the freeform branch. The remaining three preamble lines (`Generated at:`, `Git SHA:`, `Model:`) always appear in that order.
+The `Source: IDEA-<id>` line appears only on the idea branch (when `{SOURCE_PROVENANCE}` is non-empty); omit it entirely on the freeform branch. The remaining three preamble lines (`Generated at:`, `Git SHA:`, `Model:`) always appear in that order.
 
 The eight required level-2 sections, in this exact order:
 

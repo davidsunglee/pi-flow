@@ -34,7 +34,7 @@ def _workflow_only_body(brief_path, brief_sha, head_sha):
     return (
         f"Scout brief at `{brief_path}` was generated at SHA `{brief_sha}`; HEAD is now `{head_sha}`. "
         "Intervening commits modified only workflow artifacts (`docs/briefs/`, `docs/specs/`, "
-        "`docs/todos/`, `docs/plans/`). Treating as expected workflow drift and continuing."
+        "`docs/ideas/`, `docs/plans/`). Treating as expected workflow drift and continuing."
     )
 
 

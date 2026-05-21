@@ -10,7 +10,7 @@ The allowlist contains exactly these four entries:
 
 - `docs/briefs/`
 - `docs/specs/`
-- `docs/todos/`
+- `docs/ideas/`
 - `docs/plans/`
 
 The `docs/plans/` prefix covers `docs/plans/reviews/` and `docs/plans/done/` because both are under the `docs/plans/` directory boundary.

@@ -11,10 +11,10 @@ Inline orchestrator skill. Every step runs in the orchestrator's session — no 
 
 Detect the shape of the input strictly. Mirror `skills/define-spec/spec-design-procedure.md` Step 1's strictness:
 
-- **Todo ID** — if the input matches `^TODO-[0-9a-f]{8}$` (case-insensitive after strip/lowercase), it is a todo ID. Strip the `TODO-` prefix to obtain `<bare-id>` (the 8-character hex tail) and read `docs/todos/<bare-id>.md` — todo files in this repo are stored under the bare ID (e.g., `docs/todos/0aac17a1.md`), NOT under the `TODO-`-prefixed form. Capture the title and body. Retain the original `TODO-<id>` form for user-facing messages and for the `Source: TODO-<id>` line in Step 10 (todo closure). If `docs/todos/<bare-id>.md` does not exist, reject with the verbatim message:
+- **Idea ID** — if the input matches `^IDEA-[0-9a-f]{8}$` (case-insensitive after strip/lowercase), it is an idea ID. Strip the `IDEA-` prefix to obtain `<bare-id>` (the 8-character hex tail). Call the built-in `idea` tool with `action: "read"`, `id: "<bare-id>"`. Capture the artifact's title from `details.title` and body from `details.body`. Retain the original `IDEA-<id>` form for user-facing messages and for the `Source: IDEA-<id>` line in Step 10 (idea closure). If the tool returns isError (idea not found), reject with the verbatim message:
 
   ~~~
-  fastlane: todo TODO-<id> not found at docs/todos/<bare-id>.md.
+  fastlane: idea IDEA-<id> not found via the idea tool.
   ~~~
 
   and stop.
@@ -24,14 +24,14 @@ Detect the shape of the input strictly. Mirror `skills/define-spec/spec-design-p
 - **Freeform (rejected)** — else reject with the verbatim message:
 
   ~~~
-  fastlane: input must be a spec path under docs/specs/ or a TODO-<id>. Run /define-spec first to shape a spec.
+  fastlane: input must be a spec path under docs/specs/ or an IDEA-<id>. Run /define-spec first to shape a spec.
   ~~~
 
   and stop.
 
 ## Step 1: Generate checklist
 
-Read the spec/todo body. Run a brief codebase survey scoped to the file and subsystem mentions in the spec/todo. Emit a 3–7-step numbered implementation checklist that captures the concrete edits required, in order.
+Read the spec/idea body. Run a brief codebase survey scoped to the file and subsystem mentions in the spec/idea. Emit a 3–7-step numbered implementation checklist that captures the concrete edits required, in order.
 
 The checklist is **ephemeral** — never written to disk. It lives in the orchestrator's conversation state only.
 
@@ -54,7 +54,7 @@ Render the top-level confirmation menu:
 
 ~~~
 Fastlane plan:
-  Source:   <spec path or TODO-<id>>
+  Source:   <spec path or IDEA-<id>>
   Checklist:
     1. <step>
     2. <step>
@@ -70,7 +70,7 @@ Options:
   (s) Start                      — proceed with these settings
   (c) Customize                  — change a setting
   (e) Edit checklist             — revise the numbered checklist before starting
-  (x) Stop                       — exit fastlane (spec/todo remains committed)
+  (x) Stop                       — exit fastlane (spec/idea remains committed)
 ~~~
 
 ### `(c) Customize` submenu
@@ -93,7 +93,7 @@ The customize submenu MUST NOT expose a TDD toggle or a Test suite check toggle.
 ### Other top-level options
 
 - `(e) Edit checklist` — let the user revise the numbered checklist (and optionally name a test command), then re-show the top-level confirmation menu.
-- `(x) Stop` — silent exit. The spec/todo remains committed; no rollback. If the user wants to escalate to the deep workflow instead, they can re-run `/generate-plan <spec-path>` manually after stopping.
+- `(x) Stop` — silent exit. The spec/idea remains committed; no rollback. If the user wants to escalate to the deep workflow instead, they can re-run `/generate-plan <spec-path>` manually after stopping.
 
 ## Step 3: Git preflight
 
@@ -131,7 +131,7 @@ The customize submenu MUST NOT expose a TDD toggle or a Test suite check toggle.
   where `<coder_tier>` is the run-state field initialized to `capable` in Step 2 and mutable via the customize submenu's `(t) Coder tier` option (allowed values: `cheap`, `standard`, `capable`). On non-zero exit from the helper, surface its stderr (canonical templates (1)–(4)) byte-equal and stop.
 
 - Compose the placeholders:
-  - `{SPEC_OR_TODO_CONTENT}` — full spec body (for spec-path inputs) or full todo body (for todo-ID inputs).
+  - `{SPEC_OR_TODO_CONTENT}` — full spec body (for spec-path inputs) or full idea body (for idea-ID inputs).
   - `{CHECKLIST}` — the confirmed numbered checklist from Step 1/Step 2 `(e)`.
   - `{WORKING_DIR}` — the absolute working directory.
   - `{TDD_BLOCK}` — contents of `skills/execute-plan/tdd-block.md` read from disk.
@@ -214,7 +214,7 @@ Route on `.status`. Mirror `skills/execute-plan/SKILL.md` Step 9.
   2. `pi-flow helper _shared/detect-test-command --working-dir <working-dir>` — consume `.command` when `.detected == true`.
   3. "not detected" — skip the verification phase silently and proceed to Step 8 (commit phase).
 
-- Create the artifact directory: `mkdir -p docs/test-runs/<spec-name>`, where `<spec-name>` is the spec filename without `.md`. For todo-only inputs (no spec involved), substitute `TODO-<id>` for `<spec-name>` (i.e., `docs/test-runs/TODO-<id>/`).
+- Create the artifact directory: `mkdir -p docs/test-runs/<spec-name>`, where `<spec-name>` is the spec filename without `.md`. For idea-only inputs (no spec involved), substitute `IDEA-<id>` for `<spec-name>` (i.e., `docs/test-runs/IDEA-<id>/`).
 
 - Dispatch `test-runner` per `skills/_shared/test-runner-dispatch.md` with:
   - `test_command = <resolved>`
@@ -338,44 +338,32 @@ Invoke the refine-code skill with these inputs (matching the documented interfac
 - `BASE_SHA` from Step 3.
 - `HEAD_SHA` from Step 8.
 - Description = the spec goal.
-- `--plan-contents` = path to the spec file (for spec-path inputs) or the todo body written to a tmp file (for todo-ID inputs).
+- `--plan-contents` = path to the spec file (for spec-path inputs) or the idea body written to a tmp file (for idea-ID inputs).
 - `--max-iterations 3` (or the user-customized value from `(r) Refine-code iterations` in Step 2's customize submenu — i.e., the run-state field `refine_max_iterations`).
 - `--review-output-path docs/reviews/<spec-name>-fastlane-review`.
   The `-fastlane-review` namespacing distinguishes fastlane review artifacts from deep-workflow review artifacts targeting the same spec.
 
 Refine-code's existing menu on `STATUS: not_approved_within_budget` ((c) Continue refining code / (p) Proceed with issues / (x) Stop execution) stays as-is — fastlane introduces no override. Refine-code's existing provenance validation (`validate-review-provenance.py`) runs as normal.
 
-Fastlane proceeds to Step 10 (todo closure) on:
+Fastlane proceeds to Step 10 (idea closure) on:
 - `STATUS: approved`
 - `STATUS: approved_with_concerns`
 - `STATUS: not_approved_within_budget` with the user choosing `(p) Proceed with issues`
 
-On `(c) Stop`, fastlane exits without todo closure or branch completion; `docs/test-runs/<spec-name>/` is preserved.
+On `(c) Stop`, fastlane exits without idea closure or branch completion; `docs/test-runs/<spec-name>/` is preserved.
 
-## Step 10: Todo closure
+## Step 10: Idea closure
 
 Mirror `skills/execute-plan/SKILL.md` Step 16.2:
 
-1. Determine the todo ID:
-   - If the original input to fastlane was a todo ID, use it directly.
-   - Else extract `Source: TODO-<id>` from the spec preamble using a bounded `head -n 40`.
+1. Determine the idea ID:
+   - If the original input to fastlane was an idea ID, use it directly.
+   - Else extract `Source: IDEA-<id>` from the spec preamble using a bounded `head -n 40`.
    - Else skip silently.
 
-2. Read the todo via the `todo` tool. If missing or already status `done`, skip silently.
+2. Read the idea via the built-in `idea` tool (`action: "read"`, `id: "<id>"`). If missing or already status `done`, skip silently.
 
-3. Update the todo status to `done` and append the line:
-
-   ~~~
-   Completed via fastlane: <commit SHA>, spec: <spec path>
-   ~~~
-
-   Or, when no spec was involved (input was a todo ID):
-
-   ~~~
-   Completed via fastlane: <commit SHA>, spec: (input was todo)
-   ~~~
-
-   to the body.
+3. Call the built-in `idea` tool with `action: "update"`, `id: "<id>"`, `status: "done"`, and `body: "<existing body + \nCompleted via fastlane: <commit SHA>, spec: <spec path>>"` (or, when no spec was involved (input was an idea ID): `body: "<existing body + \nCompleted via fastlane: <commit SHA>, spec: (input was idea)>"`).
 
 ## Step 11: Post-completion
 
@@ -390,7 +378,7 @@ Mirror `skills/execute-plan/SKILL.md` Step 16.2:
   - Coder BLOCKED (Step 5).
   - Refine-code budget-exhaustion `(c) Stop` (Step 9).
 
-- **On successful completion** (refine-code returns `approved` / `approved_with_concerns` / `(p) Proceed with issues`, AND todo closure complete, AND post-completion done), clean up the per-spec test-runs directory:
+- **On successful completion** (refine-code returns `approved` / `approved_with_concerns` / `(p) Proceed with issues`, AND idea closure complete, AND post-completion done), clean up the per-spec test-runs directory:
 
   ~~~
   pi-flow helper _shared/cleanup-test-runs docs/test-runs/<spec-name>
@@ -415,5 +403,5 @@ Mirror `skills/execute-plan/SKILL.md` Step 16.2:
 - **Coder NEEDS_CONTEXT cycle** — one retry, then a second NEEDS_CONTEXT or any BLOCKED falls through to the BLOCKED handler. Covered by Step 5.
 - **Stash-pop conflict** during baseline comparison — hard-stop with the stash ref preserved. Covered by Step 7.
 - **Refine-code dispatch failure** — helper stderr forwarded verbatim to the user; fastlane stops. Covered by Step 9.
-- **Todo missing or already done** at closure — skip silently. Covered by Step 10.
+- **Idea missing or already done** at closure — skip silently. Covered by Step 10.
 - **Protected branch at post-completion** — `finishing-a-development-branch`'s existing gate skips it; fastlane introduces no automatic push. Covered by Step 11.
