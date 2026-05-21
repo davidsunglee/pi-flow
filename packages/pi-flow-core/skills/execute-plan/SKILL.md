@@ -368,7 +368,7 @@ The gate exits when `BLOCKED_TASKS` is empty and `CONCERNED_TASKS` is either emp
 
 ### Step 11.2: Dispatch the verifier
 
-Verifier dispatches for the wave run in parallel, bounded by the pi-interactive-subagent `MAX_PARALLEL_HARD_CAP` cap (see Step 5). Issue all verifier subagents concurrently up to the cap and wait for all of them to return before parsing in Step 11.3.
+Verifier dispatches for the wave run in parallel, bounded by the `@aphotic/pi-mux-subagents` `MAX_PARALLEL_HARD_CAP` cap (see Step 5). Issue all verifier subagents concurrently up to the cap and wait for all of them to return before parsing in Step 11.3.
 
 **Verifier-visible file set (`{MODIFIED_FILES}`).** For each task in the wave, run `pi-flow helper execute-plan/compute-verifier-file-set --task-files <task-files-json> --worker-files <worker-files-json> --observed-status <git-status-output-path-or-dash> --observed-diff-paths <diff-paths-json> --wave-shape <single-task|parallel-multi-task>`; consume `.verifier_visible_files` as `{MODIFIED_FILES}`. The `--observed-status` argument is the path to a file holding the verbatim `git status --porcelain` output, or `-` to stream that output via stdin (matches the helper's `PATH_OR_DASH` contract); never pass the porcelain text directly as the argument value. The prompt records that the set is orchestrator-assembled, not the worker's self-report.
 

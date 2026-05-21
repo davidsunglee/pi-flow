@@ -56,7 +56,7 @@ Options:
   --plan                    Path to the plan markdown file
   --task-number             If given, return only this task (single-element tasks array)
   --max-parallel-hard-cap   Maximum tasks per subwave (default: 8); matches MAX_PARALLEL_HARD_CAP
-                            constant used by pi-interactive-subagent
+                            constant used by @aphotic/pi-mux-subagents
 """
 
 import argparse

@@ -34,7 +34,7 @@ After installing the aggregate package, run:
 /flow:setup
 ```
 
-`/flow:setup` links bundled `pi-flow-core/agents/*.md` into the matching Pi agent-discovery directory so `pi-interactive-subagent` can find the packaged subagents.
+`/flow:setup` links bundled `pi-flow-core/agents/*.md` into the matching Pi agent-discovery directory so `@aphotic/pi-mux-subagents` can find the packaged subagents.
 
 ### Headless workflow install
 
@@ -56,7 +56,7 @@ pi install npm:pi-flow-ux
 
 ## Required companion
 
-`pi-flow` and `pi-flow-core` require `pi-interactive-subagent` for subagent-backed workflows (`scout`, `define-spec`, `generate-plan`, `execute-plan`, `refine-plan`, `refine-code`, `fastlane`). Install it alongside the workflow package if your Pi package source does not install peers automatically.
+`pi-flow` and `pi-flow-core` require `@aphotic/pi-mux-subagents` for subagent-backed workflows (`scout`, `define-spec`, `generate-plan`, `execute-plan`, `refine-plan`, `refine-code`, `fastlane`). Install it alongside the workflow package if your Pi package source does not install peers automatically.
 
 ## Development
 

@@ -17,13 +17,13 @@ The aggregate package for pi-flow workflow resources — a single install point 
 
 See [`pi-flow-core`](../pi-flow-core/README.md) for the full `/flow:*` and `idea` documentation.
 
-After `pnpm add pi-flow`, run `/flow:setup` so `pi-interactive-subagent` can discover the bundled agent definitions used by subagent-backed workflows.
+After `pnpm add pi-flow`, run `/flow:setup` so `@aphotic/pi-mux-subagents` can discover the bundled agent definitions used by subagent-backed workflows.
 
 The aggregate install includes the UX layer (footer, working indicator, and Nord theme). If you want a headless install without those UX extras, install `pi-flow-core` directly instead.
 
 ## Required companion
 
-This package declares `pi-interactive-subagent` as a peer dependency (range `"*"`). Install it alongside `pi-flow`.
+This package declares `@aphotic/pi-mux-subagents` as a peer dependency (range `"^0.1.0"`). Install it alongside `pi-flow`.
 
 ## Install pointer
 

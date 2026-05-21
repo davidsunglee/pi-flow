@@ -21,7 +21,7 @@ const COMMANDS_PATH = resolve(PKG_DIR, "extensions", "commands.ts");
 const SUBAGENT_MANIFEST_PATH = resolve(
   PKG_DIR,
   "node_modules",
-  "pi-interactive-subagent",
+  "@aphotic/pi-mux-subagents",
   "package.json",
 );
 const AGENT_BASENAMES = readdirSync(AGENTS_DIR)
@@ -116,7 +116,7 @@ test("setup + dispatch smoke", async (t) => {
     );
 
     assert.ok(commandsExtension, "expected commands extension to load");
-    assert.ok(subagentExtension, "expected pi-interactive-subagent extension to load");
+    assert.ok(subagentExtension, "expected @aphotic/pi-mux-subagents extension to load");
 
     const sendUserMessageCalls = [];
     extensions.runtime.sendUserMessage = (content) => {
@@ -150,7 +150,7 @@ test("setup + dispatch smoke", async (t) => {
       },
     };
 
-    await t.test("pi-interactive-subagent extension is resolved from packages/pi-flow-core/node_modules and DefaultResourceLoader loads both extensions with errors === []", () => {
+    await t.test("@aphotic/pi-mux-subagents extension is resolved from packages/pi-flow-core/node_modules and DefaultResourceLoader loads both extensions with errors === []", () => {
       assert.equal(subagentManifestPath, SUBAGENT_MANIFEST_PATH);
       assert.deepEqual(
         extensions.errors,
@@ -196,7 +196,7 @@ test("setup + dispatch smoke", async (t) => {
       assert.match(scoutBody, /^description: /m);
     });
 
-    await t.test("the loaded pi-interactive-subagent extension registers a subagent_run* primitive and its discovery accessor lists a superset of the linked project agents", async () => {
+    await t.test("the loaded @aphotic/pi-mux-subagents extension registers a subagent_run* primitive and its discovery accessor lists a superset of the linked project agents", async () => {
       const toolNames = [...subagentExtension.tools.keys()];
       assert.ok(
         toolNames.some((name) => /subagent[_-]?run/i.test(name)),

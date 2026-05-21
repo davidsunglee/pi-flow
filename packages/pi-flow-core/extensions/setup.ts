@@ -1,6 +1,6 @@
 /**
  * /flow:setup — symlink bundled pi-flow agent definitions into the
- * pi-interactive-subagent discovery directory matching the install scope.
+ * @aphotic/pi-mux-subagents discovery directory matching the install scope.
  */
 
 import fs from "node:fs/promises";
@@ -206,7 +206,7 @@ function parseExplicitTarget(args: string): DurableTarget | undefined {
 export function registerSetup(pi: ExtensionAPI): void {
   pi.registerCommand("flow:setup", {
     description:
-      "Symlink bundled pi-flow agent definitions into the matching pi-interactive-subagent discovery directory.",
+      "Symlink bundled pi-flow agent definitions into the matching @aphotic/pi-mux-subagents discovery directory.",
     handler: async (args: string, ctx: ExtensionCommandContext) => {
       try {
         const ownPackageRoot = await fs.realpath(

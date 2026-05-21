@@ -34,7 +34,7 @@ See [docs/helper-runner.md](docs/helper-runner.md) for the complete contract, re
 
 ## Commands
 
-- `/flow:setup` — symlink bundled agent definitions into the `pi-interactive-subagent` discovery directory for the current install scope.
+- `/flow:setup` — symlink bundled agent definitions into the `@aphotic/pi-mux-subagents` discovery directory for the current install scope.
 - `/flow:idea` — create or update an IDEA artifact in `docs/ideas/` and report it as `IDEA-<id>`.
 - `/flow:scout` — route an IDEA, brief path, or prose request to the `scout` skill.
 - `/flow:spec` — route an IDEA, spec path, or prose request to the `define-spec` skill.
@@ -58,7 +58,7 @@ The command walks every bundled `agents/*.md` file and attempts to create the ma
 
 `/flow:idea` writes `docs/ideas/<8hex>.md` artifacts consisting of a JSON metadata block followed by the markdown body, then reports the artifact as `IDEA-<id>`. The `idea` LLM tool operates on the same storage with `action: list | read | create | update` and accepts either `IDEA-<id>` or bare `<id>` identifiers. Identifiers using the legacy-prefix form are no longer recognized — see the migration section below for the one-time user migration step.
 
-`/flow:setup` is required after installation so `pi-interactive-subagent` can discover the bundled `pi-flow-core/agents/*.md` definitions. Subagent-backed workflows — `scout`, `define-spec`, `generate-plan`, `execute-plan`, `refine-plan`, `refine-code`, and `fastlane` — also depend on `pi-interactive-subagent` being installed alongside this package, which is why it is already declared as a peer dependency.
+`/flow:setup` is required after installation so `@aphotic/pi-mux-subagents` can discover the bundled `pi-flow-core/agents/*.md` definitions. Subagent-backed workflows — `scout`, `define-spec`, `generate-plan`, `execute-plan`, `refine-plan`, `refine-code`, and `fastlane` — also depend on `@aphotic/pi-mux-subagents` being installed alongside this package, which is why it is already declared as a peer dependency.
 
 ### Migration from docs/todos/
 
@@ -80,10 +80,10 @@ Copy `model-tiers.example.json` to configure which Claude model tier is used for
 
 ## Required Companion Package
 
-`pi-flow-core` requires **`pi-interactive-subagent`** as a peer dependency.
+`pi-flow-core` requires **`@aphotic/pi-mux-subagents`** as a peer dependency.
 
 Install it alongside this package:
 
 ```sh
-pnpm add pi-interactive-subagent
+pnpm add @aphotic/pi-mux-subagents
 ```

@@ -54,7 +54,7 @@ Use the current repo contents as source of truth, with `agent/settings.json` and
 - Extension source still imports older `@mariozechner/...` package names in places; package extraction should update imports to current `@earendil-works/...` names unless a compatibility exception is intentional and documented.
 - `agent/themes/nord.json` is the custom theme to package with the UX layer.
 - `agent/model-tiers.json` is a personal example/template. Runtime model selection remains user-owned, and workflow skills currently read `~/.pi/agent/model-tiers.json` through helper scripts.
-- `agent/settings.json` currently loads `git:github.com/davidsunglee/pi-interactive-subagent@v4.0.0`, `npm:pi-web-access`, and `npm:@aliou/pi-processes`. Only `pi-interactive-subagent` is a core workflow requirement; do not turn `pi-web-access` or `pi-processes` into `pi-flow` requirements unless a packaged skill actually depends on them.
+- `agent/settings.json` currently loads `npm:@aphotic/pi-mux-subagents`, `npm:pi-web-access`, and `npm:@aliou/pi-processes`. Only `@aphotic/pi-mux-subagents` is a core workflow requirement; do not turn `pi-web-access` or `pi-processes` into `pi-flow` requirements unless a packaged skill actually depends on them.
 
 ## Target package shape
 
@@ -99,11 +99,11 @@ Each distributable package should have `keywords: ["pi-package"]` and an accurat
 - Keep the full `TODO-<id>` to `IDEA-<id>` artifact/provenance migration out of this extraction; that is tracked separately by `TODO-d9644bc0`.
 - Preserve consumer-project artifact conventions as runtime conventions: `docs/todos`, `docs/briefs`, `docs/specs`, `docs/plans`, `docs/plans/reviews`, `docs/reviews`, and `docs/test-runs`.
 - Provide a model-tier setup guide and example/template based on `agent/model-tiers.json`, while making clear that the installed user's `~/.pi/agent/model-tiers.json` remains the runtime source of truth.
-- Declare/document `pi-interactive-subagent` as the required companion package because the workflow dispatches subagents via `subagent_run_serial` / `subagent_run_parallel` and depends on completion watching / `subagent_done` markers.
+- Declare/document `@aphotic/pi-mux-subagents` as the required companion package because the workflow dispatches subagents via `subagent_run_serial` / `subagent_run_parallel` and depends on completion watching / `subagent_done` markers.
 
 ## Agent-definition packaging issue
 
-Pi package manifests do not currently make arbitrary package-bundled `agents/` available as first-class subagent definitions. `pi-interactive-subagent` discovers project-local `.pi/agents/`, global `~/.pi/agent/agents/`, and its own bundled agents, so `pi-flow` must bridge that gap.
+Pi package manifests do not currently make arbitrary package-bundled `agents/` available as first-class subagent definitions. `@aphotic/pi-mux-subagents` discovers project-local `.pi/agents/`, global `~/.pi/agent/agents/`, and its own bundled agents, so `pi-flow` must bridge that gap.
 
 Implement an explicit `/flow:setup` command that makes the bundled `pi-flow-core` agent definitions discoverable from the matching install scope:
 
@@ -112,7 +112,7 @@ Implement an explicit `/flow:setup` command that makes the bundled `pi-flow-core
 - Explicit only: do not create global/project symlinks as a package-load side effect.
 - Honest about temporary loads: `pi -e` is useful as a smoke test, but setup should not pretend a temporary package load is a durable install unless the user explicitly requests setup and the target is valid.
 
-If `pi-interactive-subagent` gains direct package-agent discovery before this work lands, use it instead and document the minimum companion version. Otherwise, do not block the initial extraction on companion changes.
+If `@aphotic/pi-mux-subagents` gains direct package-agent discovery before this work lands, use it instead and document the minimum companion version. Otherwise, do not block the initial extraction on companion changes.
 
 ## UX package scope
 
@@ -157,13 +157,13 @@ Audit and fix references that assume the old personal config layout:
 - Current non-browser skills from `../pi-config/agent/skills` are present, loadable, and no longer rely on the old `agent/skills/...` checkout layout.
 - The current `fastlane` source is extracted under that spelling; no live `fast-lane` identifiers are reintroduced.
 - Current workflow guardrails from `generate-plan`, `refine-plan`, `execute-plan`, and `fastlane` are preserved or intentionally replaced with equivalent tested behavior.
-- Required subagent definitions are included in the core package and `/flow:setup` can make them discoverable by `pi-interactive-subagent` from the matching install scope.
+- Required subagent definitions are included in the core package and `/flow:setup` can make them discoverable by `@aphotic/pi-mux-subagents` from the matching install scope.
 - `/flow:setup` is explicit, idempotent, scope-aware, conflict-safe, and reports created links/conflicts clearly.
 - `/flow:idea`, `/flow:scout`, `/flow:spec`, `/flow:plan`, `/flow:refine-plan`, `/flow:execute`, `/flow:refine-code`, and `/flow:fastlane` are registered and can invoke packaged workflow entry points.
 - The initial idea surface avoids generic `todo` command naming while remaining compatible with existing `TODO-<id>` storage/provenance.
 - `pi-flow-ux` includes the intended footer, working indicator, and nord theme resources with current imports and correct runtime dependency declarations.
 - Personal utilities, web-browser, unrelated external packages, personal docs artifacts, auth/session files, node_modules, and generated caches are absent from distributed package contents.
-- README/docs explain the package split, primary install path, required `pi-interactive-subagent` companion, `/flow:setup`, model-tier configuration, artifact directory conventions, and basic workflow entry points.
+- README/docs explain the package split, primary install path, required `@aphotic/pi-mux-subagents` companion, `/flow:setup`, model-tier configuration, artifact directory conventions, and basic workflow entry points.
 - A package-loading smoke test such as `pi -e <package>` shows expected skills/extensions/themes/commands without creating unintended agent symlinks.
 - A real install/setup verification confirms subagent definitions are discoverable after `/flow:setup` and at least one minimal subagent-backed workflow path can dispatch.
 - Migrated helper-script and included-extension tests pass, including manifest/resource and setup-symlink tests.

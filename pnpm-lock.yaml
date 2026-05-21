@@ -4,9 +4,6 @@ settings:
   autoInstallPeers: false
   excludeLinksFromLockfile: false
 
-overrides:
-  pi-interactive-subagent: github:davidsunglee/pi-interactive-subagent#v4.0.0
-
 importers:
 
   .: {}
@@ -19,19 +16,16 @@ importers:
       pi-flow-ux:
         specifier: workspace:*
         version: link:../pi-flow-ux
-      pi-interactive-subagent:
-        specifier: github:davidsunglee/pi-interactive-subagent#v4.0.0
-        version: '@davidsunglee/pi-interactive-subagent@https://codeload.github.com/davidsunglee/pi-interactive-subagent/tar.gz/01fb0599c0d3e523be068420821267cfcc512314(@earendil-works/pi-coding-agent@0.75.3(@modelcontextprotocol/sdk@1.29.0)(ws@8.20.1)(zod@4.4.3))(@earendil-works/pi-tui@0.75.3)(typebox@1.1.38)'
 
   packages/pi-flow-core:
     dependencies:
-      pi-interactive-subagent:
-        specifier: github:davidsunglee/pi-interactive-subagent#v4.0.0
-        version: '@davidsunglee/pi-interactive-subagent@https://codeload.github.com/davidsunglee/pi-interactive-subagent/tar.gz/01fb0599c0d3e523be068420821267cfcc512314(@earendil-works/pi-coding-agent@0.75.3(@modelcontextprotocol/sdk@1.29.0)(ws@8.20.1)(zod@4.4.3))(@earendil-works/pi-tui@0.75.3)(typebox@1.1.38)'
       typebox:
         specifier: '*'
         version: 1.1.38
     devDependencies:
+      '@aphotic/pi-mux-subagents':
+        specifier: ^0.1.0
+        version: 0.1.0(@earendil-works/pi-coding-agent@0.75.3(@modelcontextprotocol/sdk@1.29.0)(ws@8.20.1)(zod@4.4.3))(@earendil-works/pi-tui@0.75.3)(typebox@1.1.38)
       '@earendil-works/pi-coding-agent':
         specifier: '*'
         version: 0.75.3(@modelcontextprotocol/sdk@1.29.0)(ws@8.20.1)(zod@4.4.3)
@@ -55,6 +49,14 @@ packages:
     peerDependenciesMeta:
       zod:
         optional: true
+
+  '@aphotic/pi-mux-subagents@0.1.0':
+    resolution: {integrity: sha512-69q8vmpCZmfQ1k+7reanypOEKZuU/g58ajSXScOgfTEg8KYO9YnSkNZhSRO4Y5lu+FzvJEmOdcaagONtVrvKVQ==}
+    hasBin: true
+    peerDependencies:
+      '@earendil-works/pi-coding-agent': '*'
+      '@earendil-works/pi-tui': '*'
+      typebox: '*'
 
   '@aws-crypto/crc32@5.2.0':
     resolution: {integrity: sha512-nLbCWqQNgUiwwtFsen1AdzAtvuLRsQS8rYgMuxCrdKf9kOssamGLuPwyTY9wyYblNr9+1XM8v6zoDTPPSIeANg==}
@@ -156,14 +158,6 @@ packages:
   '@babel/runtime@7.29.2':
     resolution: {integrity: sha512-JiDShH45zKHWyGe4ZNVRrCjBz8Nh9TMmZG1kh4QTK8hCBTWBi8Da+i7s1fJw7/lYpM4ccepSNfqzZ/QvABBi5g==}
     engines: {node: '>=6.9.0'}
-
-  '@davidsunglee/pi-interactive-subagent@https://codeload.github.com/davidsunglee/pi-interactive-subagent/tar.gz/01fb0599c0d3e523be068420821267cfcc512314':
-    resolution: {gitHosted: true, integrity: sha512-Rc4NMQ2dk1iaxqnddApsXMaskDdvJF8uzoCB0oR9AF2Mn+FKi4aA8NFjTyabD9FraBajdt7X5AA7lpPuw/Niew==, tarball: https://codeload.github.com/davidsunglee/pi-interactive-subagent/tar.gz/01fb0599c0d3e523be068420821267cfcc512314}
-    version: 4.0.0
-    peerDependencies:
-      '@earendil-works/pi-coding-agent': '*'
-      '@earendil-works/pi-tui': '*'
-      typebox: '*'
 
   '@earendil-works/pi-agent-core@0.75.3':
     resolution: {integrity: sha512-azg09GSrckQa3ffbH09YEZC7DyHgmNSX+vmWEoEhQvp4icbzqbqLfIeMayMNEK/aGusm1SghZC4bPlDdagDALg==}
@@ -957,6 +951,16 @@ snapshots:
     optionalDependencies:
       zod: 4.4.3
 
+  '@aphotic/pi-mux-subagents@0.1.0(@earendil-works/pi-coding-agent@0.75.3(@modelcontextprotocol/sdk@1.29.0)(ws@8.20.1)(zod@4.4.3))(@earendil-works/pi-tui@0.75.3)(typebox@1.1.38)':
+    dependencies:
+      '@earendil-works/pi-coding-agent': 0.75.3(@modelcontextprotocol/sdk@1.29.0)(ws@8.20.1)(zod@4.4.3)
+      '@earendil-works/pi-tui': 0.75.3
+      '@modelcontextprotocol/sdk': 1.29.0
+      typebox: 1.1.38
+    transitivePeerDependencies:
+      - '@cfworker/json-schema'
+      - supports-color
+
   '@aws-crypto/crc32@5.2.0':
     dependencies:
       '@aws-crypto/util': 5.2.0
@@ -1174,16 +1178,6 @@ snapshots:
   '@aws/lambda-invoke-store@0.2.4': {}
 
   '@babel/runtime@7.29.2': {}
-
-  '@davidsunglee/pi-interactive-subagent@https://codeload.github.com/davidsunglee/pi-interactive-subagent/tar.gz/01fb0599c0d3e523be068420821267cfcc512314(@earendil-works/pi-coding-agent@0.75.3(@modelcontextprotocol/sdk@1.29.0)(ws@8.20.1)(zod@4.4.3))(@earendil-works/pi-tui@0.75.3)(typebox@1.1.38)':
-    dependencies:
-      '@earendil-works/pi-coding-agent': 0.75.3(@modelcontextprotocol/sdk@1.29.0)(ws@8.20.1)(zod@4.4.3)
-      '@earendil-works/pi-tui': 0.75.3
-      '@modelcontextprotocol/sdk': 1.29.0
-      typebox: 1.1.38
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - supports-color
 
   '@earendil-works/pi-agent-core@0.75.3(@modelcontextprotocol/sdk@1.29.0)(ws@8.20.1)(zod@4.4.3)':
     dependencies:

@@ -8,7 +8,7 @@
   "bin": { "pi-flow": "./bin/pi-flow.mjs" },
   "files": ["bin"],
   "dependencies": { "pi-flow-core": "workspace:*", "pi-flow-ux": "workspace:*" },
-  "peerDependencies": { "pi-interactive-subagent": "*" },
+  "peerDependencies": { "@aphotic/pi-mux-subagents": "^0.1.0" },
   "scripts": {
     "test:node": "find __tests__ -name '*.test.mjs' -print0 | xargs -0 node --test",
     "test": "pnpm run test:node",

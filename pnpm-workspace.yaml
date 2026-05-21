@@ -5,5 +5,5 @@ allowBuilds:
   koffi: false
   protobufjs: false
 autoInstallPeers: false
-overrides:
-  pi-interactive-subagent: 'github:davidsunglee/pi-interactive-subagent#v4.0.0'
+minimumReleaseAgeExclude:
+  - '@aphotic/pi-mux-subagents@0.1.0'

@@ -18,13 +18,13 @@
     "typebox": "*"
   },
   "peerDependencies": {
-    "pi-interactive-subagent": "*",
+    "@aphotic/pi-mux-subagents": "^0.1.0",
     "@earendil-works/pi-coding-agent": "*",
     "typebox": "*"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "*",
-    "pi-interactive-subagent": "*",
+    "@aphotic/pi-mux-subagents": "^0.1.0",
     "typebox": "*"
   },
   "pi": {
