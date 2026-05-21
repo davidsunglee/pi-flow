@@ -228,17 +228,17 @@ test("setup + dispatch smoke", async (t) => {
       }
     });
 
-    await t.test("a workflow command (/flow:scout) invocation with TODO-abcd1234 produces exactly one pi.sendUserMessage call with the byte-equal dispatch body", async () => {
-      await scoutHandler("TODO-abcd1234", {
+    await t.test("a workflow command (/flow:scout) invocation with IDEA-abcd1234 produces exactly one pi.sendUserMessage call with the byte-equal dispatch body", async () => {
+      await scoutHandler("IDEA-abcd1234", {
         ui: {
           notify() {
-            throw new Error("/flow:scout should not notify for exact TODO input");
+            throw new Error("/flow:scout should not notify for exact IDEA input");
           },
         },
       });
 
       assert.deepEqual(sendUserMessageCalls, [
-        "Use the scout skill. Argument: TODO-abcd1234.",
+        "Use the scout skill. Argument: IDEA-abcd1234.",
       ]);
     });
 

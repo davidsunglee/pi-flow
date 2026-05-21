@@ -1,28 +1,28 @@
 ---
 name: generate-plan
-description: "Generates a structured implementation plan from a todo or spec file. Dispatches the planner subagent for deep codebase analysis, then runs an iterative review-edit loop. Use when the user wants to plan work before executing it."
+description: "Generates a structured implementation plan from an idea or spec file. Dispatches the planner subagent for deep codebase analysis, then runs an iterative review-edit loop. Use when the user wants to plan work before executing it."
 ---
 
 Dispatch the `planner` subagent to analyze the codebase and produce a structured plan file in `docs/plans/`, then review and refine the plan through an iterative review-edit loop.
 
 ## Step 1: Determine the input source
 
-The user will provide one of three input sources. **Todo and freeform inputs are inlined into the planner prompt as before. File inputs are passed by path** — the orchestrator must not read and embed the full file body into the planner prompt, because that pollutes the orchestrator's own context window on large specs, RFCs, and design docs.
+The user will provide one of three input sources. **Idea and freeform inputs are inlined into the planner prompt as before. File inputs are passed by path** — the orchestrator must not read and embed the full file body into the planner prompt, because that pollutes the orchestrator's own context window on large specs, RFCs, and design docs.
 
-### 1a. Todo ID (e.g., `TODO-7ef7d441`)
+### 1a. Idea ID (e.g., `IDEA-7ef7d441`)
 
-Use the `todo` tool to read the todo and extract its full body. The planner subagent does not have the `todo` tool, so you must inline the body.
+Use the built-in `idea` tool (`action: "read"`, `id: "<id>"`) to fetch the artifact and read `details.body` as the full body. The planner subagent does not have the `idea` tool, so you must inline the body.
 
-- Set `{TASK_DESCRIPTION}` to the todo body text.
+- Set `{TASK_DESCRIPTION}` to the idea body text.
 - Set `{TASK_ARTIFACT}` to an empty string.
-- Set `{SOURCE_TODO}` to `Source todo: TODO-<id>`.
+- Set `{SOURCE_IDEA}` to `Source idea: IDEA-<id>`.
 - Leave `{SOURCE_SPEC}` and `{SCOUT_BRIEF}` empty.
 
 ### 1b. File path (spec, RFC, design doc, etc.)
 
 Pass the file by path. **Do NOT load the full file contents into `{TASK_DESCRIPTION}`.** The planner will read the file from disk.
 
-Run `pi-flow helper _shared/extract-provenance-preamble --file <input-path> --mode spec` to extract `Source:` and `Scout brief:` lines from the preamble. Use `source_todo` from the JSON output to set `{SOURCE_TODO}` to `Source todo: <source_todo>` (else empty). Use `scout_brief` to set `{SCOUT_BRIEF}` to `Scout brief: <scout_brief>` ONLY after verifying the referenced file exists on disk; if the file does not exist, warn the user (`Scout brief referenced in spec not found at <path> — proceeding without it.`) and leave `{SCOUT_BRIEF}` empty. The three supported line shapes and the bounded-read rule are documented in the helper's `--help`.
+Run `pi-flow helper _shared/extract-provenance-preamble --file <input-path> --mode spec` to extract `Source:` and `Scout brief:` lines from the preamble. Use `source_idea` from the JSON output to set `{SOURCE_IDEA}` to `Source idea: <source_idea>` (else empty). Use `scout_brief` to set `{SCOUT_BRIEF}` to `Scout brief: <scout_brief>` ONLY after verifying the referenced file exists on disk; if the file does not exist, warn the user (`Scout brief referenced in spec not found at <path> — proceeding without it.`) and leave `{SCOUT_BRIEF}` empty. The three supported line shapes and the bounded-read rule are documented in the helper's `--help`.
 
 **Only when `scout_brief` was extracted AND the referenced file exists on disk** (i.e., `{SCOUT_BRIEF}` was set in the previous paragraph), run `pi-flow helper _shared/classify-workflow-drift --brief-path <brief-path> --working-dir <cwd>`. If `scout_brief` is null, or the referenced file is missing, skip the classifier entirely and continue with the remaining field population below — there is no brief to classify against. Parse the JSON output. The helper classifies workflow-only paths using the allowlist in [`skills/_shared/workflow-artifact-paths.md`](../_shared/workflow-artifact-paths.md); keep this cross-reference in the skill so future maintainers know the allowlist's source of truth. On `outcome: silent_continue`, proceed silently to the next preamble rule. On any other outcome, print the helper's `message_body` field verbatim to the user. For `workflow_only`, this is informational — continue plan generation. For `mixed_changes`, `uninspectable_a`, `uninspectable_b`, and `uninspectable_c`, the message is a `(c)`/`(x)` menu — wait for the user's reply and route per the menu response handling preserved below. If the helper exits non-zero with a structured `{"failure": ...}` JSON on stderr, surface that failure to the user and stop — this indicates an unexpected helper/I/O problem rather than a workflow-drift outcome.
 
@@ -40,7 +40,7 @@ Use the text as-is.
 
 - Set `{TASK_DESCRIPTION}` to the freeform text.
 - Set `{TASK_ARTIFACT}` to an empty string.
-- Leave `{SOURCE_TODO}`, `{SOURCE_SPEC}`, and `{SCOUT_BRIEF}` empty.
+- Leave `{SOURCE_IDEA}`, `{SOURCE_SPEC}`, and `{SCOUT_BRIEF}` empty.
 
 ## Step 2: Resolve model tiers
 
@@ -56,15 +56,15 @@ On non-zero exit, surface its stderr output byte-equal (canonical Templates (1)�
 
 1. Read [generate-plan-prompt.md](generate-plan-prompt.md) in this directory.
 2. Fill placeholders:
-   - `{TASK_DESCRIPTION}` — for todo and freeform inputs, the inlined text from Step 1. For file inputs, an empty string (the artifact on disk is the task description).
-   - `{TASK_ARTIFACT}` — for file inputs, `Task artifact: <input path>`. For todo and freeform inputs, an empty string.
+   - `{TASK_DESCRIPTION}` — for idea and freeform inputs, the inlined text from Step 1. For file inputs, an empty string (the artifact on disk is the task description).
+   - `{TASK_ARTIFACT}` — for file inputs, `Task artifact: <input path>`. For idea and freeform inputs, an empty string.
    - `{WORKING_DIR}` — absolute path to cwd
    - `{OUTPUT_PATH}` — absolute path of the form `<working-dir>/docs/plans/yyyy-MM-dd-<short-description>.md` (substitute `{WORKING_DIR}` from above to produce a fully-resolved absolute path before filling the prompt; Step 3.4's `--expected-path` validation and the planner prompt's byte-equal `PLAN_ARTIFACT: {OUTPUT_PATH}` emission both require this to be absolute).
      - For **file inputs**, derive `<short-description>` from the **input filename** (basename without extension, e.g., `docs/specs/reduce-context.md` → `reduce-context`). Do NOT derive it from the document body — the body is not loaded into the orchestrator prompt.
        - **Date-prefix normalization (required).** If the basename already starts with a `YYYY-MM-DD-` prefix (regex `^\d{4}-\d{2}-\d{2}-`), strip that leading prefix before applying today's date. For example, a spec created yesterday at `docs/specs/2026-05-18-reduce-context.md` becomes `<short-description> = reduce-context`, and today's plan path becomes `docs/plans/2026-05-19-reduce-context.md` — NOT `docs/plans/2026-05-19-2026-05-18-reduce-context.md`. Basenames that do not begin with a `YYYY-MM-DD-` prefix are used as-is (e.g., `reduce-context.md` → `reduce-context`).
-     - For **todo inputs**, derive from the todo title.
+     - For **idea inputs**, derive from the idea title.
      - For **freeform inputs**, derive from the task text.
-   - `{SOURCE_TODO}` — `Source todo: TODO-<id>` when a source todo ID is available — either directly (input was a todo ID) or indirectly (extracted from a file's preamble `Source: TODO-<id>` line during provenance extraction in Step 1). Empty string otherwise.
+   - `{SOURCE_IDEA}` — `Source idea: IDEA-<id>` when a source idea ID is available — either directly (input was an idea ID) or indirectly (extracted from a file's preamble `Source: IDEA-<id>` line during provenance extraction in Step 1). Empty string otherwise.
    - `{SOURCE_SPEC}` — `Source spec: docs/specs/<filename>` if the input file path is under `docs/specs/`, empty string otherwise.
    - `{SCOUT_BRIEF}` — `Scout brief: docs/briefs/<filename>` if a scout brief was extracted from the file preamble and the brief file exists on disk, empty string otherwise.
 3. Dispatch `planner` agent synchronously:
@@ -101,13 +101,13 @@ Invoke `refine-plan` with these arguments:
 - `PLAN_PATH = <plan path from Step 3>` — pass the plan file produced by the planner as the positional `PLAN_PATH` argument (e.g., `<plan path from Step 3>`), not as a flag.
 - **Coverage source** (exactly one of):
   - **File-based inputs (Step 1b):** pass `--task-artifact <input path>`. The on-disk artifact is the coverage source.
-  - **Todo inputs (Step 1a):** pass `--task-description "<todo body from {TASK_DESCRIPTION} in Step 3>"` AND `--source-todo TODO-<id>`. The inline body is the coverage source; the source-todo line is supplementary metadata.
+  - **Idea inputs (Step 1a):** pass `--task-description "<idea body from {TASK_DESCRIPTION} in Step 3>"` AND `--source-idea IDEA-<id>`. The inline body is the coverage source; the source-idea line is supplementary metadata.
   - **Freeform inputs (Step 1c):** pass `--task-description "<freeform text from {TASK_DESCRIPTION} in Step 3>"`. The inline body is the coverage source.
 - `--scout-brief <path>` — only if a valid scout brief was extracted in Step 1 AND still exists on disk at refinement time. Omit otherwise.
 - `--max-iterations 3`.
 - `--auto-commit-on-approval` — always set when invoked from `generate-plan`.
 
-`--structural-only` is NEVER passed by `generate-plan`. Every generate-plan input source has a coverage source: the file artifact for 1b, the inline body for 1a/1c.
+`--structural-only` is NEVER passed by `generate-plan`. Every generate-plan input source has a coverage source: the file artifact for 1b, the inline body for 1a/1c (idea and freeform).
 
 `refine-plan` returns a compact summary (with `STATUS`, `COMMIT`, `PLAN_PATH`, `REVIEW_PATHS`, and optionally `STRUCTURAL_ONLY` and `FAILURE_REASON`). Step 5 consumes that summary.
 
@@ -141,7 +141,7 @@ Require explicit user confirmation before invoking execute-plan in that case. Do
 
 ## Edge cases
 
-- **Todo ID provided:** Read the todo body first with the `todo` tool and inline the full body in `{TASK_DESCRIPTION}`. The planner subagent does not have the `todo` tool, so the ID alone is not enough.
+- **Idea ID provided:** Read the idea body first with the built-in `idea` tool (`action: "read"`) and inline the full body in `{TASK_DESCRIPTION}`. The planner subagent does not have the `idea` tool, so the ID alone is not enough.
 - **File path provided:** Pass by path via `{TASK_ARTIFACT}`. Do NOT inline the file body into `{TASK_DESCRIPTION}`. Only do a bounded preamble read (e.g., `head -n 40`) for provenance extraction. The planner reads the full artifact from disk.
 - **Scout brief referenced but missing on disk:** Warn the user and continue planning without it. Do not block.
 - **Refine-plan failures:** when refine-plan returns `STATUS: failed` (e.g. plan file missing, dispatch failure, review write failure), surface the `FAILURE_REASON` line to the user and skip the execute-plan offer until the underlying issue is resolved. Do not retry refine-plan automatically.
@@ -153,7 +153,7 @@ Path-based handoff in this skill applies to the initial `generate-plan -> planne
 
 What remains inline:
 
-- For todo and freeform runs, the original task description itself is inline in `{TASK_DESCRIPTION}` (Step 3). No temp artifact files are created just to force path-based handoff — todo/freeform inputs are not durable artifacts.
-- Minimal provenance / safety metadata (`{SOURCE_TODO}`, `{SOURCE_SPEC}`, `{SCOUT_BRIEF}`) stays inline.
+- For idea and freeform runs, the original task description itself is inline in `{TASK_DESCRIPTION}` (Step 3). No temp artifact files are created just to force path-based handoff — idea/freeform inputs are not durable artifacts.
+- Minimal provenance / safety metadata (`{SOURCE_IDEA}`, `{SOURCE_SPEC}`, `{SCOUT_BRIEF}`) stays inline.
 
 `execute-plan` and `execute-plan -> coder` are out of scope for this handoff contract.

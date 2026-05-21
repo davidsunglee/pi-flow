@@ -13,9 +13,9 @@ type NotifyLevel = "info" | "warning" | "error";
 type NotifyCall = { message: string; level: NotifyLevel };
 
 const EXPECTED_DESCRIPTIONS = {
-  "flow:scout": "Run scout. Routes a TODO-<id>, brief path, or freeform request to the scout skill.",
-  "flow:spec": "Run define-spec. Routes a TODO-<id>, spec path, or freeform request to the define-spec skill.",
-  "flow:plan": "Run generate-plan. Routes a TODO-<id>, brief path, or freeform request to the generate-plan skill.",
+  "flow:scout": "Run scout. Routes a IDEA-<id>, brief path, or freeform request to the scout skill.",
+  "flow:spec": "Run define-spec. Routes a IDEA-<id>, spec path, or freeform request to the define-spec skill.",
+  "flow:plan": "Run generate-plan. Routes a IDEA-<id>, brief path, or freeform request to the generate-plan skill.",
   "flow:refine-plan": "Run refine-plan against a plan file.",
   "flow:execute": "Run execute-plan against a plan file.",
   "flow:refine-code": "Run refine-code against a review.",
@@ -23,9 +23,9 @@ const EXPECTED_DESCRIPTIONS = {
 } as const;
 
 const EXACT_ARGS: Record<string, string> = {
-  "flow:scout": "TODO-abcd1234",
-  "flow:spec": "TODO-abcd1234",
-  "flow:plan": "TODO-abcd1234",
+  "flow:scout": "IDEA-abcd1234",
+  "flow:spec": "IDEA-abcd1234",
+  "flow:plan": "IDEA-abcd1234",
   "flow:refine-plan": "docs/plans/x.md",
   "flow:execute": "docs/plans/x.md",
   "flow:refine-code": "docs/reviews/x.md",

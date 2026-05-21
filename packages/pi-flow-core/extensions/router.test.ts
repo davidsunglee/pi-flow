@@ -15,8 +15,8 @@ test('parseArgs strips --exact flag and returns rest', () => {
 });
 
 test('parseArgs strips --no-interpret flag and returns rest', () => {
-  const result = parseArgs('--no-interpret TODO-abcd1234');
-  assert.deepEqual(result, { exactFlag: true, rest: 'TODO-abcd1234' });
+  const result = parseArgs('--no-interpret IDEA-abcd1234');
+  assert.deepEqual(result, { exactFlag: true, rest: 'IDEA-abcd1234' });
 });
 
 test('parseArgs empty string returns defaults', () => {
@@ -25,12 +25,12 @@ test('parseArgs empty string returns defaults', () => {
 });
 
 // recognizeExact - basic cases
-test('recognizeExact scout TODO-abcd1234 returns canonical form', () => {
-  assert.equal(recognizeExact('scout', 'TODO-abcd1234'), 'TODO-abcd1234');
+test('recognizeExact scout IDEA-abcd1234 returns canonical form', () => {
+  assert.equal(recognizeExact('scout', 'IDEA-abcd1234'), 'IDEA-abcd1234');
 });
 
 test('recognizeExact scout bare hex returns canonical form', () => {
-  assert.equal(recognizeExact('scout', 'abcd1234'), 'TODO-abcd1234');
+  assert.equal(recognizeExact('scout', 'abcd1234'), 'IDEA-abcd1234');
 });
 
 test('recognizeExact scout briefs path returns path', () => {
@@ -102,17 +102,35 @@ test('matrix: fastlane accepts empty', () => {
   assert.equal(recognizeExact('fastlane', ''), '');
 });
 
-// TODO-id ✓ cells
-test('matrix: scout accepts TODO-abcd1234', () => {
-  assert.equal(recognizeExact('scout', 'TODO-abcd1234'), 'TODO-abcd1234');
+// IDEA-id ✓ cells
+test('matrix: scout accepts IDEA-abcd1234', () => {
+  assert.equal(recognizeExact('scout', 'IDEA-abcd1234'), 'IDEA-abcd1234');
 });
 
-test('matrix: define-spec accepts TODO-abcd1234', () => {
-  assert.equal(recognizeExact('define-spec', 'TODO-abcd1234'), 'TODO-abcd1234');
+test('matrix: define-spec accepts IDEA-abcd1234', () => {
+  assert.equal(recognizeExact('define-spec', 'IDEA-abcd1234'), 'IDEA-abcd1234');
 });
 
-test('matrix: generate-plan accepts TODO-abcd1234', () => {
-  assert.equal(recognizeExact('generate-plan', 'TODO-abcd1234'), 'TODO-abcd1234');
+test('matrix: generate-plan accepts IDEA-abcd1234', () => {
+  assert.equal(recognizeExact('generate-plan', 'IDEA-abcd1234'), 'IDEA-abcd1234');
+});
+
+// TODO- prefix is no longer an artifact token — rejected everywhere
+test('matrix: scout rejects TODO-abcd1234', () => {
+  assert.equal(recognizeExact('scout', 'TODO-abcd1234'), undefined);
+});
+
+test('matrix: define-spec rejects TODO-abcd1234', () => {
+  assert.equal(recognizeExact('define-spec', 'TODO-abcd1234'), undefined);
+});
+
+test('matrix: generate-plan rejects TODO-abcd1234', () => {
+  assert.equal(recognizeExact('generate-plan', 'TODO-abcd1234'), undefined);
+});
+
+test('routeArgs scout TODO-abcd1234 routes as interpreted', () => {
+  const result = routeArgs('scout', 'TODO-abcd1234');
+  assert.equal(result.kind, 'interpreted');
 });
 
 // Matrix coverage - rejected cells
@@ -156,8 +174,8 @@ test('matrix: refine-plan rejects empty', () => {
   assert.equal(recognizeExact('refine-plan', ''), undefined);
 });
 
-test('matrix: refine-plan rejects TODO-abcd1234', () => {
-  assert.equal(recognizeExact('refine-plan', 'TODO-abcd1234'), undefined);
+test('matrix: refine-plan rejects IDEA-abcd1234', () => {
+  assert.equal(recognizeExact('refine-plan', 'IDEA-abcd1234'), undefined);
 });
 
 test('matrix: refine-plan rejects docs/specs/*.md', () => {
@@ -176,8 +194,8 @@ test('matrix: execute-plan rejects empty', () => {
   assert.equal(recognizeExact('execute-plan', ''), undefined);
 });
 
-test('matrix: execute-plan rejects TODO-abcd1234', () => {
-  assert.equal(recognizeExact('execute-plan', 'TODO-abcd1234'), undefined);
+test('matrix: execute-plan rejects IDEA-abcd1234', () => {
+  assert.equal(recognizeExact('execute-plan', 'IDEA-abcd1234'), undefined);
 });
 
 test('matrix: execute-plan rejects docs/specs/*.md', () => {
@@ -196,8 +214,8 @@ test('matrix: refine-code rejects empty', () => {
   assert.equal(recognizeExact('refine-code', ''), undefined);
 });
 
-test('matrix: refine-code rejects TODO-abcd1234', () => {
-  assert.equal(recognizeExact('refine-code', 'TODO-abcd1234'), undefined);
+test('matrix: refine-code rejects IDEA-abcd1234', () => {
+  assert.equal(recognizeExact('refine-code', 'IDEA-abcd1234'), undefined);
 });
 
 test('matrix: refine-code rejects docs/specs/*.md', () => {
@@ -212,8 +230,8 @@ test('matrix: refine-code rejects docs/plans/*.md', () => {
   assert.equal(recognizeExact('refine-code', 'docs/plans/x.md'), undefined);
 });
 
-test('matrix: fastlane rejects TODO-abcd1234', () => {
-  assert.equal(recognizeExact('fastlane', 'TODO-abcd1234'), undefined);
+test('matrix: fastlane rejects IDEA-abcd1234', () => {
+  assert.equal(recognizeExact('fastlane', 'IDEA-abcd1234'), undefined);
 });
 
 test('matrix: fastlane rejects docs/briefs/*.md', () => {
@@ -231,8 +249,8 @@ test('matrix: fastlane rejects docs/reviews/*.md', () => {
 // buildExactPrompt
 test('buildExactPrompt with arg returns exact string', () => {
   assert.equal(
-    buildExactPrompt('scout', 'TODO-abcd1234'),
-    'Use the scout skill. Argument: TODO-abcd1234.'
+    buildExactPrompt('scout', 'IDEA-abcd1234'),
+    'Use the scout skill. Argument: IDEA-abcd1234.'
   );
 });
 
@@ -258,11 +276,11 @@ test('routeArgs --exact with prose returns exact-required-but-non-exact', () => 
   assert.ok(result.reason?.includes('investigate auth'), 'reason should contain the args');
 });
 
-test('routeArgs TODO-abcd1234 returns exact with correct prompt', () => {
-  const result = routeArgs('scout', 'TODO-abcd1234');
+test('routeArgs IDEA-abcd1234 returns exact with correct prompt', () => {
+  const result = routeArgs('scout', 'IDEA-abcd1234');
   assert.deepEqual(result, {
     kind: 'exact',
-    prompt: 'Use the scout skill. Argument: TODO-abcd1234.',
+    prompt: 'Use the scout skill. Argument: IDEA-abcd1234.',
   });
 });
 
@@ -281,10 +299,10 @@ test('routeArgs generate-plan --exact docs/specs/x.md is rejected per matrix', (
 });
 
 // Flag pass-through on exact-shaped inputs
-test('recognizeExact TODO-id with trailing boolean flag preserves flag verbatim', () => {
+test('recognizeExact IDEA-id with trailing boolean flag preserves flag verbatim', () => {
   assert.equal(
-    recognizeExact('scout', 'TODO-abcd1234 --dry-run'),
-    'TODO-abcd1234 --dry-run'
+    recognizeExact('scout', 'IDEA-abcd1234 --dry-run'),
+    'IDEA-abcd1234 --dry-run'
   );
 });
 
@@ -303,11 +321,11 @@ test('recognizeExact flag-only input is rejected for skill that disallows empty'
   assert.equal(recognizeExact('execute-plan', '--tier capable'), undefined);
 });
 
-test('routeArgs --exact TODO-id with flag routes as exact preserving flag', () => {
-  const result = routeArgs('scout', '--exact TODO-abcd1234 --dry-run');
+test('routeArgs --exact IDEA-id with flag routes as exact preserving flag', () => {
+  const result = routeArgs('scout', '--exact IDEA-abcd1234 --dry-run');
   assert.deepEqual(result, {
     kind: 'exact',
-    prompt: 'Use the scout skill. Argument: TODO-abcd1234 --dry-run.',
+    prompt: 'Use the scout skill. Argument: IDEA-abcd1234 --dry-run.',
   });
 });
 
@@ -348,10 +366,10 @@ test('recognizeExact scout flag-before-artifact (briefs) returns rest verbatim',
   );
 });
 
-test('recognizeExact scout flag-with-value then TODO id returns rest verbatim', () => {
+test('recognizeExact scout flag-with-value then IDEA id returns rest verbatim', () => {
   assert.equal(
-    recognizeExact('scout', '--tier capable TODO-abcd1234'),
-    '--tier capable TODO-abcd1234'
+    recognizeExact('scout', '--tier capable IDEA-abcd1234'),
+    '--tier capable IDEA-abcd1234'
   );
 });
 
@@ -375,13 +393,13 @@ test('routeArgs scout --exact with flag-before-prose returns exact-required-but-
 
 // Whitespace normalization regressions
 test('parseArgs trims leading/trailing whitespace from rest', () => {
-  const result = parseArgs('  TODO-abcd1234  ');
-  assert.deepEqual(result, { exactFlag: false, rest: 'TODO-abcd1234' });
+  const result = parseArgs('  IDEA-abcd1234  ');
+  assert.deepEqual(result, { exactFlag: false, rest: 'IDEA-abcd1234' });
 });
 
 test('parseArgs collapses repeated spaces after --exact', () => {
-  const result = parseArgs('--exact   TODO-abcd1234');
-  assert.deepEqual(result, { exactFlag: true, rest: 'TODO-abcd1234' });
+  const result = parseArgs('--exact   IDEA-abcd1234');
+  assert.deepEqual(result, { exactFlag: true, rest: 'IDEA-abcd1234' });
 });
 
 test('parseArgs whitespace-only input yields empty rest', () => {
@@ -394,19 +412,19 @@ test('parseArgs truly empty input still yields empty rest', () => {
   assert.deepEqual(result, { exactFlag: false, rest: '' });
 });
 
-test('routeArgs TODO-id with leading/trailing whitespace routes as exact', () => {
-  const result = routeArgs('scout', '  TODO-abcd1234  ');
+test('routeArgs IDEA-id with leading/trailing whitespace routes as exact', () => {
+  const result = routeArgs('scout', '  IDEA-abcd1234  ');
   assert.deepEqual(result, {
     kind: 'exact',
-    prompt: 'Use the scout skill. Argument: TODO-abcd1234.',
+    prompt: 'Use the scout skill. Argument: IDEA-abcd1234.',
   });
 });
 
-test('routeArgs --exact with repeated spaces before TODO-id routes as exact', () => {
-  const result = routeArgs('scout', '--exact   TODO-abcd1234');
+test('routeArgs --exact with repeated spaces before IDEA-id routes as exact', () => {
+  const result = routeArgs('scout', '--exact   IDEA-abcd1234');
   assert.deepEqual(result, {
     kind: 'exact',
-    prompt: 'Use the scout skill. Argument: TODO-abcd1234.',
+    prompt: 'Use the scout skill. Argument: IDEA-abcd1234.',
   });
 });
 

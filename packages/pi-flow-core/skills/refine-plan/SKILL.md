@@ -19,7 +19,7 @@ Collect the following from the caller (user, `generate-plan`, or another skill):
 | `TASK_ARTIFACT` | no | derived from plan preamble | Auto-discovered from the plan's `**Spec:**` line; override with `--task-artifact <path>` |
 | `TASK_DESCRIPTION` | no | empty | Set via `--task-description <text>` — the inline body of the original spec/todo. Used as the coverage source when no on-disk task artifact is available; callers like `generate-plan` pass this through for todo/freeform inputs |
 | `SOURCE_SPEC` | no | derived from plan preamble | Auto-discovered from the plan's `**Spec:**` line; supplementary metadata and, when the file exists, the default source for `TASK_ARTIFACT` |
-| `SOURCE_TODO` | no | derived from plan preamble | Auto-discovered from the plan's `**Source:**` line; override with `--source-todo TODO-<id>`. Supplementary metadata only — not a coverage source on its own |
+| `SOURCE_IDEA` | no | derived from plan preamble | Auto-discovered from the plan's `**Source:**` line; override with `--source-idea IDEA-<id>`. Supplementary metadata only — not a coverage source on its own |
 | `SCOUT_BRIEF` | no | derived from plan preamble | Auto-discovered from the plan's `**Scout brief:**` line; override with `--scout-brief <path>`. Supplementary reference context, not a coverage source on its own |
 | `STRUCTURAL_ONLY` | no | `false` | Set true via `--structural-only` to opt in to a coverage-blind review |
 | `MAX_ITERATIONS` | no | 3 | Caller flag |
@@ -42,10 +42,10 @@ refine-plan: plan file <PLAN_PATH> missing or empty.
 Read a bounded preamble from the plan file (e.g., `head -n 40 <PLAN_PATH>`) and apply strict exact-match rules. Lines that count:
 
 - `**Spec:** ` followed by `` `docs/specs/<filename>` `` (with surrounding backticks; also accept the same path written without backticks) → set `SOURCE_SPEC = "Source spec: docs/specs/<filename>"`, and (if not already set) set `TASK_ARTIFACT = "docs/specs/<filename>"`.
-- `**Source:** TODO-<id>` → set `SOURCE_TODO = "Source todo: TODO-<id>"`.
+- `**Source:** IDEA-<id>` → set `SOURCE_IDEA = "Source idea: IDEA-<id>"`.
 - `**Scout brief:** ` followed by `` `docs/briefs/<filename>` `` → set `SCOUT_BRIEF = "Scout brief: docs/briefs/<filename>"`.
 
-Apply CLI overrides (`--task-artifact`, `--source-todo`, `--scout-brief`) on top of any auto-discovered values — overrides win.
+Apply CLI overrides (`--task-artifact`, `--source-idea`, `--scout-brief`) on top of any auto-discovered values — overrides win.
 
 After resolution, verify each referenced on-disk path exists (`TASK_ARTIFACT`, `SCOUT_BRIEF`). If a referenced file does not exist, drop that field with a warning:
 
@@ -68,7 +68,7 @@ If `STRUCTURAL_ONLY` is `false` AND both `TASK_ARTIFACT` and `TASK_DESCRIPTION` 
 refine-plan: no coverage source available and --structural-only not set. Provide --task-artifact <path>, --task-description <text>, or pass --structural-only to opt in to a coverage-blind review.
 ```
 
-`SOURCE_TODO`, `SOURCE_SPEC`, and `SCOUT_BRIEF` are pointer/metadata fields and do **not** satisfy this gate on their own — the reviewer needs an actual body (`TASK_DESCRIPTION`) or an on-disk artifact (`TASK_ARTIFACT`) to perform Spec/Todo Coverage. Otherwise proceed.
+`SOURCE_IDEA`, `SOURCE_SPEC`, and `SCOUT_BRIEF` are pointer/metadata fields and do **not** satisfy this gate on their own — the reviewer needs an actual body (`TASK_DESCRIPTION`) or an on-disk artifact (`TASK_ARTIFACT`) to perform Spec/Todo Coverage. Otherwise proceed.
 
 ## Step 5: Read model matrix
 
@@ -107,7 +107,7 @@ Set `STARTING_ERA = max_existing + 1`. If no matches found, `STARTING_ERA = 1`.
 
 Read [refine-plan-prompt.md](refine-plan-prompt.md) in this directory.
 
-Fill `refine-plan-prompt.md` by invoking `pi-flow helper refine-plan/fill-refine-plan-prompt --plan-path "<PLAN_PATH from Step 1>" --task-artifact "<Task artifact line or empty>" --source-todo "<Source todo line or empty>" --source-spec "<Source spec line or empty>" --scout-brief "<Scout brief line or empty>" --original-spec-inline <path-to-task-description-text-or--for-stdin> --structural-only-note <path-to-structural-only-note-text-or--for-stdin> --max-iterations <MAX_ITERATIONS> --starting-era <STARTING_ERA> --review-output-path <REVIEW_OUTPUT_PATH> --working-dir <WORKING_DIR> --model-matrix <path-to-model-matrix-json> --carry-over-review "<CARRY_OVER_REVIEW or empty>" --output <filled-prompt-path>`. The helper enforces single-pass literal substitution and fails closed on any unreplaced placeholder. Pass the `CARRY_OVER_REVIEW` value (path or empty string) unchanged — whatever value Step 1 received (caller-set or internally re-set by Step 10) is threaded through verbatim.
+Fill `refine-plan-prompt.md` by invoking `pi-flow helper refine-plan/fill-refine-plan-prompt --plan-path "<PLAN_PATH from Step 1>" --task-artifact "<Task artifact line or empty>" --source-idea "<Source idea line or empty>" --source-spec "<Source spec line or empty>" --scout-brief "<Scout brief line or empty>" --original-spec-inline <path-to-task-description-text-or--for-stdin> --structural-only-note <path-to-structural-only-note-text-or--for-stdin> --max-iterations <MAX_ITERATIONS> --starting-era <STARTING_ERA> --review-output-path <REVIEW_OUTPUT_PATH> --working-dir <WORKING_DIR> --model-matrix <path-to-model-matrix-json> --carry-over-review "<CARRY_OVER_REVIEW or empty>" --output <filled-prompt-path>`. The helper enforces single-pass literal substitution and fails closed on any unreplaced placeholder. Pass the `CARRY_OVER_REVIEW` value (path or empty string) unchanged — whatever value Step 1 received (caller-set or internally re-set by Step 10) is threaded through verbatim.
 
 ### Step 7.5: Compose structural-only note
 

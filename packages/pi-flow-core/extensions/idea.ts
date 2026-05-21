@@ -9,7 +9,7 @@ import { Type } from "typebox";
 
 import {
   generateIdeaId,
-  getTodoDir,
+  getIdeaDir,
   listIdeas,
   normalizeIdeaId,
   readIdea,
@@ -18,7 +18,7 @@ import {
 } from "./storage.ts";
 
 const IDEA_TOOL_DESCRIPTION =
-  "Capture, read, list, and update Flow ideas backed by docs/todos/<8-hex>.md artifacts. Use this for durable user intent. Identifiers are TODO-<8-hex> (legacy compatibility); the user-facing surface calls them ideas.";
+  "Capture, read, list, and update Flow ideas backed by docs/ideas/<8-hex>.md artifacts. Use this for durable user intent. Identifiers are IDEA-<8-hex> (case-insensitive); the user-facing surface calls them ideas.";
 
 const ideaParameters = Type.Object(
   {
@@ -86,7 +86,7 @@ async function executeIdeaTool(
   params: IdeaToolParams,
   ctx: ExtensionContext,
 ): Promise<AgentToolResult<unknown>> {
-  const dir = await getTodoDir(ctx.cwd);
+  const dir = await getIdeaDir(ctx.cwd);
 
   if (params.action === "list") {
     const extra = extraFields(params, ["action"]);
@@ -95,7 +95,7 @@ async function executeIdeaTool(
     const list = await listIdeas(dir);
     const summary = list.length === 0
       ? "No ideas found."
-      : list.map((idea) => `TODO-${idea.id} [${idea.status}] ${idea.title}`).join("\n");
+      : list.map((idea) => `IDEA-${idea.id} [${idea.status}] ${idea.title}`).join("\n");
     return textResult(summary, { details: { list } });
   }
 
@@ -107,7 +107,7 @@ async function executeIdeaTool(
     const norm = normalizeIdeaId(params.id);
     if (!norm) return textResult(`invalid id: ${params.id}`, { isError: true });
     const artifact = await readIdea(dir, norm);
-    if (!artifact) return textResult(`not found: TODO-${norm}`, { isError: true });
+    if (!artifact) return textResult(`not found: IDEA-${norm}`, { isError: true });
     return textResult(JSON.stringify(artifact, null, 2), { details: artifact });
   }
 
@@ -123,7 +123,7 @@ async function executeIdeaTool(
       status: params.status,
     });
     const finalPath = await writeIdea(dir, artifact);
-    return textResult(`TODO-${artifact.id}\n${finalPath}`, { details: artifact });
+    return textResult(`IDEA-${artifact.id}\n${finalPath}`, { details: artifact });
   }
 
   if (params.action === "update") {
@@ -134,7 +134,7 @@ async function executeIdeaTool(
     const norm = normalizeIdeaId(params.id);
     if (!norm) return textResult(`invalid id: ${params.id}`, { isError: true });
     const existing = await readIdea(dir, norm);
-    if (!existing) return textResult(`not found: TODO-${norm}`, { isError: true });
+    if (!existing) return textResult(`not found: IDEA-${norm}`, { isError: true });
 
     const updated: IdeaArtifact = {
       ...existing,
@@ -144,7 +144,7 @@ async function executeIdeaTool(
       ...(params.status === undefined ? {} : { status: params.status }),
     };
     const finalPath = await writeIdea(dir, updated);
-    return textResult(`TODO-${updated.id}\n${finalPath}`, { details: updated });
+    return textResult(`IDEA-${updated.id}\n${finalPath}`, { details: updated });
   }
 
   return textResult(`unknown action: ${(params as { action: string }).action}`, { isError: true });
@@ -152,7 +152,7 @@ async function executeIdeaTool(
 
 export function registerIdea(pi: ExtensionAPI): void {
   pi.registerCommand("flow:idea", {
-    description: "Capture a durable Flow idea in docs/todos/<8-hex>.md.",
+    description: "Capture a durable Flow idea in docs/ideas/<8-hex>.md.",
     handler: async (args: string, ctx: ExtensionCommandContext) => {
       let seed = args.trim();
       if (seed.length === 0) {
@@ -174,9 +174,9 @@ export function registerIdea(pi: ExtensionAPI): void {
 
       const { title, body } = splitSeed(seed);
       const artifact = newArtifact({ title, body });
-      const dir = await getTodoDir(ctx.cwd);
+      const dir = await getIdeaDir(ctx.cwd);
       const finalPath = await writeIdea(dir, artifact);
-      ctx.ui.notify(`Idea captured. TODO-${artifact.id}: ${artifact.title}\n  → ${finalPath}`, "info");
+      ctx.ui.notify(`Idea captured. IDEA-${artifact.id}: ${artifact.title}\n  → ${finalPath}`, "info");
     },
   });
 
@@ -184,7 +184,7 @@ export function registerIdea(pi: ExtensionAPI): void {
     name: "idea",
     label: "Idea",
     description: IDEA_TOOL_DESCRIPTION,
-    promptSnippet: "idea — capture/read/list/update Flow ideas (TODO-<id> compatible).",
+    promptSnippet: "idea — capture/read/list/update Flow ideas (IDEA-<8hex> canonical id).",
     parameters: ideaParameters,
     execute: async (_toolCallId, params, _signal, _onUpdate, ctx) => {
       return executeIdeaTool(params as IdeaToolParams, ctx);

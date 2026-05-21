@@ -71,8 +71,8 @@ function makeCtx(
   };
 }
 
-async function listTodoFiles(sandbox: string): Promise<string[]> {
-  const todoDir = path.join(sandbox, "docs", "todos");
+async function listIdeaFiles(sandbox: string): Promise<string[]> {
+  const todoDir = path.join(sandbox, "docs", "ideas");
   try {
     return (await fs.readdir(todoDir)).filter((name) => /^[0-9a-f]{8}\.md$/.test(name));
   } catch (err) {
@@ -82,16 +82,16 @@ async function listTodoFiles(sandbox: string): Promise<string[]> {
 }
 
 async function readOnlyArtifact(sandbox: string): Promise<IdeaArtifact> {
-  const files = await listTodoFiles(sandbox);
+  const files = await listIdeaFiles(sandbox);
   assert.equal(files.length, 1, "expected exactly one idea artifact");
-  const raw = await fs.readFile(path.join(sandbox, "docs", "todos", files[0]), "utf8");
+  const raw = await fs.readFile(path.join(sandbox, "docs", "ideas", files[0]), "utf8");
   const parsed = parseIdeaArtifact(raw);
   assert.ok(parsed, "artifact should parse");
   return parsed;
 }
 
 async function seedIdea(sandbox: string, artifact: IdeaArtifact): Promise<void> {
-  const todoDir = path.join(sandbox, "docs", "todos");
+  const todoDir = path.join(sandbox, "docs", "ideas");
   await fs.mkdir(todoDir, { recursive: true });
   await fs.writeFile(path.join(todoDir, `${artifact.id}.md`), formatIdeaArtifact(artifact), "utf8");
 }
@@ -109,18 +109,18 @@ function artifact(id: string, title: string, status: "open" | "done" = "open"): 
   };
 }
 
-test("command happy path writes an idea artifact and reports TODO id", async () => {
+test("command happy path writes an idea artifact and reports IDEA id", async () => {
   const sandbox = mkSandbox("pi-flow-idea-command-");
   const { command } = bootExtension();
   const ctx = makeCtx(sandbox);
 
   await command.options.handler("Add scout dispatch retry\nBackground prose...", ctx);
 
-  const files = await listTodoFiles(sandbox);
+  const files = await listIdeaFiles(sandbox);
   assert.equal(files.length, 1);
   assert.match(files[0], /^[0-9a-f]{8}\.md$/);
 
-  const raw = await fs.readFile(path.join(sandbox, "docs", "todos", files[0]), "utf8");
+  const raw = await fs.readFile(path.join(sandbox, "docs", "ideas", files[0]), "utf8");
   const parsed = parseIdeaArtifact(raw);
   assert.ok(parsed);
   assert.equal(parsed.title, "Add scout dispatch retry");
@@ -131,7 +131,7 @@ test("command happy path writes an idea artifact and reports TODO id", async () 
 
   const notify = ctx.notifyCalls.find((c) => c.level === "info");
   assert.ok(notify, "expected info notification");
-  assert.match(notify.message, /TODO-[0-9a-f]{8}/);
+  assert.match(notify.message, /IDEA-[0-9a-f]{8}/);
   assert.match(notify.message, /Add scout dispatch retry/);
 });
 
@@ -156,7 +156,7 @@ test("cancelled interactive prompt (undefined result) writes nothing and notifie
 
   await command.options.handler("", ctx);
 
-  assert.deepEqual(await listTodoFiles(sandbox), []);
+  assert.deepEqual(await listIdeaFiles(sandbox), []);
   assert.equal(ctx.inputCalls.length, 1);
 });
 
@@ -167,7 +167,7 @@ test("empty interactive prompt result (user cleared field) writes nothing", asyn
 
   await command.options.handler("", ctx);
 
-  assert.deepEqual(await listTodoFiles(sandbox), []);
+  assert.deepEqual(await listIdeaFiles(sandbox), []);
 });
 
 test("empty-args without UI rejects with usage message and writes nothing", async () => {
@@ -177,7 +177,7 @@ test("empty-args without UI rejects with usage message and writes nothing", asyn
 
   await command.options.handler("", ctx);
 
-  assert.deepEqual(await listTodoFiles(sandbox), []);
+  assert.deepEqual(await listIdeaFiles(sandbox), []);
   const error = ctx.notifyCalls.find((c) => c.level === "error");
   assert.ok(error, "expected error notification");
   assert.match(error.message, /\/flow:idea requires a title or body/);
@@ -202,13 +202,13 @@ test("tool list returns seeded ideas", async () => {
   );
 });
 
-test("tool read accepts TODO-prefixed and bare ids", async () => {
+test("tool read accepts IDEA-prefixed and bare ids", async () => {
   const sandbox = mkSandbox("pi-flow-idea-tool-read-");
   const { tool } = bootExtension();
   await seedIdea(sandbox, artifact("abc123ef", "Readable idea"));
   const ctx = makeCtx(sandbox);
 
-  const prefixed = await tool.execute("call-read-1", { action: "read", id: "TODO-abc123ef" }, undefined, undefined, ctx);
+  const prefixed = await tool.execute("call-read-1", { action: "read", id: "IDEA-abc123ef" }, undefined, undefined, ctx);
   const bare = await tool.execute("call-read-2", { action: "read", id: "abc123ef" }, undefined, undefined, ctx);
 
   assert.equal(prefixed.isError, undefined);
@@ -230,7 +230,7 @@ test("tool create writes a new idea artifact", async () => {
   );
 
   assert.equal(result.isError, undefined);
-  assert.match(result.content[0].text, /TODO-[0-9a-f]{8}/);
+  assert.match(result.content[0].text, /IDEA-[0-9a-f]{8}/);
   const parsed = await readOnlyArtifact(sandbox);
   assert.equal(parsed.title, "From tool");
   assert.deepEqual(parsed.tags, ["a", "b"]);
@@ -256,8 +256,8 @@ test("tool update accepts bare id and preserves omitted fields", async () => {
   );
 
   assert.equal(result.isError, undefined);
-  assert.match(result.content[0].text, /TODO-fedcba98/);
-  const raw = await fs.readFile(path.join(sandbox, "docs", "todos", "fedcba98.md"), "utf8");
+  assert.match(result.content[0].text, /IDEA-fedcba98/);
+  const raw = await fs.readFile(path.join(sandbox, "docs", "ideas", "fedcba98.md"), "utf8");
   const parsed = parseIdeaArtifact(raw);
   assert.ok(parsed);
   assert.equal(parsed.status, "done");

@@ -10,7 +10,7 @@ You are the plan refiner. Drive one era of the plan review-edit cycle for the pl
 
 {TASK_ARTIFACT}
 
-{SOURCE_TODO}
+{SOURCE_IDEA}
 
 {SOURCE_SPEC}
 
@@ -88,7 +88,7 @@ When `{CARRY_OVER_REVIEW}` is non-empty, perform a planner edit pass against tha
 1. Read the carry-over review file at `{CARRY_OVER_REVIEW}`.
 2. Build a temp final-message file whose exact last non-empty line is `REVIEW_ARTIFACT: {CARRY_OVER_REVIEW}` and read the carry-over review file's first non-empty line as the expected reviewer-provenance string.
 3. Run `pi-flow helper refine-plan/validate-and-parse-plan-review --final-message <temp-final-message-path> --expected-path "{CARRY_OVER_REVIEW}" --reviewer-provenance "<first-non-empty-line-from-carry-over-review>" --allowed-tiers crossProvider.capable,capable`. On non-zero exit, map the helper's stderr JSON `failure` field into the existing `reviewer artifact handoff failed: <specific check>` taxonomy and exit. On exit 0, use `.blocking_findings_markdown` as the carry-over blocking findings (Critical + Important only).
-4. Run `pi-flow helper refine-plan/prepare-plan-edit-prompt --review-findings <path-or-stdin-for-blocking-findings> --plan-path "{PLAN_PATH}" --task-artifact "{TASK_ARTIFACT line or empty}" --source-todo "{SOURCE_TODO line or empty}" --source-spec "{SOURCE_SPEC line or empty}" --scout-brief "{SCOUT_BRIEF line or empty}" --original-spec-inline <path-or-stdin> --output-path "{PLAN_PATH}"`. On non-zero exit, emit `STATUS: failed` with reason `worker dispatch failed: planner-edit-pass` and exit. Read `.prompt_path` from stdout JSON and use that filled prompt for the planner dispatch.
+4. Run `pi-flow helper refine-plan/prepare-plan-edit-prompt --review-findings <path-or-stdin-for-blocking-findings> --plan-path "{PLAN_PATH}" --task-artifact "{TASK_ARTIFACT line or empty}" --source-idea "{SOURCE_IDEA line or empty}" --source-spec "{SOURCE_SPEC line or empty}" --scout-brief "{SCOUT_BRIEF line or empty}" --original-spec-inline <path-or-stdin> --output-path "{PLAN_PATH}"`. On non-zero exit, emit `STATUS: failed` with reason `worker dispatch failed: planner-edit-pass` and exit. Read `.prompt_path` from stdout JSON and use that filled prompt for the planner dispatch.
 5. Dispatch `planner` (edit mode) per the existing Planner Edit Pass procedure using the helper-prepared prompt.
 6. After the planner returns, verify the plan file still exists and is non-empty (same check as the in-loop Planner Edit Pass step 3). If missing or empty, emit `STATUS: failed` with reason `input artifact missing or empty: plan file after carry-over edit pass`.
 7. **Harden the plan against ambiguous fenced examples.** Run:
@@ -106,7 +106,7 @@ When `{CARRY_OVER_REVIEW}` is empty (first-era runs, etc.), skip the carry-over 
 
 2. **Resolve the primary reviewer dispatch** by running `resolve-model-dispatch.py --tier crossProvider.capable --agent plan-reviewer`.
 
-3. **Prepare the primary review prompt** by running `pi-flow helper refine-plan/prepare-plan-review-prompt --plan-path "{PLAN_PATH}" --task-artifact "{TASK_ARTIFACT line or empty}" --source-todo "{SOURCE_TODO line or empty}" --source-spec "{SOURCE_SPEC line or empty}" --scout-brief "{SCOUT_BRIEF line or empty}" --original-spec-inline <path-or-stdin> --structural-only-note <path-or-stdin> --review-output-path "{REVIEW_OUTPUT_PATH}" --working-dir "{WORKING_DIR}" --current-era <CURRENT_ERA> --reviewer-model <primary model> --reviewer-cli <primary cli>`. On non-zero exit, emit `STATUS: failed` with reason `worker dispatch failed: plan-reviewer` and exit. Read `.prompt_path`, `.review_path`, and `.reviewer_provenance` from stdout JSON. The helper owns temp-file creation, absolute review-path construction (`{WORKING_DIR}/{REVIEW_OUTPUT_PATH}-v<CURRENT_ERA>.md`), and the exact `**Reviewer:** <provider>/<model> via <cli>` line.
+3. **Prepare the primary review prompt** by running `pi-flow helper refine-plan/prepare-plan-review-prompt --plan-path "{PLAN_PATH}" --task-artifact "{TASK_ARTIFACT line or empty}" --source-idea "{SOURCE_IDEA line or empty}" --source-spec "{SOURCE_SPEC line or empty}" --scout-brief "{SCOUT_BRIEF line or empty}" --original-spec-inline <path-or-stdin> --structural-only-note <path-or-stdin> --review-output-path "{REVIEW_OUTPUT_PATH}" --working-dir "{WORKING_DIR}" --current-era <CURRENT_ERA> --reviewer-model <primary model> --reviewer-cli <primary cli>`. On non-zero exit, emit `STATUS: failed` with reason `worker dispatch failed: plan-reviewer` and exit. Read `.prompt_path`, `.review_path`, and `.reviewer_provenance` from stdout JSON. The helper owns temp-file creation, absolute review-path construction (`{WORKING_DIR}/{REVIEW_OUTPUT_PATH}-v<CURRENT_ERA>.md`), and the exact `**Reviewer:** <provider>/<model> via <cli>` line.
 
 4. **Dispatch `plan-reviewer`** via `subagent_run_serial` using the helper-prepared prompt at `.prompt_path`.
 
@@ -159,7 +159,7 @@ _Approved with concerns by plan reviewer. Full review: `<path-to-review-file>`._
 
 When the outcome is `Not approved` and the budget is not exhausted:
 
-1. **Prepare the planner edit prompt** by running `pi-flow helper refine-plan/prepare-plan-edit-prompt --review-findings <temp-file-or-stdin-with-blocking-findings-markdown-from-Step-5> --plan-path "{PLAN_PATH}" --task-artifact "{TASK_ARTIFACT line or empty}" --source-todo "{SOURCE_TODO line or empty}" --source-spec "{SOURCE_SPEC line or empty}" --scout-brief "{SCOUT_BRIEF line or empty}" --original-spec-inline <path-or-stdin> --output-path "{PLAN_PATH}"`. The `--review-findings` input is `.blocking_findings_markdown` from Per-Iteration Full Review Step 5 (Critical + Important findings only; Minor findings are non-blocking and must not feed the edit pass). On non-zero exit, emit `STATUS: failed` with reason `worker dispatch failed: planner-edit-pass` and exit. Read `.prompt_path` from stdout JSON and use that filled prompt for the planner dispatch.
+1. **Prepare the planner edit prompt** by running `pi-flow helper refine-plan/prepare-plan-edit-prompt --review-findings <temp-file-or-stdin-with-blocking-findings-markdown-from-Step-5> --plan-path "{PLAN_PATH}" --task-artifact "{TASK_ARTIFACT line or empty}" --source-idea "{SOURCE_IDEA line or empty}" --source-spec "{SOURCE_SPEC line or empty}" --scout-brief "{SCOUT_BRIEF line or empty}" --original-spec-inline <path-or-stdin> --output-path "{PLAN_PATH}"`. The `--review-findings` input is `.blocking_findings_markdown` from Per-Iteration Full Review Step 5 (Critical + Important findings only; Minor findings are non-blocking and must not feed the edit pass). On non-zero exit, emit `STATUS: failed` with reason `worker dispatch failed: planner-edit-pass` and exit. Read `.prompt_path` from stdout JSON and use that filled prompt for the planner dispatch.
 
 2. **Dispatch `planner`** via `subagent_run_serial` with:
    - `model: <capable from model matrix>`

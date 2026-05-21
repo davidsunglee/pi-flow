@@ -30,15 +30,15 @@ export interface RouteOutcome {
 
 export const EXACT_INPUT_MATRIX: Record<
   SkillKey,
-  { empty: boolean; todoId: boolean; briefs: boolean; specs: boolean; plans: boolean; reviews: boolean }
+  { empty: boolean; ideaId: boolean; briefs: boolean; specs: boolean; plans: boolean; reviews: boolean }
 > = {
-  'scout':         { empty: true,  todoId: true,  briefs: true,  specs: false, plans: false, reviews: false },
-  'define-spec':   { empty: true,  todoId: true,  briefs: false, specs: true,  plans: false, reviews: false },
-  'generate-plan': { empty: true,  todoId: true,  briefs: true,  specs: false, plans: false, reviews: false },
-  'refine-plan':   { empty: false, todoId: false, briefs: false, specs: false, plans: true,  reviews: false },
-  'execute-plan':  { empty: false, todoId: false, briefs: false, specs: false, plans: true,  reviews: false },
-  'refine-code':   { empty: false, todoId: false, briefs: false, specs: false, plans: false, reviews: true  },
-  'fastlane':      { empty: true,  todoId: false, briefs: false, specs: true,  plans: false, reviews: false },
+  'scout':         { empty: true,  ideaId: true,  briefs: true,  specs: false, plans: false, reviews: false },
+  'define-spec':   { empty: true,  ideaId: true,  briefs: false, specs: true,  plans: false, reviews: false },
+  'generate-plan': { empty: true,  ideaId: true,  briefs: true,  specs: false, plans: false, reviews: false },
+  'refine-plan':   { empty: false, ideaId: false, briefs: false, specs: false, plans: true,  reviews: false },
+  'execute-plan':  { empty: false, ideaId: false, briefs: false, specs: false, plans: true,  reviews: false },
+  'refine-code':   { empty: false, ideaId: false, briefs: false, specs: false, plans: false, reviews: true  },
+  'fastlane':      { empty: true,  ideaId: false, briefs: false, specs: true,  plans: false, reviews: false },
 };
 
 export function parseArgs(rawArgs: string): ParsedArgs {
@@ -57,11 +57,11 @@ export function parseArgs(rawArgs: string): ParsedArgs {
   return { exactFlag, rest };
 }
 
-const TODO_RE = /^(TODO-)?([0-9a-f]{8})$/;
+const IDEA_RE = /^(IDEA-)?([0-9a-f]{8})$/;
 const DOCS_DIR_RE = /docs\/(briefs|specs|plans|reviews)\//;
 
 function isArtifactToken(t: string): boolean {
-  if (TODO_RE.test(t)) return true;
+  if (IDEA_RE.test(t)) return true;
   if (t.endsWith('.md') && DOCS_DIR_RE.test(t)) return true;
   return false;
 }
@@ -103,10 +103,10 @@ export function recognizeExact(skill: SkillKey, rest: string): string | undefine
     return matrix.empty ? rest : undefined;
   }
 
-  const m = positional.match(TODO_RE);
+  const m = positional.match(IDEA_RE);
   if (m) {
-    if (!matrix.todoId) return undefined;
-    return hasFlags ? rest : `TODO-${m[2]}`;
+    if (!matrix.ideaId) return undefined;
+    return hasFlags ? rest : `IDEA-${m[2]}`;
   }
 
   const dirMatch = positional.match(DOCS_DIR_RE);

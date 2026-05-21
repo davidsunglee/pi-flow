@@ -10,7 +10,7 @@ Analyze the codebase at `{WORKING_DIR}` and produce a structured implementation 
 
 {TASK_ARTIFACT}
 
-{SOURCE_TODO}
+{SOURCE_IDEA}
 
 {SOURCE_SPEC}
 
