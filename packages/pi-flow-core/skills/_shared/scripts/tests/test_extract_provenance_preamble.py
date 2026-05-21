@@ -287,6 +287,18 @@ class TestExtractProvenancePreamble(unittest.TestCase):
         finally:
             os.unlink(path)
 
+    def test_spec_mode_rejects_legacy_todo_scout_brief(self):
+        legacy = "TO" + "DO-12345678-brief.md"
+        content = f"# Title\n\nScout brief: docs/briefs/{legacy}\n\n## Real heading\n"
+        path = write_tmp(content)
+        try:
+            result = run(["--file", path, "--mode", "spec"])
+            self.assertEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+            self.assertIsNone(data["scout_brief"])
+        finally:
+            os.unlink(path)
+
 
 class TestSpecModeFencedHeading(unittest.TestCase):
 

@@ -33,7 +33,7 @@ from fence_aware import compute_in_fence_lines
 
 
 _RE_SOURCE = re.compile(r"^(?:Source:|\*\*Source:\*\*) (IDEA-[0-9a-f]{8})$")
-_RE_SCOUT = re.compile(r"^(?:Scout brief:|\*\*Scout brief:\*\*) (docs/briefs/[^/]+)$")
+_RE_SCOUT = re.compile(r"^(?:Scout brief:|\*\*Scout brief:\*\*) (docs/briefs/(?!TODO-)[^/]+)$")
 _RE_GIT_SHA_LINE = re.compile(r"^(?:Git SHA:|\*\*Git SHA:\*\*) (.+)$")
 _RE_GIT_SHA_VALUE = re.compile(r"^[0-9a-f]{40}$")
 
