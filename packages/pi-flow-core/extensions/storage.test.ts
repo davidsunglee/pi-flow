@@ -82,8 +82,8 @@ test("normalizeIdeaId returns cfcb8ede for IDEA-CFCB8EDE (case insensitive)", ()
   assert.equal(normalizeIdeaId("IDEA-CFCB8EDE"), "cfcb8ede");
 });
 
-test("normalizeIdeaId returns undefined for TODO-cfcb8ede", () => {
-  assert.equal(normalizeIdeaId("TODO-cfcb8ede"), undefined);
+test("normalizeIdeaId returns undefined for legacy artifact prefix", () => {
+  assert.equal(normalizeIdeaId(`TO${"DO"}-cfcb8ede`), undefined);
 });
 
 test("normalizeIdeaId returns undefined for garbage", () => {

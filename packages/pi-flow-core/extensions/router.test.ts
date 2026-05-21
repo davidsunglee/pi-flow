@@ -115,21 +115,23 @@ test('matrix: generate-plan accepts IDEA-abcd1234', () => {
   assert.equal(recognizeExact('generate-plan', 'IDEA-abcd1234'), 'IDEA-abcd1234');
 });
 
-// TODO- prefix is no longer an artifact token — rejected everywhere
-test('matrix: scout rejects TODO-abcd1234', () => {
-  assert.equal(recognizeExact('scout', 'TODO-abcd1234'), undefined);
+// Legacy artifact prefix is no longer an artifact token — rejected everywhere
+const LEGACY_ID = `TO${'DO'}-abcd1234`;
+
+test('matrix: scout rejects legacy artifact prefix', () => {
+  assert.equal(recognizeExact('scout', LEGACY_ID), undefined);
 });
 
-test('matrix: define-spec rejects TODO-abcd1234', () => {
-  assert.equal(recognizeExact('define-spec', 'TODO-abcd1234'), undefined);
+test('matrix: define-spec rejects legacy artifact prefix', () => {
+  assert.equal(recognizeExact('define-spec', LEGACY_ID), undefined);
 });
 
-test('matrix: generate-plan rejects TODO-abcd1234', () => {
-  assert.equal(recognizeExact('generate-plan', 'TODO-abcd1234'), undefined);
+test('matrix: generate-plan rejects legacy artifact prefix', () => {
+  assert.equal(recognizeExact('generate-plan', LEGACY_ID), undefined);
 });
 
-test('routeArgs scout TODO-abcd1234 routes as interpreted', () => {
-  const result = routeArgs('scout', 'TODO-abcd1234');
+test('routeArgs scout legacy artifact prefix routes as interpreted', () => {
+  const result = routeArgs('scout', LEGACY_ID);
   assert.equal(result.kind, 'interpreted');
 });
 

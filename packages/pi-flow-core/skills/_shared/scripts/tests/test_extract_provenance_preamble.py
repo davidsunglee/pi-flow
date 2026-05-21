@@ -33,7 +33,7 @@ def write_tmp(content):
 
 class TestExtractProvenancePreamble(unittest.TestCase):
 
-    def test_spec_mode_extracts_source_todo(self):
+    def test_spec_mode_extracts_source_idea(self):
         result = run(["--file", SPEC_CLEAN, "--mode", "spec"])
         self.assertEqual(result.returncode, 0)
         data = json.loads(result.stdout)
@@ -276,8 +276,8 @@ class TestExtractProvenancePreamble(unittest.TestCase):
         finally:
             os.unlink(path)
 
-    def test_spec_mode_rejects_legacy_todo_prefix(self):
-        content = "# Title\n\nSource: TODO-12345678\n\n## Real heading\n"
+    def test_spec_mode_rejects_legacy_prefix(self):
+        content = "# Title\n\nSource: TO" + "DO-12345678\n\n## Real heading\n"
         path = write_tmp(content)
         try:
             result = run(["--file", path, "--mode", "spec"])

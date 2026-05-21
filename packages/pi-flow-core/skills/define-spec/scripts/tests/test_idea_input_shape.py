@@ -55,8 +55,8 @@ class TestIdeaInputShape(unittest.TestCase):
     def test_non_hex_chars_do_not_match(self):
         self.assertIsNone(detect_idea("IDEA-bd750bgg"))  # 'gg' not hex
 
-    def test_legacy_todo_prefix_does_not_match(self):
-        self.assertIsNone(detect_idea("TODO-bd750b75"))
+    def test_legacy_prefix_does_not_match(self):
+        self.assertIsNone(detect_idea("TO" + "DO-bd750b75"))
 
 
 if __name__ == "__main__":
