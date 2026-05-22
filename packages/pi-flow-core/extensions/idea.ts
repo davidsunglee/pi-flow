@@ -1106,13 +1106,19 @@ export function registerIdea(pi: ExtensionAPI): void {
       }
 
       let mutableEntries = entries;
+      let nextPrompt: string | undefined;
+      let rootTui: TUI | undefined;
 
       await ctx.ui.custom<void>((tui, theme, keybindings, done) => {
+        rootTui = tui;
         let activeComponent: Component & { invalidate(): void };
         let selector: IdeaSelectorComponent;
 
         const closeAndPrefill = (text: string) => {
-          ctx.ui.setEditorText(text);
+          // Defer setEditorText until AFTER the custom UI closes. Pi's
+          // non-overlay custom UI restores the editor text saved at open time
+          // when done() runs, so any setEditorText before done() is wiped.
+          nextPrompt = text;
           done(undefined);
         };
 
@@ -1295,6 +1301,11 @@ export function registerIdea(pi: ExtensionAPI): void {
           },
         };
       });
+
+      if (nextPrompt !== undefined) {
+        ctx.ui.setEditorText(nextPrompt);
+        rootTui?.requestRender();
+      }
     },
   });
 

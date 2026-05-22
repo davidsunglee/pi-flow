@@ -5,9 +5,9 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { registerIdea } from "./idea.ts";
+import { buildRefineIdeaPrompt, registerIdea } from "./idea.ts";
 import { formatIdeaArtifact, parseIdeaArtifact, type IdeaArtifact } from "./storage.ts";
-import { visibleWidth } from "@earendil-works/pi-tui";
+import { getKeybindings, visibleWidth } from "@earendil-works/pi-tui";
 
 type NotifyLevel = "info" | "warning" | "error";
 type NotifyCall = { message: string; level: NotifyLevel };
@@ -2526,4 +2526,220 @@ test("IdeaDetailOverlayComponent footer: lowercase line counter remains correct 
   const lines2 = overlay.render(160);
   const footer2 = lines2[lines2.length - 3];
   assert.match(footer2, /lines 6-10 of \d+/, `after pageDown, footer should show 'lines 6-10 of N', got: ${footer2}`);
+});
+
+// -- closeAndPrefill regression tests ----------------------------------------
+//
+// The ideas TUI is opened via ctx.ui.custom() in non-overlay mode. Pi's
+// non-overlay custom UI saves the editor text on open and restores it when
+// done() is called. If an action sets editor text BEFORE calling done(), the
+// restore wipes it. These tests simulate that restore behaviour so the regression
+// is caught here without an end-to-end pi run.
+
+const CTRL_SHIFT_R = "\x1b[27;6;114~"; // ctrl+shift+r (modifyOtherKeys form)
+const CTRL_SHIFT_F = "\x1b[27;6;102~"; // ctrl+shift+f
+const CTRL_SHIFT_S = "\x1b[27;6;115~"; // ctrl+shift+s
+const ENTER = "\r";
+const ESC = "\x1b";
+const ARROW_DOWN = "\x1b[B";
+
+function setupInteractiveCtx(cwd: string) {
+  const notifyCalls: NotifyCall[] = [];
+  const customCalls: Array<{ factory: any; options?: any; done: (v: any) => void; handle: any }> = [];
+  let editorText = "";
+  const setEditorTextHistory: string[] = [];
+  const tuiRenderCount = { value: 0 };
+
+  const theme: any = {
+    fg: (_color: string, s: string) => s,
+    bold: (s: string) => s,
+  };
+  const keybindings = getKeybindings();
+
+  const ctxObj: any = {
+    cwd,
+    hasUI: true,
+    notifyCalls,
+    customCalls,
+    setEditorTextHistory,
+    tuiRenderCount,
+    get editorText(): string { return editorText; },
+    ui: {
+      notify(message: string, level: NotifyLevel) {
+        notifyCalls.push({ message, level });
+      },
+      async input(_t: string, _p?: string) {
+        return undefined;
+      },
+      setEditorText(text: string) {
+        setEditorTextHistory.push(text);
+        editorText = text;
+      },
+      custom(factory: any, options?: any): Promise<any> {
+        const isOverlay = options?.overlay === true;
+        if (isOverlay) {
+          // Tests do not exercise the overlay flow; never resolve.
+          return new Promise<any>(() => {});
+        }
+        const savedEditor = editorText;
+        let resolve!: (v: any) => void;
+        const promise = new Promise<any>((r) => { resolve = r; });
+        const fakeTui: any = {
+          requestRender() { tuiRenderCount.value += 1; },
+          terminal: { rows: 40, cols: 120 },
+        };
+        const done = (v: any) => {
+          // Mimic Pi non-overlay custom-UI semantics: editor is restored on done.
+          editorText = savedEditor;
+          resolve(v);
+        };
+        const handle = factory(fakeTui, theme, keybindings, done);
+        customCalls.push({ factory, options, done, handle });
+        return promise;
+      },
+    },
+  };
+  return ctxObj;
+}
+
+async function flushMicrotasks(steps = 6): Promise<void> {
+  for (let i = 0; i < steps; i++) {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+}
+
+async function startInteractiveIdeas(ctx: any, cmd: RegisteredCommand): Promise<{
+  send: (data: string) => Promise<void>;
+  finished: Promise<void>;
+}> {
+  const finished = cmd.options.handler("", ctx);
+  // Allow async work in the handler (getIdeaDir, listIdeas) to complete and
+  // for ctx.ui.custom() to be invoked synchronously after.
+  for (let attempt = 0; attempt < 100 && ctx.customCalls.length === 0; attempt++) {
+    await flushMicrotasks(1);
+  }
+  if (ctx.customCalls.length === 0) {
+    throw new Error("expected ctx.ui.custom to be invoked");
+  }
+  const handle = ctx.customCalls[0].handle;
+  return {
+    send: async (data: string) => {
+      handle.handleInput(data);
+      await flushMicrotasks();
+    },
+    finished,
+  };
+}
+
+test("flow:ideas selector quick refine (Ctrl+Shift+R) prefills the editor with refine prompt after UI closes", async () => {
+  const sandbox = mkSandbox("pi-flow-ideas-quick-refine-");
+  const { commands } = bootExtension();
+  const cmd = commands.find((c) => c.name === "flow:ideas");
+  assert.ok(cmd);
+  await seedIdea(sandbox, artifact("11112222", "Sample idea", "open"));
+
+  const ctx = setupInteractiveCtx(sandbox);
+  const { send, finished } = await startInteractiveIdeas(ctx, cmd!);
+  await send(CTRL_SHIFT_R);
+  await finished;
+
+  const expected = buildRefineIdeaPrompt("11112222", "Sample idea");
+  assert.equal(
+    ctx.editorText,
+    expected,
+    `expected editor to hold the refine prompt after UI closes; got ${JSON.stringify(ctx.editorText)}`,
+  );
+});
+
+test("flow:ideas selector quick fastlane (Ctrl+Shift+F) prefills the /flow:fastlane prompt after UI closes", async () => {
+  const sandbox = mkSandbox("pi-flow-ideas-quick-fastlane-");
+  const { commands } = bootExtension();
+  const cmd = commands.find((c) => c.name === "flow:ideas");
+  assert.ok(cmd);
+  await seedIdea(sandbox, artifact("22223333", "Fastlane idea", "open"));
+
+  const ctx = setupInteractiveCtx(sandbox);
+  const { send, finished } = await startInteractiveIdeas(ctx, cmd!);
+  await send(CTRL_SHIFT_F);
+  await finished;
+
+  assert.equal(ctx.editorText, "/flow:fastlane IDEA-22223333");
+});
+
+test("flow:ideas selector quick spec (Ctrl+Shift+S) prefills the /flow:spec prompt after UI closes", async () => {
+  const sandbox = mkSandbox("pi-flow-ideas-quick-spec-");
+  const { commands } = bootExtension();
+  const cmd = commands.find((c) => c.name === "flow:ideas");
+  assert.ok(cmd);
+  await seedIdea(sandbox, artifact("33334444", "Spec idea", "open"));
+
+  const ctx = setupInteractiveCtx(sandbox);
+  const { send, finished } = await startInteractiveIdeas(ctx, cmd!);
+  await send(CTRL_SHIFT_S);
+  await finished;
+
+  assert.equal(ctx.editorText, "/flow:spec IDEA-33334444");
+});
+
+test("flow:ideas action menu refine prefills the refine prompt after UI closes", async () => {
+  const sandbox = mkSandbox("pi-flow-ideas-action-refine-");
+  const { commands } = bootExtension();
+  const cmd = commands.find((c) => c.name === "flow:ideas");
+  assert.ok(cmd);
+  await seedIdea(sandbox, artifact("44445555", "Menu refine idea", "open"));
+
+  const ctx = setupInteractiveCtx(sandbox);
+  const { send, finished } = await startInteractiveIdeas(ctx, cmd!);
+
+  await send(ENTER); // selector → open action menu (default first idea)
+  await send(ARROW_DOWN); // view → refine
+  await send(ENTER); // confirm refine
+  await finished;
+
+  const expected = buildRefineIdeaPrompt("44445555", "Menu refine idea");
+  assert.equal(ctx.editorText, expected);
+});
+
+for (const { skill, downs } of [
+  { skill: "fastlane", downs: 0 },
+  { skill: "scout", downs: 1 },
+  { skill: "spec", downs: 2 },
+  { skill: "plan", downs: 3 },
+] as const) {
+  test(`flow:ideas work submenu ${skill} prefills /flow:${skill} prompt after UI closes`, async () => {
+    const sandbox = mkSandbox(`pi-flow-ideas-work-${skill}-`);
+    const { commands } = bootExtension();
+    const cmd = commands.find((c) => c.name === "flow:ideas");
+    assert.ok(cmd);
+    await seedIdea(sandbox, artifact("55556666", `Work ${skill} idea`, "open"));
+
+    const ctx = setupInteractiveCtx(sandbox);
+    const { send, finished } = await startInteractiveIdeas(ctx, cmd!);
+
+    await send(ENTER); // open action menu
+    await send(ARROW_DOWN); // view → refine
+    await send(ARROW_DOWN); // refine → work
+    await send(ENTER); // open work submenu
+    for (let i = 0; i < downs; i++) await send(ARROW_DOWN);
+    await send(ENTER); // confirm skill
+    await finished;
+
+    assert.equal(ctx.editorText, `/flow:${skill} IDEA-55556666`);
+  });
+}
+
+test("flow:ideas selector cancel (Esc) leaves the editor text untouched", async () => {
+  const sandbox = mkSandbox("pi-flow-ideas-cancel-");
+  const { commands } = bootExtension();
+  const cmd = commands.find((c) => c.name === "flow:ideas");
+  assert.ok(cmd);
+  await seedIdea(sandbox, artifact("66667777", "Cancel idea", "open"));
+
+  const ctx = setupInteractiveCtx(sandbox);
+  const { send, finished } = await startInteractiveIdeas(ctx, cmd!);
+  await send(ESC);
+  await finished;
+
+  assert.equal(ctx.editorText, "");
+  assert.deepEqual(ctx.setEditorTextHistory, []);
 });
