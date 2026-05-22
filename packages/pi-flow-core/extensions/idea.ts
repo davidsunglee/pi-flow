@@ -22,6 +22,7 @@ import {
   Text,
   type Component,
   type TUI,
+  type SelectListTheme,
   Key,
   matchesKey,
   fuzzyMatch,
@@ -513,6 +514,345 @@ export class IdeaSelectorComponent implements Component {
     return lines;
   }
 }
+
+function inlineSelectListTheme(theme: Theme): SelectListTheme {
+  return {
+    selectedPrefix: (text) => theme.fg("accent", text),
+    selectedText: (text) => theme.fg("accent", text),
+    description: (text) => theme.fg("dim", text),
+    scrollInfo: (text) => theme.fg("muted", text),
+    noMatch: (text) => theme.fg("muted", text),
+  };
+}
+
+function renderCenteredTitle(text: string, width: number, styled: string): string {
+  const visible = visibleWidth(text);
+  const pad = Math.max(0, Math.floor((Math.max(width, visible) - visible) / 2));
+  return " ".repeat(pad) + styled;
+}
+
+export interface IdeaActionMenuHost {
+  dispatchAction(name: "view" | "refine" | "work" | "close" | "reopen" | "other"): void;
+  back(): void;
+  theme: Theme;
+  keybindings: KeybindingsManager;
+  requestRender(): void;
+}
+
+export class IdeaActionMenuComponent implements Component {
+  private idea: IdeaListEntry;
+  private host: IdeaActionMenuHost;
+  private list: SelectList;
+
+  constructor(idea: IdeaListEntry, host: IdeaActionMenuHost) {
+    this.idea = idea;
+    this.host = host;
+    const items = [
+      { value: "view", label: "view" },
+      { value: "refine", label: "refine" },
+      { value: "work", label: "work ▶" },
+      idea.status === "open"
+        ? { value: "close", label: "close" }
+        : { value: "reopen", label: "reopen" },
+      { value: "other", label: "other ▶" },
+    ];
+    this.list = new SelectList(items, items.length, inlineSelectListTheme(host.theme));
+    this.list.onSelect = (item) =>
+      host.dispatchAction(item.value as "view" | "refine" | "work" | "close" | "reopen" | "other");
+    this.list.onCancel = () => host.back();
+  }
+
+  handleInput(data: string): void {
+    this.list.handleInput(data);
+  }
+
+  invalidate(): void {
+    this.list.invalidate();
+  }
+
+  render(width: number): string[] {
+    const theme = this.host.theme;
+    const border = new DynamicBorder((s) => theme.fg("muted", s));
+    const titleText = `IDEA-${this.idea.id} "${this.idea.title}"`;
+    const styled = theme.fg("accent", theme.bold(titleText));
+
+    const lines: string[] = [];
+    lines.push(...border.render(width));
+    lines.push(renderCenteredTitle(titleText, width, styled));
+    lines.push(...this.list.render(width));
+    lines.push(...border.render(width));
+    return lines;
+  }
+}
+
+export interface IdeaWorkSubmenuHost {
+  dispatch(skill: "fastlane" | "scout" | "spec" | "plan"): void;
+  back(): void;
+  theme: Theme;
+  keybindings: KeybindingsManager;
+  requestRender(): void;
+}
+
+export class IdeaWorkSubmenuComponent implements Component {
+  private idea: IdeaListEntry;
+  private host: IdeaWorkSubmenuHost;
+  private list: SelectList;
+
+  constructor(idea: IdeaListEntry, host: IdeaWorkSubmenuHost) {
+    this.idea = idea;
+    this.host = host;
+    const items = [
+      { value: "fastlane", label: "fastlane" },
+      { value: "scout", label: "scout" },
+      { value: "spec", label: "spec" },
+      { value: "plan", label: "plan" },
+    ];
+    this.list = new SelectList(items, items.length, inlineSelectListTheme(host.theme));
+    this.list.setSelectedIndex(0);
+    this.list.onSelect = (item) =>
+      host.dispatch(item.value as "fastlane" | "scout" | "spec" | "plan");
+    this.list.onCancel = () => host.back();
+  }
+
+  handleInput(data: string): void {
+    this.list.handleInput(data);
+  }
+
+  invalidate(): void {
+    this.list.invalidate();
+  }
+
+  render(width: number): string[] {
+    const theme = this.host.theme;
+    const border = new DynamicBorder((s) => theme.fg("muted", s));
+    const titleText = `IDEA-${this.idea.id} — work`;
+    const styled = theme.fg("accent", theme.bold(titleText));
+
+    const lines: string[] = [];
+    lines.push(...border.render(width));
+    lines.push(renderCenteredTitle(titleText, width, styled));
+    lines.push(...this.list.render(width));
+    lines.push(...border.render(width));
+    return lines;
+  }
+}
+
+export interface IdeaOtherSubmenuHost {
+  dispatch(name: "copy-path" | "copy-text" | "delete"): void;
+  back(): void;
+  theme: Theme;
+  keybindings: KeybindingsManager;
+  requestRender(): void;
+}
+
+export class IdeaOtherSubmenuComponent implements Component {
+  private idea: IdeaListEntry;
+  private host: IdeaOtherSubmenuHost;
+  private list: SelectList;
+
+  constructor(idea: IdeaListEntry, host: IdeaOtherSubmenuHost) {
+    this.idea = idea;
+    this.host = host;
+    const items = [
+      { value: "copy-path", label: "copy path" },
+      { value: "copy-text", label: "copy text" },
+      { value: "delete", label: "delete" },
+    ];
+    this.list = new SelectList(items, items.length, inlineSelectListTheme(host.theme));
+    this.list.setSelectedIndex(0);
+    this.list.onSelect = (item) =>
+      host.dispatch(item.value as "copy-path" | "copy-text" | "delete");
+    this.list.onCancel = () => host.back();
+  }
+
+  handleInput(data: string): void {
+    this.list.handleInput(data);
+  }
+
+  invalidate(): void {
+    this.list.invalidate();
+  }
+
+  render(width: number): string[] {
+    const theme = this.host.theme;
+    const border = new DynamicBorder((s) => theme.fg("muted", s));
+    const titleText = `IDEA-${this.idea.id} — other`;
+    const styled = theme.fg("accent", theme.bold(titleText));
+
+    const lines: string[] = [];
+    lines.push(...border.render(width));
+    lines.push(renderCenteredTitle(titleText, width, styled));
+    lines.push(...this.list.render(width));
+    lines.push(...border.render(width));
+    return lines;
+  }
+}
+
+export interface IdeaDeleteConfirmHost {
+  confirm(): void;
+  cancel(): void;
+  theme: Theme;
+  keybindings: KeybindingsManager;
+  requestRender(): void;
+}
+
+export class IdeaDeleteConfirmComponent implements Component {
+  private idea: IdeaListEntry;
+  private host: IdeaDeleteConfirmHost;
+  private list: SelectList;
+
+  constructor(idea: IdeaListEntry, host: IdeaDeleteConfirmHost) {
+    this.idea = idea;
+    this.host = host;
+    const items = [
+      { value: "no", label: "No" },
+      { value: "yes", label: "Yes" },
+    ];
+    this.list = new SelectList(items, items.length, inlineSelectListTheme(host.theme));
+    this.list.setSelectedIndex(0);
+    this.list.onSelect = (item) => {
+      if (item.value === "yes") host.confirm();
+      else host.cancel();
+    };
+    this.list.onCancel = () => host.cancel();
+  }
+
+  handleInput(data: string): void {
+    this.list.handleInput(data);
+  }
+
+  invalidate(): void {
+    this.list.invalidate();
+  }
+
+  render(width: number): string[] {
+    const theme = this.host.theme;
+    const border = new DynamicBorder((s) => theme.fg("muted", s));
+    const titleText = `Delete idea IDEA-${this.idea.id}? This cannot be undone.`;
+    const styled = theme.fg("warning", theme.bold(titleText));
+
+    const lines: string[] = [];
+    lines.push(...border.render(width));
+    lines.push(renderCenteredTitle(titleText, width, styled));
+    lines.push(...this.list.render(width));
+    lines.push(...border.render(width));
+    return lines;
+  }
+}
+
+class IdeaDetailOverlayComponent implements Component {
+  private idea: IdeaArtifact;
+  private host: { close(): void; theme: Theme; keybindings: KeybindingsManager; requestRender(): void };
+  private scrollOffset: number = 0;
+  private lastViewHeight: number = 20;
+  private maxVisibleLines: number | undefined;
+  private markdown: Markdown;
+  private cachedMarkdownLines: string[] | null = null;
+
+  constructor(
+    idea: IdeaArtifact,
+    host: { close(): void; theme: Theme; keybindings: KeybindingsManager; requestRender(): void },
+    opts?: { maxVisibleLines?: number },
+  ) {
+    this.idea = idea;
+    this.host = host;
+    this.maxVisibleLines = opts?.maxVisibleLines;
+    this.markdown = new Markdown(idea.body, 1, 0, getMarkdownTheme());
+  }
+
+  invalidate(): void {
+    this.cachedMarkdownLines = null;
+    this.markdown.invalidate();
+  }
+
+  render(width: number): string[] {
+    const theme = this.host.theme;
+    const idea = this.idea;
+
+    // Top border with title
+    const titlePart = ` ${theme.fg("accent", idea.title)} `;
+    const leftBorder = theme.fg("borderMuted", "─".repeat(3));
+    const rightBorderCount = Math.max(0, width - 3 - visibleWidth(titlePart) - 3);
+    const rightBorder = theme.fg("borderMuted", "─".repeat(rightBorderCount));
+    const borderLine = leftBorder + titlePart + rightBorder;
+
+    // Meta line
+    const tagStr = idea.tags.length > 0 ? `[${idea.tags.join(", ")}]` : "no tags";
+    const metaLine = theme.fg("muted", `IDEA-${idea.id} • ${idea.status} • ${tagStr}`);
+
+    // Render and cache markdown
+    if (!this.cachedMarkdownLines) {
+      this.cachedMarkdownLines = this.markdown.render(width);
+    }
+    const allLines = this.cachedMarkdownLines;
+    const totalLines = allLines.length;
+
+    // Determine visible height
+    const derivedViewHeight = Math.max(1, totalLines);
+    const visibleLines = this.maxVisibleLines
+      ? Math.min(this.maxVisibleLines, derivedViewHeight)
+      : derivedViewHeight;
+    this.lastViewHeight = visibleLines;
+
+    // Slice by scroll offset
+    const start = Math.min(this.scrollOffset, Math.max(0, totalLines - 1));
+    const end = start + visibleLines;
+    const bodyLines = allLines.slice(start, end);
+
+    // Scroll position footer
+    const endLine = totalLines > 0 ? Math.min(start + visibleLines - 1, totalLines - 1) : 0;
+    const footerLine = theme.fg("dim", `Lines ${start}-${endLine} of ${totalLines}`);
+
+    return [borderLine, metaLine, ...bodyLines, footerLine];
+  }
+
+  handleInput(data: string): void {
+    const kb = this.host.keybindings;
+    const totalLines = this.cachedMarkdownLines?.length ?? 0;
+
+    if (kb.matches(data, "tui.select.cancel")) {
+      this.host.close();
+      return;
+    }
+    if (kb.matches(data, "tui.select.confirm")) {
+      this.host.close();
+      return;
+    }
+    if (kb.matches(data, "tui.select.up")) {
+      this.scrollOffset = Math.max(0, this.scrollOffset - 1);
+      this.host.requestRender();
+      return;
+    }
+    if (kb.matches(data, "tui.select.down")) {
+      this.scrollOffset = Math.min(Math.max(0, totalLines - 1), this.scrollOffset + 1);
+      this.host.requestRender();
+      return;
+    }
+    if (kb.matches(data, "tui.select.pageUp") || matchesKey(data, Key.left)) {
+      this.scrollOffset = Math.max(0, this.scrollOffset - this.lastViewHeight);
+      this.host.requestRender();
+      return;
+    }
+    if (kb.matches(data, "tui.select.pageDown") || matchesKey(data, Key.right)) {
+      this.scrollOffset = Math.min(Math.max(0, totalLines - 1), this.scrollOffset + this.lastViewHeight);
+      this.host.requestRender();
+      return;
+    }
+  }
+}
+
+export const _internalsForTest = {
+  IdeaSelectorComponent,
+  IdeaActionMenuComponent,
+  IdeaWorkSubmenuComponent,
+  IdeaOtherSubmenuComponent,
+  IdeaDeleteConfirmComponent,
+  IdeaDetailOverlayComponent,
+  buildRefineIdeaPrompt,
+  filterAndRankIdeas,
+  formatGroupedTextList,
+  parseFlowIdeasArgs,
+};
 
 export function registerIdea(pi: ExtensionAPI): void {
   pi.registerCommand("flow:idea", {

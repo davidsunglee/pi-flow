@@ -685,6 +685,115 @@ test("idea tool registers renderCall and renderResult callbacks", () => {
   assert.equal(typeof definition.renderResult, "function");
 });
 
+function stubMenuHost() {
+  const dispatched: any[] = [];
+  let backCalls = 0;
+  const theme: any = {
+    fg: (_color: string, s: string) => s,
+    bold: (s: string) => s,
+  };
+  const keybindings: any = { matches: (_d: string, _k: string) => false };
+  const host: any = {
+    dispatchAction(name: string) { dispatched.push(name); },
+    dispatch(name: string) { dispatched.push(name); },
+    confirm() { dispatched.push("confirm"); },
+    cancel() { dispatched.push("cancel"); },
+    back() { backCalls += 1; },
+    theme,
+    keybindings,
+    requestRender() {},
+  };
+  return { host, dispatched, get backCalls() { return backCalls; } };
+}
+
+function entry(id: string, status: "open" | "closed", title = "Sample"): any {
+  return { id, title, tags: [], status, createdAt: "2026-01-01T00:00:00.000Z" };
+}
+
+test("_internalsForTest exposes all component constructors and pure helpers", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  assert.equal(typeof _internalsForTest.IdeaSelectorComponent, "function");
+  assert.equal(typeof _internalsForTest.IdeaActionMenuComponent, "function");
+  assert.equal(typeof _internalsForTest.IdeaWorkSubmenuComponent, "function");
+  assert.equal(typeof _internalsForTest.IdeaOtherSubmenuComponent, "function");
+  assert.equal(typeof _internalsForTest.IdeaDeleteConfirmComponent, "function");
+  assert.equal(typeof _internalsForTest.IdeaDetailOverlayComponent, "function");
+  assert.equal(typeof _internalsForTest.buildRefineIdeaPrompt, "function");
+  assert.equal(typeof _internalsForTest.filterAndRankIdeas, "function");
+  assert.equal(typeof _internalsForTest.formatGroupedTextList, "function");
+  assert.equal(typeof _internalsForTest.parseFlowIdeasArgs, "function");
+});
+
+test("IdeaActionMenuComponent shows close (not reopen) for open ideas in correct order", async () => {
+  const { IdeaActionMenuComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open"), host);
+  const out = c.render(80).join("\n");
+
+  assert.match(out, /\bview\b/);
+  assert.match(out, /\brefine\b/);
+  assert.ok(out.includes("work ▶"), "missing 'work ▶'");
+  assert.match(out, /\bclose\b/);
+  assert.ok(out.includes("other ▶"), "missing 'other ▶'");
+  assert.doesNotMatch(out, /\breopen\b/);
+
+  const viewIdx = out.indexOf("view");
+  const refineIdx = out.indexOf("refine");
+  const workIdx = out.indexOf("work ▶");
+  const closeIdx = out.indexOf("close");
+  const otherIdx = out.indexOf("other ▶");
+  assert.ok(viewIdx < refineIdx && refineIdx < workIdx && workIdx < closeIdx && closeIdx < otherIdx, "menu items out of order");
+});
+
+test("IdeaActionMenuComponent shows reopen (not close) for closed ideas", async () => {
+  const { IdeaActionMenuComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "closed"), host);
+  const out = c.render(80).join("\n");
+
+  assert.match(out, /\breopen\b/);
+  assert.doesNotMatch(out, /\bclose\b/);
+});
+
+test("IdeaWorkSubmenuComponent lists fastlane, scout, spec, plan in order", async () => {
+  const { IdeaWorkSubmenuComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open"), host);
+  const out = c.render(80).join("\n");
+
+  const fIdx = out.indexOf("fastlane");
+  const sIdx = out.indexOf("scout");
+  const spIdx = out.indexOf("spec");
+  const pIdx = out.indexOf("plan");
+  assert.ok(fIdx >= 0 && sIdx >= 0 && spIdx >= 0 && pIdx >= 0, "missing one of fastlane/scout/spec/plan");
+  assert.ok(fIdx < sIdx && sIdx < spIdx && spIdx < pIdx, "work submenu items out of order");
+});
+
+test("IdeaOtherSubmenuComponent lists copy path, copy text, delete in order", async () => {
+  const { IdeaOtherSubmenuComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const c = new IdeaOtherSubmenuComponent(entry("aaaabbbb", "open"), host);
+  const out = c.render(80).join("\n");
+
+  const cp = out.indexOf("copy path");
+  const ct = out.indexOf("copy text");
+  const del = out.indexOf("delete");
+  assert.ok(cp >= 0 && ct >= 0 && del >= 0, "missing one of copy path/copy text/delete");
+  assert.ok(cp < ct && ct < del, "other submenu items out of order");
+});
+
+test("IdeaDeleteConfirmComponent renders exact prompt text", async () => {
+  const { IdeaDeleteConfirmComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const c = new IdeaDeleteConfirmComponent(entry("aaaabbbb", "open"), host);
+  const out = c.render(120).join("\n");
+
+  assert.ok(
+    out.includes("Delete idea IDEA-aaaabbbb? This cannot be undone."),
+    `expected literal prompt substring, got:\n${out}`,
+  );
+});
+
 test("idea tool description contains all five canonical section headers and promptSnippet references IDEA-", () => {
   const { tools } = bootExtension();
   const definition = tools.find((t) => t.name === "idea") as any;
@@ -701,4 +810,101 @@ test("idea tool description contains all five canonical section headers and prom
     ["list", "read", "create", "update", "append", "delete"].some((a) => snippet.includes(a)),
     "promptSnippet missing action name",
   );
+});
+
+function makeOverlayHost() {
+  let activeBinding = "";
+  const result = {
+    closed: 0,
+    rendered: 0,
+    host: null as any,
+    setBinding(b: string) { activeBinding = b; },
+  };
+  const stubTheme: any = {
+    fg: (_color: string, s: string) => s,
+    bold: (s: string) => s,
+  };
+  const stubKeybindings: any = {
+    matches: (_data: string, kb: string) => kb === activeBinding,
+  };
+  result.host = {
+    close() { result.closed += 1; },
+    requestRender() { result.rendered += 1; },
+    theme: stubTheme,
+    keybindings: stubKeybindings,
+  };
+  return result;
+}
+
+test("IdeaDetailOverlayComponent smoke test — renders border with title and meta line with IDEA id", async () => {
+  const { initTheme } = await import("@earendil-works/pi-coding-agent");
+  initTheme();
+
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: "Test idea",
+    tags: ["alpha", "beta"],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body: "# Heading\n\n## Subheading\n\nsome body text",
+  };
+
+  const h = makeOverlayHost();
+  const overlay = new IdeaDetailOverlayComponent(idea, h.host);
+  const lines = overlay.render(80);
+  const out = lines.join("\n");
+
+  // First line: border contains ─── and the title
+  assert.match(lines[0], /─{3,}\s+Test idea/);
+
+  // Second line: meta contains IDEA-<id>
+  assert.match(lines[1], /IDEA-aabb1122/);
+
+  // Body text contains both heading strings somewhere
+  assert.ok(out.includes("Heading"), "rendered output should include 'Heading'");
+  assert.ok(out.includes("Subheading"), "rendered output should include 'Subheading'");
+});
+
+test("IdeaDetailOverlayComponent scroll test — scrollOffset advances on down and pageDown", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+
+  const body = Array.from({ length: 100 }, (_, i) => `line ${i}`).join("\n\n");
+  const idea: IdeaArtifact = {
+    id: "ccdd3344",
+    title: "Scroll test",
+    tags: [],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body,
+  };
+
+  const h = makeOverlayHost();
+  const overlay = new IdeaDetailOverlayComponent(idea, h.host, { maxVisibleLines: 5 });
+
+  // Initial render — footer shows Lines 0-4
+  const lines0 = overlay.render(80);
+  const footer0 = lines0[lines0.length - 1];
+  assert.match(footer0, /Lines 0-4 of /);
+
+  // Scroll down by 1
+  h.setBinding("tui.select.down");
+  overlay.handleInput!("\x1b[B");
+
+  const lines1 = overlay.render(80);
+  const footer1 = lines1[lines1.length - 1];
+  assert.match(footer1, /Lines 1-5 of /);
+  // First body line (after border + meta) should differ
+  assert.notEqual(lines1[2], lines0[2], "first body line should shift after scroll down");
+
+  // Scroll page down — lastViewHeight is 5, so offset becomes 1+5=6
+  h.setBinding("tui.select.pageDown");
+  overlay.handleInput!("\x1b[B");
+
+  const lines2 = overlay.render(80);
+  const footer2 = lines2[lines2.length - 1];
+  assert.match(footer2, /Lines 6-10 of /);
 });
