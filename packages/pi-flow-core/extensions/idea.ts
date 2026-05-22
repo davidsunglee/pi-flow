@@ -832,11 +832,10 @@ class IdeaDetailOverlayComponent implements Component {
     this.markdown.invalidate();
   }
 
-  private buildFooterText(start: number, viewHeight: number, totalLines: number): string {
+  private buildCounterText(start: number, viewHeight: number, totalLines: number): string {
     const startDisp = totalLines === 0 ? 0 : Math.min(start, Math.max(0, totalLines - 1));
     const endDisp = totalLines === 0 ? 0 : Math.min(start + viewHeight - 1, totalLines - 1);
-    const counter = `lines ${startDisp}-${endDisp} of ${totalLines}`;
-    return `Esc back • ↑↓ scroll • ←→ page • ${counter}`;
+    return `lines ${startDisp}-${endDisp} of ${totalLines}`;
   }
 
   render(width: number): string[] {
@@ -858,78 +857,104 @@ class IdeaDetailOverlayComponent implements Component {
     const allLines = this.cachedMarkdownLines;
     const totalLines = allLines.length;
 
-    // Title line: `IDEA-<id> "<title>"` (border + bold) • <status> • <tags>
+    // Title line: `IDEA-<id> "<title>"` (border + bold) • <status>
     const idAndTitle = idea.title.length > 0
       ? `IDEA-${idea.id} "${idea.title}"`
       : `IDEA-${idea.id}`;
     const titleStyled = theme.fg("border", theme.bold(idAndTitle));
     const statusColor = idea.status === "open" ? "success" : "dim";
     const statusStyled = theme.fg(statusColor, idea.status);
-    const tagText = idea.tags.length > 0 ? `[${idea.tags.join(", ")}]` : "no tags";
-    const tagStyled = theme.fg("muted", tagText);
     const sep = theme.fg("muted", " • ");
     // Leading space sits inside the left vertical border.
-    const titleLine = ` ${titleStyled}${sep}${statusStyled}${sep}${tagStyled}`;
+    const titleLine = ` ${titleStyled}${sep}${statusStyled}`;
     const titleRows = wrapTextWithAnsi(titleLine, Math.max(1, contentWidth));
 
-    const topBorder = border.render(width);
-    const bottomBorder = border.render(width);
+    // Tags on their own line directly below the title. Leading space matches
+    // title-line indentation. Empty tags fall back to a muted "no tags".
+    const tagText = idea.tags.length > 0 ? idea.tags.join(", ") : "no tags";
+    const tagLine = ` ${theme.fg("muted", tagText)}`;
+    const tagRows = wrapTextWithAnsi(tagLine, Math.max(1, contentWidth));
+
+    // Top/bottom border: connected box corners when width allows; fallback to
+    // plain dashes (DynamicBorder) for tiny widths so we never exceed width.
+    const topBorder = width >= 2
+      ? [theme.fg("border", `┌${"─".repeat(width - 2)}┐`)]
+      : border.render(width);
+    const bottomBorder = width >= 2
+      ? [theme.fg("border", `└${"─".repeat(width - 2)}┘`)]
+      : border.render(width);
 
     const buildFooterRows = (vh: number): string[] => {
       const maxOff = Math.max(0, totalLines - vh);
       const s = Math.max(0, Math.min(this.scrollOffset, maxOff));
-      // Leading space sits inside the left vertical border.
-      return wrapTextWithAnsi(
-        ` ${theme.fg("dim", this.buildFooterText(s, vh, totalLines))}`,
-        Math.max(1, contentWidth),
-      );
+      const counterText = this.buildCounterText(s, vh, totalLines);
+      // Commands on the left (leading space sits inside the left border) and
+      // counter right-justified inside the right border. The trailing space in
+      // `right` guarantees ≥1 visible space between the counter and │.
+      const left = ` ${theme.fg("dim", "Esc back • ↑↓ scroll • ←→ page")}`;
+      const right = `${theme.fg("dim", counterText)} `;
+      const cw = Math.max(1, contentWidth);
+      const lw = visibleWidth(left);
+      const rw = visibleWidth(right);
+      if (lw + rw <= cw) {
+        return [left + " ".repeat(cw - lw - rw) + right];
+      }
+      // Narrow width: stack and right-justify the counter where it still fits.
+      const leftWrapped = wrapTextWithAnsi(left, cw);
+      if (rw <= cw) {
+        return [...leftWrapped, " ".repeat(cw - rw) + right];
+      }
+      const rightWrapped = wrapTextWithAnsi(right, cw);
+      return [...leftWrapped, ...rightWrapped];
     };
 
     let viewHeight: number;
     let footerRows: string[];
-    let renderTitleRows: string[];
+    let renderHeaderRows: string[];
 
     if (this.maxVisibleLines !== undefined) {
       // Test override: body viewport height is fixed; chrome can extend total height.
       viewHeight = Math.max(1, this.maxVisibleLines);
       footerRows = buildFooterRows(viewHeight);
-      renderTitleRows = titleRows;
+      renderHeaderRows = [...titleRows, ...tagRows];
     } else {
       const maxRows = this.host.getMaxRows?.();
       if (maxRows === undefined) {
         viewHeight = Math.max(1, totalLines);
         footerRows = buildFooterRows(viewHeight);
-        renderTitleRows = titleRows;
+        renderHeaderRows = [...titleRows, ...tagRows];
       } else {
         // Production: hard-cap total overlay rows to floor(maxRows * 0.8).
         // Layout overhead: 2 borders + 4 blank lines = 6 rows. Remaining content
-        // budget is split among title, body, and footer. Title is capped to at
-        // most half of the content budget so pathological wrapping (narrow width
-        // + very long title) cannot push the bottom border out of budget. Body
-        // viewport collapses to 0 in extreme cases to keep border/footer visible.
+        // budget is split among header (title+tags), body, and footer. Header
+        // rows are capped to at most half the content budget so pathological
+        // wrapping (narrow width + very long title) cannot push the bottom
+        // border out of budget. Body viewport collapses to 0 in extreme cases
+        // to keep border/footer visible.
         const totalBudget = Math.floor(maxRows * 0.8);
         const fixedOverhead = topBorder.length + bottomBorder.length + 4;
         const contentBudget = Math.max(0, totalBudget - fixedOverhead);
 
-        const maxTitleAllowed = contentBudget === 0
+        const headerRows = [...titleRows, ...tagRows];
+        const maxHeaderAllowed = contentBudget === 0
           ? 0
           : Math.max(1, Math.floor(contentBudget / 2));
-        renderTitleRows = titleRows.slice(0, Math.min(titleRows.length, maxTitleAllowed));
+        renderHeaderRows = headerRows.slice(0, Math.min(headerRows.length, maxHeaderAllowed));
 
         // Iterate to a fixed point: footer row count depends on view height
         // (line-counter digits widen the wrapped footer at narrow widths).
-        viewHeight = Math.max(0, contentBudget - renderTitleRows.length - 1);
+        viewHeight = Math.max(0, contentBudget - renderHeaderRows.length - 1);
         footerRows = buildFooterRows(Math.max(1, viewHeight));
         let cappedFooter = footerRows.slice(
           0,
-          Math.max(0, contentBudget - renderTitleRows.length),
+          Math.max(0, contentBudget - renderHeaderRows.length),
         );
         for (let i = 0; i < 4; i++) {
-          const titleFooterBudget = Math.max(0, contentBudget - renderTitleRows.length);
-          cappedFooter = footerRows.slice(0, Math.min(footerRows.length, titleFooterBudget));
+          const headerFooterBudget = Math.max(0, contentBudget - renderHeaderRows.length);
+          cappedFooter = footerRows.slice(0, Math.min(footerRows.length, headerFooterBudget));
           const bodyMax = Math.max(
             0,
-            contentBudget - renderTitleRows.length - cappedFooter.length,
+            contentBudget - renderHeaderRows.length - cappedFooter.length,
           );
           // Compact for short bodies; full bodyMax for scrollable bodies.
           const nextVH = Math.min(totalLines, bodyMax);
@@ -937,8 +962,8 @@ class IdeaDetailOverlayComponent implements Component {
           viewHeight = nextVH;
           footerRows = buildFooterRows(Math.max(1, viewHeight));
         }
-        const titleFooterBudget = Math.max(0, contentBudget - renderTitleRows.length);
-        footerRows = footerRows.slice(0, Math.min(footerRows.length, titleFooterBudget));
+        const headerFooterBudget = Math.max(0, contentBudget - renderHeaderRows.length);
+        footerRows = footerRows.slice(0, Math.min(footerRows.length, headerFooterBudget));
       }
     }
 
@@ -956,7 +981,7 @@ class IdeaDetailOverlayComponent implements Component {
     const composed = [
       ...topBorder,
       "",
-      ...renderTitleRows,
+      ...renderHeaderRows,
       "",
       ...bodyLines,
       "",

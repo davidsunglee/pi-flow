@@ -1474,11 +1474,67 @@ test("IdeaDetailOverlayComponent uses border token for top and bottom borders", 
   const overlay = new _internalsForTest.IdeaDetailOverlayComponent(idea, host, { maxVisibleLines: 5 });
   const lines = overlay.render(80);
 
-  assert.match(lines[0], /^<fg:border>─+<\/fg:border>$/, `top border should use border token, got: ${lines[0]}`);
-  assert.match(lines[lines.length - 1], /^<fg:border>─+<\/fg:border>$/, `bottom border should use border token, got: ${lines[lines.length - 1]}`);
+  // Top/bottom border must use border token; corner glyphs are allowed.
+  assert.match(lines[0], /^<fg:border>[┌─].*[┐─]<\/fg:border>$/, `top border should use border token, got: ${lines[0]}`);
+  assert.match(lines[lines.length - 1], /^<fg:border>[└─].*[┘─]<\/fg:border>$/, `bottom border should use border token, got: ${lines[lines.length - 1]}`);
 });
 
-test("IdeaDetailOverlayComponent title line: IDEA-<id> and title use border+bold; status uses success for open; tags muted", async () => {
+test("IdeaDetailOverlayComponent: connected box border has corner glyphs in border token", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+  const taggingTheme: any = {
+    fg: (color: string, s: string) => `<fg:${color}>${s}</fg:${color}>`,
+    bold: (s: string) => `<b>${s}</b>`,
+  };
+  const stubKeybindings: any = { matches: () => false };
+  const host: any = {
+    close() {},
+    requestRender() {},
+    theme: taggingTheme,
+    keybindings: stubKeybindings,
+  };
+
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: "Box",
+    tags: [],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body: "body",
+  };
+
+  const overlay = new IdeaDetailOverlayComponent(idea, host, { maxVisibleLines: 3 });
+  const width = 40;
+  const lines = overlay.render(width);
+
+  // Top row: ┌ at left and ┐ at right, all under border token, dashes between.
+  assert.match(
+    lines[0],
+    /^<fg:border>┌─+┐<\/fg:border>$/,
+    `top row should be border-token ┌──┐, got: ${JSON.stringify(lines[0])}`,
+  );
+  // Bottom row: └ at left and ┘ at right, all under border token.
+  assert.match(
+    lines[lines.length - 1],
+    /^<fg:border>└─+┘<\/fg:border>$/,
+    `bottom row should be border-token └──┘, got: ${JSON.stringify(lines[lines.length - 1])}`,
+  );
+  // Middle rows still bounded by border-token │ on both sides.
+  for (let i = 1; i < lines.length - 1; i++) {
+    assert.match(
+      lines[i],
+      /^<fg:border>│<\/fg:border>/,
+      `middle line ${i} should start with border │, got: ${JSON.stringify(lines[i])}`,
+    );
+    assert.match(
+      lines[i],
+      /<fg:border>│<\/fg:border>$/,
+      `middle line ${i} should end with border │, got: ${JSON.stringify(lines[i])}`,
+    );
+  }
+});
+
+test("IdeaDetailOverlayComponent title line: IDEA-<id> and title use border+bold; status uses success for open", async () => {
   const { _internalsForTest } = await import("./idea.ts");
   const { IdeaDetailOverlayComponent } = _internalsForTest;
   const taggingTheme: any = {
@@ -1517,10 +1573,112 @@ test("IdeaDetailOverlayComponent title line: IDEA-<id> and title use border+bold
     /<fg:success>open<\/fg:success>/,
     `expected success-colored 'open' status, got: ${titleLine}`,
   );
-  assert.match(
+  // Tags must NOT appear on the title line — they belong on a separate row.
+  assert.doesNotMatch(
     titleLine,
-    /<fg:muted>\[alpha, beta\]<\/fg:muted>/,
-    `expected muted tags '[alpha, beta]', got: ${titleLine}`,
+    /alpha/,
+    `tags should not be on the title line, got: ${titleLine}`,
+  );
+  assert.doesNotMatch(
+    titleLine,
+    /\[/,
+    `tags brackets should not be on the title line, got: ${titleLine}`,
+  );
+});
+
+test("IdeaDetailOverlayComponent tags line: muted, no brackets, leading space after left border", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+  const taggingTheme: any = {
+    fg: (color: string, s: string) => `<fg:${color}>${s}</fg:${color}>`,
+    bold: (s: string) => `<b>${s}</b>`,
+  };
+  const stubKeybindings: any = { matches: () => false };
+  const host: any = {
+    close() {},
+    requestRender() {},
+    theme: taggingTheme,
+    keybindings: stubKeybindings,
+  };
+
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: "Test idea",
+    tags: ["alpha", "beta"],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body: "body",
+  };
+
+  const overlay = new IdeaDetailOverlayComponent(idea, host, { maxVisibleLines: 3 });
+  const lines = overlay.render(500);
+  // Layout: [0]=top border, [1]=blank, [2]=title-line, [3]=tags-line
+  const tagsLine = lines[3];
+
+  // Tags appear on their own line, muted, no surrounding [ ].
+  assert.match(
+    tagsLine,
+    /<fg:muted>alpha, beta<\/fg:muted>/,
+    `tags should be muted 'alpha, beta' on the tags line, got: ${JSON.stringify(tagsLine)}`,
+  );
+  assert.doesNotMatch(
+    tagsLine,
+    /\[/,
+    `tags line should not include '['; got: ${JSON.stringify(tagsLine)}`,
+  );
+  assert.doesNotMatch(
+    tagsLine,
+    /\]/,
+    `tags line should not include ']'; got: ${JSON.stringify(tagsLine)}`,
+  );
+  // After the left border, the tags must start after at least one visible space.
+  assert.match(
+    tagsLine,
+    /^<fg:border>│<\/fg:border> +<fg:muted>alpha, beta<\/fg:muted>/,
+    `tags line should start with border │ then ≥1 space then muted tags, got: ${JSON.stringify(tagsLine)}`,
+  );
+});
+
+test("IdeaDetailOverlayComponent tags line: 'no tags' muted on its own line when tags empty", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+  const taggingTheme: any = {
+    fg: (color: string, s: string) => `<fg:${color}>${s}</fg:${color}>`,
+    bold: (s: string) => `<b>${s}</b>`,
+  };
+  const stubKeybindings: any = { matches: () => false };
+  const host: any = {
+    close() {},
+    requestRender() {},
+    theme: taggingTheme,
+    keybindings: stubKeybindings,
+  };
+
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: "Untagged",
+    tags: [],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body: "body",
+  };
+
+  const overlay = new IdeaDetailOverlayComponent(idea, host, { maxVisibleLines: 3 });
+  const lines = overlay.render(500);
+  const titleLine = lines[2];
+  const tagsLine = lines[3];
+
+  // The 'no tags' label must NOT appear on the title line.
+  assert.doesNotMatch(
+    titleLine,
+    /no tags/,
+    `'no tags' should not appear on the title line, got: ${JSON.stringify(titleLine)}`,
+  );
+  // The 'no tags' label should appear muted on the tags line, after the left border + ≥1 space.
+  assert.match(
+    tagsLine,
+    /^<fg:border>│<\/fg:border> +<fg:muted>no tags<\/fg:muted>/,
+    `tags line should show muted 'no tags' after border + leading space, got: ${JSON.stringify(tagsLine)}`,
   );
 });
 
@@ -2178,9 +2336,9 @@ test("IdeaDetailOverlayComponent: middle rows have left and right border-token v
   const width = 80;
   const lines = overlay.render(width);
 
-  // Top and bottom borders still ─ only (no side borders attached).
-  assert.match(lines[0], /^<fg:border>─+<\/fg:border>$/, `top border should be ─ only, got: ${JSON.stringify(lines[0])}`);
-  assert.match(lines[lines.length - 1], /^<fg:border>─+<\/fg:border>$/, `bottom border should be ─ only, got: ${JSON.stringify(lines[lines.length - 1])}`);
+  // Top and bottom borders use border token; corner glyphs allowed.
+  assert.match(lines[0], /^<fg:border>[┌─].*[┐─]<\/fg:border>$/, `top border should be border-token horizontal with optional corners, got: ${JSON.stringify(lines[0])}`);
+  assert.match(lines[lines.length - 1], /^<fg:border>[└─].*[┘─]<\/fg:border>$/, `bottom border should be border-token horizontal with optional corners, got: ${JSON.stringify(lines[lines.length - 1])}`);
 
   // Middle rows (between top and bottom borders) start and end with border-token │.
   // Width safety with real ANSI escapes is covered by the existing stub-theme tests.
@@ -2272,7 +2430,7 @@ test("IdeaDetailOverlayComponent: footer interior content begins with one visibl
   );
 });
 
-test("IdeaDetailOverlayComponent footer: command order is 'Esc back • ↑↓ scroll • ←→ page • lines X-Y of Z' with no Enter and lowercase 'lines'", async () => {
+test("IdeaDetailOverlayComponent footer: commands on left, lowercase counter right-justified, no bullet before counter, no Enter", async () => {
   const { _internalsForTest } = await import("./idea.ts");
   const { IdeaDetailOverlayComponent } = _internalsForTest;
   const stubTheme: any = {
@@ -2297,14 +2455,40 @@ test("IdeaDetailOverlayComponent footer: command order is 'Esc back • ↑↓ s
     body,
   };
 
+  const width = 160;
   const overlay = new IdeaDetailOverlayComponent(idea, host, { maxVisibleLines: 5 });
-  const lines = overlay.render(160);
+  const lines = overlay.render(width);
   const footer = lines[lines.length - 3];
 
+  // Commands on the LEFT side.
   assert.match(
     footer,
-    /Esc back • ↑↓ scroll • ←→ page • lines \d+-\d+ of \d+/,
-    `footer order should match 'Esc back • ↑↓ scroll • ←→ page • lines X-Y of Z', got: ${JSON.stringify(footer)}`,
+    /^│ Esc back • ↑↓ scroll • ←→ page/,
+    `footer should begin with '│ Esc back • ↑↓ scroll • ←→ page', got: ${JSON.stringify(footer)}`,
+  );
+  // Lowercase line counter present.
+  assert.match(
+    footer,
+    /lines \d+-\d+ of \d+/,
+    `footer should contain lowercase 'lines X-Y of Z', got: ${JSON.stringify(footer)}`,
+  );
+  // NO bullet separator immediately before the counter.
+  assert.doesNotMatch(
+    footer,
+    /page • lines/,
+    `footer should not have '• ' immediately before 'lines' counter, got: ${JSON.stringify(footer)}`,
+  );
+  // Counter sits to the right of commands: at least one space between '←→ page' and 'lines'.
+  assert.match(
+    footer,
+    /←→ page +lines/,
+    `counter should follow commands with at least one space (right-justified), got: ${JSON.stringify(footer)}`,
+  );
+  // Counter is followed by at least one visible space before the right border │.
+  assert.match(
+    footer,
+    /lines \d+-\d+ of \d+ +│$/,
+    `counter should have ≥1 space before the right border │, got: ${JSON.stringify(footer)}`,
   );
   assert.doesNotMatch(footer, /\bLines\b/, `footer should use lowercase 'lines', not 'Lines', got: ${JSON.stringify(footer)}`);
   assert.doesNotMatch(footer, /\bEnter\b/i, `footer should not include Enter, got: ${JSON.stringify(footer)}`);
