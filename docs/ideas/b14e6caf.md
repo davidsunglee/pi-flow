@@ -8,7 +8,7 @@
     "tui",
     "ux"
   ],
-  "status": "open",
+  "status": "closed",
   "created_at": "2026-05-21T06:10:07.728Z"
 }
 
@@ -312,3 +312,5 @@ Add/update tests around observable behavior:
 3. Should assignment (`claim` / `release`) be ported for ideas, or is that too task-oriented for durable intent artifacts?
 4. Should the TUI include Flow-specific actions (`scout`, `spec`, `plan`) in addition to old-style `work` and `refine`?
 5. Should `idea list` default to all ideas for backward compatibility, or open ideas for old todo parity? A `status` filter removes most of the pressure from this decision.
+
+Completed via plan: docs/plans/2026-05-21-b14e6caf.md
