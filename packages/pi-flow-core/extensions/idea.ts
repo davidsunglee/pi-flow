@@ -1118,13 +1118,11 @@ export function registerIdea(pi: ExtensionAPI): void {
       }
       return new Text(text, 0, 0);
     },
-    renderResult: (result, { expanded }, theme) => {
-      if (result.isError) {
-        return new Text(
-          theme.fg("error", result.content[0]?.type === "text" ? result.content[0].text : "Error"),
-          0,
-          0,
-        );
+    renderResult: (result, { expanded }, theme, context) => {
+      const firstContent = result.content[0];
+      const firstText = firstContent?.type === "text" ? firstContent.text : undefined;
+      if (context.isError) {
+        return new Text(theme.fg("error", firstText ?? "Error"), 0, 0);
       }
 
       const details = result.details as any;
@@ -1190,7 +1188,7 @@ export function registerIdea(pi: ExtensionAPI): void {
         return new Text(lines.join("\n"), 0, 0);
       }
 
-      return new Text(result.content[0]?.text ?? "", 0, 0);
+      return new Text(firstText ?? "", 0, 0);
     },
   }));
 }
