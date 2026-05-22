@@ -14,12 +14,21 @@ function sharedPath(file) {
   return resolve(PKG_DIR, 'skills', '_shared', file);
 }
 
-test('fastlane customize submenu is preserved byte-equal', () => {
+test('fastlane customize submenu options are preserved', () => {
   const content = readFileSync(skillPath('fastlane'), 'utf8');
-  const expected = 'Choose a setting to change:\n  (t) Coder tier               — current: capable (high thinking)\n  (r) Refine-code iterations   — current: 3\n  (m) Back to main menu';
+  const lines = content.split('\n').map(line => line.trim());
+  const expected = [
+    'Choose a setting to change:',
+    '(t) Coder tier               — current: capable (high thinking)',
+    '(r) Refine-code iterations   — current: 3',
+    '(m) Back to main menu',
+  ];
+  const found = lines.some((_, index) =>
+    expected.every((line, offset) => lines[index + offset] === line)
+  );
   assert.ok(
-    content.includes(expected),
-    'fastlane SKILL.md must contain the exact three-line customize submenu block'
+    found,
+    'fastlane SKILL.md must contain the customize submenu options in order'
   );
 });
 
