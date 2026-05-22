@@ -712,6 +712,51 @@ test("IdeaSelectorComponent render emits bordered layout with spacing between he
   assert.match(ideaRowText, /IDEA-22222222/);
 });
 
+test("IdeaSelectorComponent render: selected row IDEA id is accent + bold, unselected is accent only", async () => {
+  const { IdeaSelectorComponent } = await import("./idea.ts");
+
+  const entries = [
+    { id: "11111111", title: "Alpha", tags: [], status: "open" as const, createdAt: "2026-01-01T00:00:00.000Z" },
+    { id: "22222222", title: "Beta", tags: [], status: "open" as const, createdAt: "2026-01-02T00:00:00.000Z" },
+  ];
+
+  const taggingTheme: any = {
+    fg: (color: string, s: string) => `<fg:${color}>${s}</fg:${color}>`,
+    bold: (s: string) => `<b>${s}</b>`,
+  };
+  const stubKeybindings: any = { matches: () => false };
+  const host: any = {
+    setActive() {},
+    requestRender() {},
+    notify() {},
+    close() {},
+    dispatch() {},
+    theme: taggingTheme,
+    keybindings: stubKeybindings,
+  };
+
+  const selector = new IdeaSelectorComponent(entries, "", host);
+  const out = selector.render(120).join("\n");
+
+  // Selected row (index 0) should have its IDEA id wrapped in both bold and accent.
+  assert.match(
+    out,
+    /<fg:accent><b>IDEA-11111111<\/b><\/fg:accent>/,
+    `selected IDEA id should be accent + bold, got: ${out}`,
+  );
+  // Unselected row should be accent but NOT bold around its IDEA id.
+  assert.match(
+    out,
+    /<fg:accent>IDEA-22222222<\/fg:accent>/,
+    `unselected IDEA id should be accent only, got: ${out}`,
+  );
+  assert.doesNotMatch(
+    out,
+    /<fg:accent><b>IDEA-22222222<\/b><\/fg:accent>/,
+    `unselected IDEA id should not be bold, got: ${out}`,
+  );
+});
+
 test("IdeaSelectorComponent render: top and bottom border use accent color", async () => {
   const { IdeaSelectorComponent } = await import("./idea.ts");
 

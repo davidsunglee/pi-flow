@@ -26,7 +26,6 @@ import {
   Key,
   matchesKey,
   fuzzyMatch,
-  truncateToWidth,
   visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
@@ -510,7 +509,10 @@ export class IdeaSelectorComponent implements Component {
         const item = this.filtered[i];
         const isSelected = i === this.selectedIndex;
         const prefix = isSelected ? "→ " : "  ";
-        const idPart = theme.fg("accent", `IDEA-${item.id}`);
+        const rawId = `IDEA-${item.id}`;
+        const idPart = isSelected
+          ? theme.fg("accent", theme.bold(rawId))
+          : theme.fg("accent", rawId);
         const titleColor = item.status === "closed" ? "dim" : "text";
         const titlePart = theme.fg(titleColor, item.title);
         const tagPart = item.tags.length > 0
