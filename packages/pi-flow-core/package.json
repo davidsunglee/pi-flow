@@ -20,10 +20,12 @@
   "peerDependencies": {
     "@aphotic/pi-mux-subagents": "^0.1.0",
     "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
     "typebox": "*"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
     "@aphotic/pi-mux-subagents": "^0.1.0",
     "typebox": "*"
   },

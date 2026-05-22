@@ -187,17 +187,22 @@ test("empty-args without UI rejects with usage message and writes nothing", asyn
 test("tool list returns seeded ideas", async () => {
   const sandbox = mkSandbox("pi-flow-idea-tool-list-");
   const { tool } = bootExtension();
-  await seedIdea(sandbox, artifact("aaaabbbb", "First idea"));
+  await seedIdea(sandbox, artifact("aaaabbbb", "First idea", "open"));
   await seedIdea(sandbox, artifact("ccccdddd", "Second idea", "closed"));
 
   const result = await tool.execute("call-list", { action: "list" }, undefined, undefined, makeCtx(sandbox));
 
   assert.equal(result.isError, undefined);
   assert.equal(result.content[0].type, "text");
-  assert.match(result.content[0].text, /First idea/);
-  assert.match(result.content[0].text, /Second idea/);
   assert.deepEqual(
     result.details.list.map((entry: any) => entry.id).sort(),
+    ["aaaabbbb"],
+  );
+
+  const allResult = await tool.execute("call-list-all", { action: "list", status: "all" }, undefined, undefined, makeCtx(sandbox));
+  assert.equal(allResult.isError, undefined);
+  assert.deepEqual(
+    allResult.details.list.map((entry: any) => entry.id).sort(),
     ["aaaabbbb", "ccccdddd"],
   );
 });
@@ -266,6 +271,114 @@ test("tool update accepts bare id and preserves omitted fields", async () => {
   assert.equal(parsed.body, "Keep body");
 });
 
+
+test("tool list rejects unknown filter fields", async () => {
+  const sandbox = mkSandbox("pi-flow-idea-tool-list-reject-");
+  const { tool } = bootExtension();
+
+  const result = await tool.execute("call-list-reject", { action: "list", foo: "bar" } as any, undefined, undefined, makeCtx(sandbox));
+
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /invalid fields for list: foo/);
+});
+
+test("tool list accepts query filter", async () => {
+  const sandbox = mkSandbox("pi-flow-idea-tool-list-query-");
+  const { tool } = bootExtension();
+  await seedIdea(sandbox, artifact("aaaaaaaa", "Alpha feature idea", "open"));
+  await seedIdea(sandbox, artifact("bbbbbbbb", "Beta improvement idea", "open"));
+  await seedIdea(sandbox, artifact("cccccccc", "Gamma unique idea", "open"));
+
+  const result = await tool.execute(
+    "call-list-query",
+    { action: "list", status: "all", query: "unique" },
+    undefined,
+    undefined,
+    makeCtx(sandbox),
+  );
+
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(
+    result.details.list.map((entry: any) => entry.id),
+    ["cccccccc"],
+  );
+});
+
+test("tool append appends with blank-line separator", async () => {
+  const sandbox = mkSandbox("pi-flow-idea-tool-append-");
+  const { tool } = bootExtension();
+  const idea = { ...artifact("12345678", "Append test"), body: "first" };
+  await seedIdea(sandbox, idea);
+
+  const result = await tool.execute(
+    "call-append",
+    { action: "append", id: "12345678", body: "second" },
+    undefined,
+    undefined,
+    makeCtx(sandbox),
+  );
+
+  assert.equal(result.isError, undefined);
+  const raw = await fs.readFile(path.join(sandbox, "docs", "ideas", "12345678.md"), "utf8");
+  const parsed = parseIdeaArtifact(raw);
+  assert.ok(parsed);
+  assert.equal(parsed.body, "first\n\nsecond");
+  assert.equal(result.details.body, "first\n\nsecond");
+});
+
+test("tool append on empty body uses no separator", async () => {
+  const sandbox = mkSandbox("pi-flow-idea-tool-append-empty-");
+  const { tool } = bootExtension();
+  const idea = { ...artifact("abcdef01", "Append empty test"), body: "" };
+  await seedIdea(sandbox, idea);
+
+  const result = await tool.execute(
+    "call-append-empty",
+    { action: "append", id: "abcdef01", body: "only" },
+    undefined,
+    undefined,
+    makeCtx(sandbox),
+  );
+
+  assert.equal(result.isError, undefined);
+  assert.equal(result.details.body, "only");
+});
+
+test("tool delete removes file and returns details", async () => {
+  const sandbox = mkSandbox("pi-flow-idea-tool-delete-");
+  const { tool } = bootExtension();
+  const idea = artifact("deadbeef", "To be deleted");
+  await seedIdea(sandbox, idea);
+
+  const result = await tool.execute(
+    "call-delete",
+    { action: "delete", id: "deadbeef" },
+    undefined,
+    undefined,
+    makeCtx(sandbox),
+  );
+
+  assert.equal(result.isError, undefined);
+  assert.equal(result.details.id, "deadbeef");
+  assert.equal(existsSync(path.join(sandbox, "docs", "ideas", "deadbeef.md")), false);
+});
+
+test("tool delete returns error on missing id", async () => {
+  const sandbox = mkSandbox("pi-flow-idea-tool-delete-missing-");
+  const { tool } = bootExtension();
+
+  const result = await tool.execute(
+    "call-delete-missing",
+    { action: "delete", id: "cafebabe" },
+    undefined,
+    undefined,
+    makeCtx(sandbox),
+  );
+
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /not found: IDEA-[0-9a-f]{8}/);
+});
+
 test("registerIdea does not leak todo command or tool names", () => {
   const { commands, tools } = bootExtension();
   assert.ok(commands.some((c) => c.name === "flow:idea"));
@@ -273,4 +386,153 @@ test("registerIdea does not leak todo command or tool names", () => {
   assert.equal(tools.some((t) => t.name === "todo" || t.name === "flow:todo"), false);
   assert.deepEqual(commands.map((c) => c.name), ["flow:idea"]);
   assert.deepEqual(tools.map((t) => t.name), ["idea"]);
+});
+
+test("buildRefineIdeaPrompt generates correct template", async () => {
+  const { buildRefineIdeaPrompt } = await import("./idea.ts");
+  const result = buildRefineIdeaPrompt("abcd1234", "Test idea");
+
+  assert.match(result, /idea IDEA-abcd1234/);
+  assert.match(result, /Test idea/);
+  assert.match(result, /provide a recommendation for each question/);
+
+  const contextIdx = result.indexOf("## Context");
+  const goalIdx = result.indexOf("## Goal");
+  const scopeIdx = result.indexOf("## Scope");
+  const acceptanceIdx = result.indexOf("## Acceptance Sketch");
+  const questionsIdx = result.indexOf("## Open Questions");
+
+  assert.ok(contextIdx > -1);
+  assert.ok(goalIdx > -1);
+  assert.ok(scopeIdx > -1);
+  assert.ok(acceptanceIdx > -1);
+  assert.ok(questionsIdx > -1);
+  assert.ok(contextIdx < goalIdx && goalIdx < scopeIdx && scopeIdx < acceptanceIdx && acceptanceIdx < questionsIdx);
+
+  assert.match(result, /update the idea via the `idea` tool's `update` action\.$/m);
+});
+
+test("filterAndRankIdeas with empty query returns open before closed, chronologically", async () => {
+  const { filterAndRankIdeas } = await import("./idea.ts");
+
+  const entries = [
+    { id: "aaaabbbb", title: "First", tags: [], status: "open" as const, createdAt: "2026-01-01T00:00:00.000Z" },
+    { id: "ccccdddd", title: "Second", tags: [], status: "open" as const, createdAt: "2026-02-01T00:00:00.000Z" },
+    { id: "eeeeffff", title: "Third", tags: [], status: "closed" as const, createdAt: "2025-12-01T00:00:00.000Z" },
+  ];
+
+  const result = filterAndRankIdeas(entries, "");
+
+  assert.deepEqual(
+    result.map((e) => e.id),
+    ["aaaabbbb", "ccccdddd", "eeeeffff"]
+  );
+});
+
+test("filterAndRankIdeas with query filters by fuzzy match", async () => {
+  const { filterAndRankIdeas } = await import("./idea.ts");
+
+  const entries = [
+    { id: "aaaabbbb", title: "First", tags: [], status: "open" as const, createdAt: "2026-01-01T00:00:00.000Z" },
+    { id: "ccccdddd", title: "Second", tags: [], status: "open" as const, createdAt: "2026-02-01T00:00:00.000Z" },
+    { id: "eeeeffff", title: "UNIQUE", tags: [], status: "closed" as const, createdAt: "2025-12-01T00:00:00.000Z" },
+  ];
+
+  const result = filterAndRankIdeas(entries, "unique");
+
+  assert.deepEqual(result.map((e) => e.id), ["eeeeffff"]);
+});
+
+test("formatGroupedTextList with mixed entries groups by status", async () => {
+  const { formatGroupedTextList } = await import("./idea.ts");
+
+  const entries = [
+    { id: "aaaabbbb", title: "First", tags: [], status: "open" as const, createdAt: "2026-01-01T00:00:00.000Z" },
+    { id: "ccccdddd", title: "Second", tags: [], status: "closed" as const, createdAt: "2026-02-01T00:00:00.000Z" },
+  ];
+
+  const result = formatGroupedTextList(entries, {});
+
+  assert.match(result, /Open ideas \(1\)/);
+  assert.match(result, /Closed ideas \(1\)/);
+  assert.match(result, /IDEA-aaaabbbb/);
+  assert.match(result, /IDEA-ccccdddd/);
+});
+
+test("formatGroupedTextList respects status filter", async () => {
+  const { formatGroupedTextList } = await import("./idea.ts");
+
+  const entries = [
+    { id: "aaaabbbb", title: "First", tags: [], status: "open" as const, createdAt: "2026-01-01T00:00:00.000Z" },
+    { id: "ccccdddd", title: "Second", tags: [], status: "closed" as const, createdAt: "2026-02-01T00:00:00.000Z" },
+  ];
+
+  const result = formatGroupedTextList(entries, { status: "open" });
+
+  assert.match(result, /Open ideas \(1\)/);
+  assert.doesNotMatch(result, /Closed ideas/);
+});
+
+test("formatGroupedTextList returns 'No ideas.' when empty with no query", async () => {
+  const { formatGroupedTextList } = await import("./idea.ts");
+
+  const result = formatGroupedTextList([], {});
+
+  assert.equal(result.trim(), "No ideas.");
+});
+
+test("formatGroupedTextList returns 'No matching ideas.' when query matches nothing", async () => {
+  const { formatGroupedTextList } = await import("./idea.ts");
+
+  const entries = [
+    { id: "aaaabbbb", title: "First", tags: [], status: "open" as const, createdAt: "2026-01-01T00:00:00.000Z" },
+  ];
+
+  const result = formatGroupedTextList(entries, { query: "nomatchxyz" });
+
+  assert.equal(result.trim(), "No matching ideas.");
+});
+
+test("formatGroupedTextList shows tags when present", async () => {
+  const { formatGroupedTextList } = await import("./idea.ts");
+
+  const entries = [
+    { id: "aaaabbbb", title: "First", tags: ["tag1", "tag2"], status: "open" as const, createdAt: "2026-01-01T00:00:00.000Z" },
+  ];
+
+  const result = formatGroupedTextList(entries, {});
+
+  assert.match(result, /\[tag1, tag2\]/);
+});
+
+test("parseFlowIdeasArgs with empty string returns defaults", async () => {
+  const { parseFlowIdeasArgs } = await import("./idea.ts");
+
+  const result = parseFlowIdeasArgs("");
+
+  assert.deepEqual(result, { query: "", status: "all" });
+});
+
+test("parseFlowIdeasArgs with query only", async () => {
+  const { parseFlowIdeasArgs } = await import("./idea.ts");
+
+  const result = parseFlowIdeasArgs("regression");
+
+  assert.deepEqual(result, { query: "regression", status: "all" });
+});
+
+test("parseFlowIdeasArgs with --open flag and query", async () => {
+  const { parseFlowIdeasArgs } = await import("./idea.ts");
+
+  const result = parseFlowIdeasArgs("--open regression auth");
+
+  assert.deepEqual(result, { query: "regression auth", status: "open" });
+});
+
+test("parseFlowIdeasArgs last flag wins", async () => {
+  const { parseFlowIdeasArgs } = await import("./idea.ts");
+
+  const result = parseFlowIdeasArgs("--closed --all foo");
+
+  assert.deepEqual(result, { query: "foo", status: "all" });
 });
