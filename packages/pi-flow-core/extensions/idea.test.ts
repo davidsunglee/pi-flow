@@ -53,11 +53,15 @@ function makeCtx(
 ) {
   const notifyCalls: NotifyCall[] = [];
   const inputCalls: Array<{ title: string; placeholder?: string }> = [];
+  const customCalls: any[] = [];
+  const editorTextCalls: string[] = [];
   return {
     cwd,
     hasUI: opts.hasUI ?? true,
     notifyCalls,
     inputCalls,
+    customCalls,
+    editorTextCalls,
     ui: {
       notify(message: string, level: NotifyLevel) {
         notifyCalls.push({ message, level });
@@ -66,6 +70,13 @@ function makeCtx(
         inputCalls.push({ title, placeholder });
         if (opts.inputReturnsUndefined) return undefined;
         return opts.inputResult ?? "";
+      },
+      async custom(factory: any, _options?: any): Promise<any> {
+        customCalls.push({ factory, _options });
+        return undefined;
+      },
+      setEditorText(text: string) {
+        editorTextCalls.push(text);
       },
     },
   };
@@ -608,6 +619,20 @@ test("flow:ideas command emits No matching ideas when query has no hits", async 
 
   assert.equal(ctx.notifyCalls.length, 1);
   assert.equal(ctx.notifyCalls[0].message, "No matching ideas.");
+});
+
+test("flow:ideas interactive path invokes ctx.ui.custom", async () => {
+  const sandbox = mkSandbox("pi-flow-ideas-interactive-smoke-");
+  const { commands } = bootExtension();
+  const cmd = commands.find((c) => c.name === "flow:ideas");
+  assert.ok(cmd, "flow:ideas command should be registered");
+
+  await seedIdea(sandbox, artifact("11112222", "Sample", "open"));
+
+  const ctx = makeCtx(sandbox, { hasUI: true });
+  await cmd.options.handler("", ctx);
+
+  assert.ok(ctx.customCalls.length >= 1, "expected ctx.ui.custom to be invoked");
 });
 
 function makeSelectorHost() {

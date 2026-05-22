@@ -396,6 +396,14 @@ export class IdeaSelectorComponent implements Component {
     this.filtered = filterAndRankIdeas(entries, this.query);
   }
 
+  setEntries(next: IdeaListEntry[]): void {
+    this.entries = next;
+    this.filtered = filterAndRankIdeas(this.entries, this.query);
+    const max = Math.max(0, this.filtered.length - 1);
+    if (this.selectedIndex > max) this.selectedIndex = max;
+    if (this.selectedIndex < 0) this.selectedIndex = 0;
+  }
+
   handleInput(data: string): void {
     const current = this.filtered[this.selectedIndex];
 
@@ -897,8 +905,195 @@ export function registerIdea(pi: ExtensionAPI): void {
         return;
       }
 
-      // TUI wiring lands in Task 9
-      ctx.ui.notify(formatGroupedTextList(entries, { query, status }), "info");
+      let mutableEntries = entries;
+
+      await ctx.ui.custom<void>((tui, theme, keybindings, done) => {
+        let activeComponent: Component & { invalidate(): void };
+        let selector: IdeaSelectorComponent;
+
+        const closeAndPrefill = (text: string) => {
+          ctx.ui.setEditorText(text);
+          done(undefined);
+        };
+
+        const refresh = async () => {
+          mutableEntries = await listIdeas(dir);
+          selector.setEntries(mutableEntries);
+          tui.requestRender();
+        };
+
+        const setActive = (c: Component & { invalidate(): void }) => {
+          activeComponent = c;
+          tui.requestRender();
+        };
+
+        let openActionMenu: (idea: IdeaListEntry) => void;
+
+        const openWorkSubmenu = (idea: IdeaListEntry) => {
+          const work = new IdeaWorkSubmenuComponent(idea, {
+            dispatch: (skill) => {
+              closeAndPrefill(`/flow:${skill} IDEA-${idea.id}`);
+            },
+            back: () => openActionMenu(idea),
+            theme,
+            keybindings,
+            requestRender: () => tui.requestRender(),
+          });
+          setActive(work);
+        };
+
+        const openDeleteConfirm = (idea: IdeaListEntry) => {
+          const confirmComponent = new IdeaDeleteConfirmComponent(idea, {
+            confirm: () => {
+              (async () => {
+                await deleteIdea(dir, idea.id);
+                ctx.ui.notify(`Deleted idea IDEA-${idea.id}`, "info");
+                await refresh();
+                setActive(selector);
+              })();
+            },
+            cancel: () => openActionMenu(idea),
+            theme,
+            keybindings,
+            requestRender: () => tui.requestRender(),
+          });
+          setActive(confirmComponent);
+        };
+
+        const openOtherSubmenu = (idea: IdeaListEntry) => {
+          const other = new IdeaOtherSubmenuComponent(idea, {
+            dispatch: (name) => {
+              if (name === "copy-path") {
+                (async () => {
+                  await copyToClipboard(path.join(dir, `${idea.id}.md`));
+                  ctx.ui.notify(`Copied path of IDEA-${idea.id}`, "info");
+                  openActionMenu(idea);
+                })();
+              } else if (name === "copy-text") {
+                (async () => {
+                  const full = await readIdea(dir, idea.id);
+                  if (!full) {
+                    ctx.ui.notify(`IDEA-${idea.id} no longer exists`, "warning");
+                    openActionMenu(idea);
+                    return;
+                  }
+                  const text = full.body.length > 0 ? `# ${full.title}\n\n${full.body}` : `# ${full.title}`;
+                  await copyToClipboard(text);
+                  ctx.ui.notify(`Copied text of IDEA-${full.id}`, "info");
+                  openActionMenu(idea);
+                })();
+              } else if (name === "delete") {
+                openDeleteConfirm(idea);
+              }
+            },
+            back: () => openActionMenu(idea),
+            theme,
+            keybindings,
+            requestRender: () => tui.requestRender(),
+          });
+          setActive(other);
+        };
+
+        const openDetailOverlay = (full: IdeaArtifact) => {
+          ctx.ui.custom<void>((_overlayTui, _overlayTheme, overlayKeybindings, overlayDone) => {
+            const overlay = new IdeaDetailOverlayComponent(full, {
+              close: () => overlayDone(undefined),
+              theme,
+              keybindings: overlayKeybindings,
+              requestRender: () => _overlayTui.requestRender(),
+            });
+            return {
+              render: (w) => overlay.render(w),
+              invalidate: () => overlay.invalidate(),
+              handleInput: (data) => {
+                overlay.handleInput?.(data);
+                _overlayTui.requestRender();
+              },
+            };
+          }, {
+            overlay: true,
+            overlayOptions: { width: "80%", maxHeight: "80%", anchor: "center" },
+          });
+        };
+
+        openActionMenu = (idea: IdeaListEntry) => {
+          const menu = new IdeaActionMenuComponent(idea, {
+            dispatchAction: (name) => {
+              if (name === "view") {
+                (async () => {
+                  const full = await readIdea(dir, idea.id);
+                  if (!full) {
+                    ctx.ui.notify(`IDEA-${idea.id} no longer exists`, "warning");
+                    return;
+                  }
+                  openDetailOverlay(full);
+                })();
+              } else if (name === "refine") {
+                closeAndPrefill(buildRefineIdeaPrompt(idea.id, idea.title));
+              } else if (name === "work") {
+                openWorkSubmenu(idea);
+              } else if (name === "close" || name === "reopen") {
+                (async () => {
+                  const full = await readIdea(dir, idea.id);
+                  if (!full) {
+                    ctx.ui.notify(`IDEA-${idea.id} no longer exists`, "warning");
+                    return;
+                  }
+                  const nextStatus: "open" | "closed" = name === "close" ? "closed" : "open";
+                  await writeIdea(dir, { ...full, status: nextStatus });
+                  const verb = name === "close" ? "Closed" : "Reopened";
+                  ctx.ui.notify(`${verb} idea IDEA-${idea.id}`, "info");
+                  await refresh();
+                  const updated = mutableEntries.find((e) => e.id === idea.id);
+                  if (updated) openActionMenu(updated);
+                  else setActive(selector);
+                })();
+              } else if (name === "other") {
+                openOtherSubmenu(idea);
+              }
+            },
+            back: () => setActive(selector),
+            theme,
+            keybindings,
+            requestRender: () => tui.requestRender(),
+          });
+          setActive(menu);
+        };
+
+        const selectorHost: IdeaSelectorHost = {
+          setActive: (c) => setActive(c),
+          requestRender: () => tui.requestRender(),
+          notify: (m, l) => ctx.ui.notify(m, l),
+          close: () => done(undefined),
+          dispatch: (action) => {
+            if (action.kind === "cancel") {
+              done(undefined);
+            } else if (action.kind === "open") {
+              openActionMenu(action.idea);
+            } else if (action.kind === "refine") {
+              closeAndPrefill(buildRefineIdeaPrompt(action.idea.id, action.idea.title));
+            } else if (action.kind === "fastlane") {
+              closeAndPrefill(`/flow:fastlane IDEA-${action.idea.id}`);
+            } else if (action.kind === "spec") {
+              closeAndPrefill(`/flow:spec IDEA-${action.idea.id}`);
+            }
+          },
+          theme,
+          keybindings,
+        };
+
+        selector = new IdeaSelectorComponent(mutableEntries, query, selectorHost);
+        activeComponent = selector;
+
+        return {
+          render: (w) => activeComponent.render(w),
+          invalidate: () => activeComponent.invalidate(),
+          handleInput: (data) => {
+            activeComponent.handleInput?.(data);
+            tui.requestRender();
+          },
+        };
+      });
     },
   });
 
