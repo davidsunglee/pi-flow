@@ -489,14 +489,14 @@ export class IdeaSelectorComponent implements Component {
     lines.push("");
 
     const headerText = `Ideas (${openCount} open, ${closedCount} closed)`;
-    lines.push(theme.fg("border", theme.bold(headerText)));
+    lines.push(` ${theme.fg("border", theme.bold(headerText))}`);
     lines.push("");
 
     const searchPrefix = theme.fg("muted", "Search: ");
     const searchValue = this.query.length === 0
       ? theme.fg("dim", "(type to search)")
       : this.query;
-    lines.push(`${searchPrefix}${searchValue}`);
+    lines.push(` ${searchPrefix}${searchValue}`);
     lines.push("");
 
     if (this.entries.length === 0) {
@@ -529,7 +529,7 @@ export class IdeaSelectorComponent implements Component {
     }
 
     lines.push("");
-    lines.push(...wrapTextWithAnsi(theme.fg("dim", IDEA_SELECTOR_HINT), width));
+    lines.push(...wrapTextWithAnsi(` ${theme.fg("dim", IDEA_SELECTOR_HINT)}`, width));
     lines.push("");
     lines.push(...border.render(width));
 
@@ -602,11 +602,11 @@ export class IdeaActionMenuComponent implements Component {
     const lines: string[] = [];
     lines.push(...border.render(width));
     lines.push("");
-    lines.push(...wrapTextWithAnsi(styledTitle, width));
+    lines.push(...wrapTextWithAnsi(` ${styledTitle}`, width));
     lines.push("");
     lines.push(...this.list.render(width));
     lines.push("");
-    lines.push(...wrapTextWithAnsi(theme.fg("dim", hintText), width));
+    lines.push(...wrapTextWithAnsi(` ${theme.fg("dim", hintText)}`, width));
     lines.push("");
     lines.push(...border.render(width));
     return lines;
@@ -660,11 +660,11 @@ export class IdeaWorkSubmenuComponent implements Component {
     const lines: string[] = [];
     lines.push(...border.render(width));
     lines.push("");
-    lines.push(...wrapTextWithAnsi(styledTitle, width));
+    lines.push(...wrapTextWithAnsi(` ${styledTitle}`, width));
     lines.push("");
     lines.push(...this.list.render(width));
     lines.push("");
-    lines.push(...wrapTextWithAnsi(theme.fg("dim", hintText), width));
+    lines.push(...wrapTextWithAnsi(` ${theme.fg("dim", hintText)}`, width));
     lines.push("");
     lines.push(...border.render(width));
     return lines;
@@ -717,11 +717,11 @@ export class IdeaOtherSubmenuComponent implements Component {
     const lines: string[] = [];
     lines.push(...border.render(width));
     lines.push("");
-    lines.push(...wrapTextWithAnsi(styledTitle, width));
+    lines.push(...wrapTextWithAnsi(` ${styledTitle}`, width));
     lines.push("");
     lines.push(...this.list.render(width));
     lines.push("");
-    lines.push(...wrapTextWithAnsi(theme.fg("dim", hintText), width));
+    lines.push(...wrapTextWithAnsi(` ${theme.fg("dim", hintText)}`, width));
     lines.push("");
     lines.push(...border.render(width));
     return lines;
@@ -835,8 +835,8 @@ class IdeaDetailOverlayComponent implements Component {
   private buildFooterText(start: number, viewHeight: number, totalLines: number): string {
     const startDisp = totalLines === 0 ? 0 : Math.min(start, Math.max(0, totalLines - 1));
     const endDisp = totalLines === 0 ? 0 : Math.min(start + viewHeight - 1, totalLines - 1);
-    const counter = `Lines ${startDisp}-${endDisp} of ${totalLines}`;
-    return `${counter} • Esc back • ↑↓ scroll • ←→ page`;
+    const counter = `lines ${startDisp}-${endDisp} of ${totalLines}`;
+    return `Esc back • ↑↓ scroll • ←→ page • ${counter}`;
   }
 
   render(width: number): string[] {
@@ -844,9 +844,15 @@ class IdeaDetailOverlayComponent implements Component {
     const idea = this.idea;
     const border = new DynamicBorder((s) => theme.fg("border", s));
 
+    // Interior width accounts for two side-border columns. For tiny widths (< 2)
+    // we fall back to rendering without side borders so content can still fit.
+    const useSideBorders = width >= 2;
+    const interior = useSideBorders ? width - 2 : width;
+    const contentWidth = Math.max(0, interior);
+
     if (!this.cachedMarkdownLines || this.cachedMarkdownWidth !== width) {
       this.markdown.invalidate();
-      this.cachedMarkdownLines = this.markdown.render(width);
+      this.cachedMarkdownLines = this.markdown.render(contentWidth);
       this.cachedMarkdownWidth = width;
     }
     const allLines = this.cachedMarkdownLines;
@@ -862,8 +868,9 @@ class IdeaDetailOverlayComponent implements Component {
     const tagText = idea.tags.length > 0 ? `[${idea.tags.join(", ")}]` : "no tags";
     const tagStyled = theme.fg("muted", tagText);
     const sep = theme.fg("muted", " • ");
-    const titleLine = `${titleStyled}${sep}${statusStyled}${sep}${tagStyled}`;
-    const titleRows = wrapTextWithAnsi(titleLine, width);
+    // Leading space sits inside the left vertical border.
+    const titleLine = ` ${titleStyled}${sep}${statusStyled}${sep}${tagStyled}`;
+    const titleRows = wrapTextWithAnsi(titleLine, Math.max(1, contentWidth));
 
     const topBorder = border.render(width);
     const bottomBorder = border.render(width);
@@ -871,7 +878,11 @@ class IdeaDetailOverlayComponent implements Component {
     const buildFooterRows = (vh: number): string[] => {
       const maxOff = Math.max(0, totalLines - vh);
       const s = Math.max(0, Math.min(this.scrollOffset, maxOff));
-      return wrapTextWithAnsi(theme.fg("dim", this.buildFooterText(s, vh, totalLines)), width);
+      // Leading space sits inside the left vertical border.
+      return wrapTextWithAnsi(
+        ` ${theme.fg("dim", this.buildFooterText(s, vh, totalLines))}`,
+        Math.max(1, contentWidth),
+      );
     };
 
     let viewHeight: number;
@@ -954,17 +965,31 @@ class IdeaDetailOverlayComponent implements Component {
       ...bottomBorder,
     ];
 
+    let final = composed;
     if (this.maxVisibleLines === undefined) {
       const maxRows = this.host.getMaxRows?.();
       if (maxRows !== undefined) {
         const cap = Math.floor(maxRows * 0.8);
         if (composed.length > cap) {
-          return capLinesPreserveBottomBorder(composed, cap);
+          final = capLinesPreserveBottomBorder(composed, cap);
         }
       }
     }
 
-    return composed;
+    // Apply left/right vertical borders to middle rows (everything except the
+    // top/bottom border rows). Top/bottom borders are full-width `─` and remain
+    // unchanged. Skip side borders entirely for tiny widths to keep output safe.
+    if (useSideBorders && final.length >= 3) {
+      const v = theme.fg("border", "│");
+      final = final.map((line, i) => {
+        if (i === 0 || i === final.length - 1) return line;
+        const vw = visibleWidth(line);
+        const pad = vw < contentWidth ? " ".repeat(contentWidth - vw) : "";
+        return `${v}${line}${pad}${v}`;
+      });
+    }
+
+    return final;
   }
 
   handleInput(data: string): void {

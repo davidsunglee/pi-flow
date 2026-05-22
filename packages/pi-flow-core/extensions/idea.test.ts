@@ -695,9 +695,9 @@ test("IdeaSelectorComponent render emits bordered layout with spacing between he
   const border = "─".repeat(width);
   assert.equal(lines[0], border, "first line should be top border");
   assert.equal(lines[1], "", "blank line after top border");
-  assert.match(lines[2], /^Ideas \(1 open, 1 closed\)$/);
+  assert.match(lines[2], /^ Ideas \(1 open, 1 closed\)$/);
   assert.equal(lines[3], "", "blank line after header");
-  assert.match(lines[4], /^Search: /);
+  assert.match(lines[4], /^ Search: /);
   assert.equal(lines[5], "", "blank line after search");
 
   assert.equal(lines[lines.length - 1], border, "last line should be bottom border");
@@ -1145,7 +1145,7 @@ test("IdeaActionMenuComponent renders left-aligned title 'Actions for IDEA-...' 
 
   // line 0 = top border, line 1 = blank, line 2 = title
   const titleLine = lines[2];
-  assert.match(titleLine, /^<fg:border><b>Actions for IDEA-aaaabbbb "My idea title"<\/b><\/fg:border>$/, `expected left-aligned border+bold title, got: ${JSON.stringify(titleLine)}`);
+  assert.match(titleLine, /^ <fg:border><b>Actions for IDEA-aaaabbbb "My idea title"<\/b><\/fg:border>$/, `expected left-aligned border+bold title with one leading space, got: ${JSON.stringify(titleLine)}`);
 });
 
 test("IdeaActionMenuComponent uses border token for top and bottom borders", async () => {
@@ -1256,8 +1256,8 @@ test("IdeaWorkSubmenuComponent renders left-aligned title 'Workflow actions for 
   const titleLine = lines[2];
   assert.match(
     titleLine,
-    /^<fg:border><b>Workflow actions for IDEA-aaaabbbb: "My idea title"<\/b><\/fg:border>$/,
-    `expected left-aligned border+bold work submenu title, got: ${JSON.stringify(titleLine)}`,
+    /^ <fg:border><b>Workflow actions for IDEA-aaaabbbb: "My idea title"<\/b><\/fg:border>$/,
+    `expected left-aligned border+bold work submenu title with one leading space, got: ${JSON.stringify(titleLine)}`,
   );
 });
 
@@ -1332,8 +1332,8 @@ test("IdeaOtherSubmenuComponent renders left-aligned title 'Other actions for ID
   const titleLine = lines[2];
   assert.match(
     titleLine,
-    /^<fg:border><b>Other actions for IDEA-aaaabbbb: "My idea title"<\/b><\/fg:border>$/,
-    `expected left-aligned border+bold other submenu title, got: ${JSON.stringify(titleLine)}`,
+    /^ <fg:border><b>Other actions for IDEA-aaaabbbb: "My idea title"<\/b><\/fg:border>$/,
+    `expected left-aligned border+bold other submenu title with one leading space, got: ${JSON.stringify(titleLine)}`,
   );
 });
 
@@ -2069,4 +2069,277 @@ test("IdeaDetailOverlayComponent: rendering wide then narrow re-wraps body to ne
       `after wide-then-narrow render: line ${i} visible width ${visibleWidth(line)} exceeds ${narrow}: ${JSON.stringify(line)}`,
     );
   }
+});
+
+test("IdeaSelectorComponent render: header, search bar, and quick reference each begin with exactly one leading space", async () => {
+  const { IdeaSelectorComponent } = await import("./idea.ts");
+
+  const entries = [
+    { id: "11111111", title: "Alpha", tags: [], status: "open" as const, createdAt: "2026-01-01T00:00:00.000Z" },
+    { id: "22222222", title: "Beta", tags: [], status: "closed" as const, createdAt: "2026-01-02T00:00:00.000Z" },
+  ];
+
+  const { host } = makeSelectorHost();
+  const selector = new IdeaSelectorComponent(entries, "", host);
+  const width = 120;
+  const lines = selector.render(width);
+
+  const header = lines[2];
+  assert.match(header, /^ [^ ]/, `header should start with exactly one leading space, got: ${JSON.stringify(header)}`);
+  assert.match(header, /^ Ideas \(1 open, 1 closed\)$/, `header should be ' Ideas (...)', got: ${JSON.stringify(header)}`);
+
+  const search = lines[4];
+  assert.match(search, /^ [^ ]/, `search bar should start with exactly one leading space, got: ${JSON.stringify(search)}`);
+  assert.match(search, /^ Search: /, `search bar should start with ' Search: ', got: ${JSON.stringify(search)}`);
+
+  const hint = lines[lines.length - 3];
+  assert.match(hint, /^ [^ ]/, `quick reference should start with exactly one leading space, got: ${JSON.stringify(hint)}`);
+  assert.match(hint, /^ ↑↓ select/, `quick reference should start with ' ↑↓ select', got: ${JSON.stringify(hint)}`);
+
+  for (const [i, line] of lines.entries()) {
+    assert.ok(
+      visibleWidth(line) <= width,
+      `line ${i} visible width ${visibleWidth(line)} exceeds ${width}: ${JSON.stringify(line)}`,
+    );
+  }
+});
+
+test("IdeaActionMenuComponent: title and quick reference each begin with exactly one leading space", async () => {
+  const { IdeaActionMenuComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open", "My title"), host);
+  const lines = c.render(120);
+
+  const titleLine = lines[2];
+  assert.match(titleLine, /^ [^ ]/, `title should start with exactly one leading space, got: ${JSON.stringify(titleLine)}`);
+  assert.match(titleLine, /^ Actions for IDEA-aaaabbbb/, `title should begin with ' Actions for IDEA-...', got: ${JSON.stringify(titleLine)}`);
+
+  const hint = lines[lines.length - 3];
+  assert.match(hint, /^ [^ ]/, `quick reference should start with exactly one leading space, got: ${JSON.stringify(hint)}`);
+  assert.match(hint, /^ Enter to confirm/, `quick reference should begin with ' Enter to confirm', got: ${JSON.stringify(hint)}`);
+});
+
+test("IdeaWorkSubmenuComponent: title and quick reference each begin with exactly one leading space", async () => {
+  const { IdeaWorkSubmenuComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open", "My title"), host);
+  const lines = c.render(120);
+
+  const titleLine = lines[2];
+  assert.match(titleLine, /^ [^ ]/, `title should start with exactly one leading space, got: ${JSON.stringify(titleLine)}`);
+  assert.match(titleLine, /^ Workflow actions for IDEA-aaaabbbb/, `title should begin with ' Workflow actions for IDEA-...', got: ${JSON.stringify(titleLine)}`);
+
+  const hint = lines[lines.length - 3];
+  assert.match(hint, /^ [^ ]/, `quick reference should start with exactly one leading space, got: ${JSON.stringify(hint)}`);
+  assert.match(hint, /^ Enter to confirm/, `quick reference should begin with ' Enter to confirm', got: ${JSON.stringify(hint)}`);
+});
+
+test("IdeaOtherSubmenuComponent: title and quick reference each begin with exactly one leading space", async () => {
+  const { IdeaOtherSubmenuComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const c = new IdeaOtherSubmenuComponent(entry("aaaabbbb", "open", "My title"), host);
+  const lines = c.render(120);
+
+  const titleLine = lines[2];
+  assert.match(titleLine, /^ [^ ]/, `title should start with exactly one leading space, got: ${JSON.stringify(titleLine)}`);
+  assert.match(titleLine, /^ Other actions for IDEA-aaaabbbb/, `title should begin with ' Other actions for IDEA-...', got: ${JSON.stringify(titleLine)}`);
+
+  const hint = lines[lines.length - 3];
+  assert.match(hint, /^ [^ ]/, `quick reference should start with exactly one leading space, got: ${JSON.stringify(hint)}`);
+  assert.match(hint, /^ Enter to confirm/, `quick reference should begin with ' Enter to confirm', got: ${JSON.stringify(hint)}`);
+});
+
+test("IdeaDetailOverlayComponent: middle rows have left and right border-token vertical borders where width allows", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+
+  const taggingTheme: any = {
+    fg: (color: string, s: string) => `<fg:${color}>${s}</fg:${color}>`,
+    bold: (s: string) => `<b>${s}</b>`,
+  };
+  const stubKeybindings: any = { matches: () => false };
+  const host: any = {
+    close() {},
+    requestRender() {},
+    theme: taggingTheme,
+    keybindings: stubKeybindings,
+  };
+
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: "Test",
+    tags: [],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body: "body line",
+  };
+
+  const overlay = new IdeaDetailOverlayComponent(idea, host, { maxVisibleLines: 3 });
+  const width = 80;
+  const lines = overlay.render(width);
+
+  // Top and bottom borders still ─ only (no side borders attached).
+  assert.match(lines[0], /^<fg:border>─+<\/fg:border>$/, `top border should be ─ only, got: ${JSON.stringify(lines[0])}`);
+  assert.match(lines[lines.length - 1], /^<fg:border>─+<\/fg:border>$/, `bottom border should be ─ only, got: ${JSON.stringify(lines[lines.length - 1])}`);
+
+  // Middle rows (between top and bottom borders) start and end with border-token │.
+  // Width safety with real ANSI escapes is covered by the existing stub-theme tests.
+  for (let i = 1; i < lines.length - 1; i++) {
+    const line = lines[i];
+    assert.match(
+      line,
+      /^<fg:border>│<\/fg:border>/,
+      `middle line ${i} should start with border │, got: ${JSON.stringify(line)}`,
+    );
+    assert.match(
+      line,
+      /<fg:border>│<\/fg:border>$/,
+      `middle line ${i} should end with border │, got: ${JSON.stringify(line)}`,
+    );
+  }
+});
+
+test("IdeaDetailOverlayComponent: title interior content begins with one visible space after the left border", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+
+  const taggingTheme: any = {
+    fg: (color: string, s: string) => `<fg:${color}>${s}</fg:${color}>`,
+    bold: (s: string) => `<b>${s}</b>`,
+  };
+  const stubKeybindings: any = { matches: () => false };
+  const host: any = {
+    close() {},
+    requestRender() {},
+    theme: taggingTheme,
+    keybindings: stubKeybindings,
+  };
+
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: "Test idea",
+    tags: ["alpha"],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body: "body",
+  };
+
+  const overlay = new IdeaDetailOverlayComponent(idea, host, { maxVisibleLines: 3 });
+  const titleLine = overlay.render(120)[2];
+
+  // Expect: <fg:border>│</fg:border> <fg:border><b>IDEA-...</b></fg:border>...<fg:border>│</fg:border>
+  assert.match(
+    titleLine,
+    /^<fg:border>│<\/fg:border> <fg:border><b>IDEA-aabb1122/,
+    `title interior should begin with one leading space after the left border, then styled IDEA-..., got: ${JSON.stringify(titleLine)}`,
+  );
+});
+
+test("IdeaDetailOverlayComponent: footer interior content begins with one visible space after the left border", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+
+  const taggingTheme: any = {
+    fg: (color: string, s: string) => `<fg:${color}>${s}</fg:${color}>`,
+    bold: (s: string) => `<b>${s}</b>`,
+  };
+  const stubKeybindings: any = { matches: () => false };
+  const host: any = {
+    close() {},
+    requestRender() {},
+    theme: taggingTheme,
+    keybindings: stubKeybindings,
+  };
+
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: "Footer test",
+    tags: [],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body: "body",
+  };
+
+  const overlay = new IdeaDetailOverlayComponent(idea, host, { maxVisibleLines: 3 });
+  const lines = overlay.render(160);
+  const footerLine = lines[lines.length - 3];
+
+  // Expect: <fg:border>│</fg:border> <fg:dim>Esc back ...</fg:dim>... <fg:border>│</fg:border>
+  assert.match(
+    footerLine,
+    /^<fg:border>│<\/fg:border> <fg:dim>Esc back/,
+    `footer interior should begin with one leading space after the left border, then styled 'Esc back', got: ${JSON.stringify(footerLine)}`,
+  );
+});
+
+test("IdeaDetailOverlayComponent footer: command order is 'Esc back • ↑↓ scroll • ←→ page • lines X-Y of Z' with no Enter and lowercase 'lines'", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+  const stubTheme: any = {
+    fg: (_color: string, s: string) => s,
+    bold: (s: string) => s,
+  };
+  const stubKeybindings: any = { matches: () => false };
+  const host: any = {
+    close() {},
+    requestRender() {},
+    theme: stubTheme,
+    keybindings: stubKeybindings,
+  };
+
+  const body = Array.from({ length: 30 }, (_, i) => `line ${i}`).join("\n\n");
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: "Footer order test",
+    tags: [],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body,
+  };
+
+  const overlay = new IdeaDetailOverlayComponent(idea, host, { maxVisibleLines: 5 });
+  const lines = overlay.render(160);
+  const footer = lines[lines.length - 3];
+
+  assert.match(
+    footer,
+    /Esc back • ↑↓ scroll • ←→ page • lines \d+-\d+ of \d+/,
+    `footer order should match 'Esc back • ↑↓ scroll • ←→ page • lines X-Y of Z', got: ${JSON.stringify(footer)}`,
+  );
+  assert.doesNotMatch(footer, /\bLines\b/, `footer should use lowercase 'lines', not 'Lines', got: ${JSON.stringify(footer)}`);
+  assert.doesNotMatch(footer, /\bEnter\b/i, `footer should not include Enter, got: ${JSON.stringify(footer)}`);
+});
+
+test("IdeaDetailOverlayComponent footer: lowercase line counter remains correct after down and pageDown", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+
+  const body = Array.from({ length: 100 }, (_, i) => `line ${i}`).join("\n\n");
+  const idea: IdeaArtifact = {
+    id: "ccdd3344",
+    title: "Counter test",
+    tags: [],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body,
+  };
+
+  const h = makeOverlayHost();
+  const overlay = new IdeaDetailOverlayComponent(idea, h.host, { maxVisibleLines: 5 });
+
+  const lines0 = overlay.render(160);
+  const footer0 = lines0[lines0.length - 3];
+  assert.match(footer0, /lines 0-4 of \d+/, `initial footer should show 'lines 0-4 of N', got: ${footer0}`);
+
+  h.setBinding("tui.select.down");
+  overlay.handleInput!("\x1b[B");
+  const lines1 = overlay.render(160);
+  const footer1 = lines1[lines1.length - 3];
+  assert.match(footer1, /lines 1-5 of \d+/, `after down, footer should show 'lines 1-5 of N', got: ${footer1}`);
+
+  h.setBinding("tui.select.pageDown");
+  overlay.handleInput!("\x1b[B");
+  const lines2 = overlay.render(160);
+  const footer2 = lines2[lines2.length - 3];
+  assert.match(footer2, /lines 6-10 of \d+/, `after pageDown, footer should show 'lines 6-10 of N', got: ${footer2}`);
 });
