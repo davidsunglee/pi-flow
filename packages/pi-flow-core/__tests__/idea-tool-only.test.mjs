@@ -78,7 +78,7 @@ test("packaged extensions register only the built-in `idea` tool — no external
       // Simulate the execute-plan Step 16.2 flow end-to-end:
       //   1) generate-plan emits a plan with `**Source:** IDEA-<id>` (we seed the artifact directly here)
       //   2) execute-plan extracts the IDEA-<id>, reads the artifact via the `idea` tool,
-      //   3) execute-plan calls the `idea` tool's `update` action with status="done" and an appended body line.
+      //   3) execute-plan calls the `idea` tool's `update` action with status="closed" and an appended body line.
       const ideaDir = join(sandbox, "docs", "ideas");
       mkdirSync(ideaDir, { recursive: true });
       const id = "abc12345";
@@ -96,13 +96,13 @@ test("packaged extensions register only the built-in `idea` tool — no external
       assert.equal(readParsed.status, "open");
       // Step 16.2 step 3: update via the built-in `idea` tool with the appended "Completed via plan:" line.
       const completedBody = `${readParsed.body}\nCompleted via plan: docs/plans/sample.md`;
-      const updateResult = await ideaTool.definition.execute("call-update", { action: "update", id: `IDEA-${id}`, status: "done", body: completedBody }, undefined, undefined, { cwd: sandbox });
+      const updateResult = await ideaTool.definition.execute("call-update", { action: "update", id: `IDEA-${id}`, status: "closed", body: completedBody }, undefined, undefined, { cwd: sandbox });
       assert.equal(updateResult.isError, undefined);
       assert.match(updateResult.content[0].text, /^IDEA-abc12345\n/);
-      // Confirm the round-trip: a follow-up read sees status="done" and the appended completion line.
+      // Confirm the round-trip: a follow-up read sees status="closed" and the appended completion line.
       const reReadResult = await ideaTool.definition.execute("call-reread", { action: "read", id: `IDEA-${id}` }, undefined, undefined, { cwd: sandbox });
       const reReadParsed = JSON.parse(reReadResult.content[0].text);
-      assert.equal(reReadParsed.status, "done");
+      assert.equal(reReadParsed.status, "closed");
       assert.match(reReadParsed.body, /Completed via plan: docs\/plans\/sample\.md/);
     });
   } finally {
