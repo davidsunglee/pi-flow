@@ -524,7 +524,7 @@ export class IdeaSelectorComponent implements Component {
     }
 
     lines.push("");
-    lines.push(theme.fg("dim", IDEA_SELECTOR_HINT));
+    lines.push(truncateToWidth(theme.fg("dim", IDEA_SELECTOR_HINT), width));
     lines.push("");
     lines.push(...border.render(width));
 

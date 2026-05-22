@@ -7,6 +7,7 @@ import path from "node:path";
 
 import { registerIdea } from "./idea.ts";
 import { formatIdeaArtifact, parseIdeaArtifact, type IdeaArtifact } from "./storage.ts";
+import { visibleWidth } from "@earendil-works/pi-tui";
 
 type NotifyLevel = "info" | "warning" | "error";
 type NotifyCall = { message: string; level: NotifyLevel };
@@ -708,6 +709,23 @@ test("IdeaSelectorComponent render emits bordered layout with spacing between he
   const ideaRowText = middle.join("\n");
   assert.match(ideaRowText, /IDEA-11111111/);
   assert.match(ideaRowText, /IDEA-22222222/);
+});
+
+test("IdeaSelectorComponent render: every line respects the supplied width", async () => {
+  const { IdeaSelectorComponent } = await import("./idea.ts");
+
+  const entries = [
+    { id: "11111111", title: "Alpha feature", tags: [], status: "open" as const, createdAt: "2026-01-01T00:00:00.000Z" },
+  ];
+
+  const { host } = makeSelectorHost();
+  const selector = new IdeaSelectorComponent(entries, "", host);
+  const width = 110;
+  const lines = selector.render(width);
+  for (const [i, line] of lines.entries()) {
+    const w = visibleWidth(line);
+    assert.ok(w <= width, `line ${i} visible width ${w} exceeds ${width}: ${JSON.stringify(line)}`);
+  }
 });
 
 test("IdeaSelectorComponent filters list as the user types, header counts unchanged", async () => {
