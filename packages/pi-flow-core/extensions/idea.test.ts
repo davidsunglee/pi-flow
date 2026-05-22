@@ -98,7 +98,7 @@ async function seedIdea(sandbox: string, artifact: IdeaArtifact): Promise<void> 
 
 const BASE_CREATED_AT = "2026-05-20T00:00:00.000Z";
 
-function artifact(id: string, title: string, status: "open" | "done" = "open"): IdeaArtifact {
+function artifact(id: string, title: string, status: "open" | "closed" = "open"): IdeaArtifact {
   return {
     id,
     title,
@@ -188,7 +188,7 @@ test("tool list returns seeded ideas", async () => {
   const sandbox = mkSandbox("pi-flow-idea-tool-list-");
   const { tool } = bootExtension();
   await seedIdea(sandbox, artifact("aaaabbbb", "First idea"));
-  await seedIdea(sandbox, artifact("ccccdddd", "Second idea", "done"));
+  await seedIdea(sandbox, artifact("ccccdddd", "Second idea", "closed"));
 
   const result = await tool.execute("call-list", { action: "list" }, undefined, undefined, makeCtx(sandbox));
 
@@ -249,7 +249,7 @@ test("tool update accepts bare id and preserves omitted fields", async () => {
 
   const result = await tool.execute(
     "call-update",
-    { action: "update", id: "fedcba98", status: "done" },
+    { action: "update", id: "fedcba98", status: "closed" },
     undefined,
     undefined,
     makeCtx(sandbox),
@@ -260,7 +260,7 @@ test("tool update accepts bare id and preserves omitted fields", async () => {
   const raw = await fs.readFile(path.join(sandbox, "docs", "ideas", "fedcba98.md"), "utf8");
   const parsed = parseIdeaArtifact(raw);
   assert.ok(parsed);
-  assert.equal(parsed.status, "done");
+  assert.equal(parsed.status, "closed");
   assert.equal(parsed.title, "Keep title");
   assert.deepEqual(parsed.tags, ["keep"]);
   assert.equal(parsed.body, "Keep body");

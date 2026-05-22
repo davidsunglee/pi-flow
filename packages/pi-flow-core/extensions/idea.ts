@@ -33,7 +33,7 @@ const ideaParameters = Type.Object(
     body: Type.Optional(Type.String()),
     tags: Type.Optional(Type.Array(Type.String())),
     status: Type.Optional(
-      Type.Union([Type.Literal("open"), Type.Literal("done")], { default: "open" }),
+      Type.Union([Type.Literal("open"), Type.Literal("closed")], { default: "open" }),
     ),
   },
   { additionalProperties: false },
@@ -45,7 +45,7 @@ type IdeaToolParams = {
   title?: string;
   body?: string;
   tags?: string[];
-  status?: "open" | "done";
+  status?: "open" | "closed";
 };
 
 function textResult(text: string, opts: { isError?: boolean; details?: unknown } = {}): AgentToolResult<unknown> {
@@ -66,7 +66,7 @@ function newArtifact(fields: {
   title: string;
   body?: string;
   tags?: string[];
-  status?: "open" | "done";
+  status?: "open" | "closed";
 }): IdeaArtifact {
   return {
     id: generateIdeaId(),

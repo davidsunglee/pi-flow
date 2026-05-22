@@ -7,9 +7,17 @@ export interface IdeaArtifact {
   id: string;
   title: string;
   tags: string[];
-  status: "open" | "done";
+  status: "open" | "closed";
   createdAt: string;
   body: string;
+}
+
+export interface IdeaListEntry {
+  id: string;
+  title: string;
+  tags: string[];
+  status: "open" | "closed";
+  createdAt: string;
 }
 
 export async function getIdeaDir(cwd: string): Promise<string> {
@@ -82,15 +90,18 @@ export function parseIdeaArtifact(raw: string): IdeaArtifact | undefined {
     const metaText = raw.slice(start, end + 1);
     const meta = JSON.parse(metaText) as Record<string, unknown>;
 
+    // Unknown fields in the JSON header are deliberately ignored so future schema additions don't break existing files.
     if (
       typeof meta.id !== "string" ||
       typeof meta.title !== "string" ||
       !Array.isArray(meta.tags) ||
-      (meta.status !== "open" && meta.status !== "done") ||
+      (meta.status !== "open" && meta.status !== "closed" && meta.status !== "done") ||
       typeof meta.created_at !== "string"
     ) {
       return undefined;
     }
+
+    const normalizedStatus: "open" | "closed" = meta.status === "done" ? "closed" : meta.status;
 
     const remainder = raw.slice(end + 1).replace(/^\n+/, "");
     const body = remainder.endsWith("\n") ? remainder.slice(0, -1) : remainder;
@@ -99,7 +110,7 @@ export function parseIdeaArtifact(raw: string): IdeaArtifact | undefined {
       id: meta.id,
       title: meta.title,
       tags: meta.tags as string[],
-      status: meta.status,
+      status: normalizedStatus,
       createdAt: meta.created_at,
       body,
     };
@@ -134,7 +145,10 @@ export async function writeIdea(dir: string, a: IdeaArtifact): Promise<string> {
   return finalPath;
 }
 
-export async function listIdeas(dir: string): Promise<Array<{ id: string; title: string; status: string }>> {
+export async function listIdeas(
+  dir: string,
+  filter?: { status?: "open" | "closed" | "all"; query?: string },
+): Promise<IdeaListEntry[]> {
   let entries: string[];
   try {
     entries = await fs.readdir(dir);
@@ -143,18 +157,60 @@ export async function listIdeas(dir: string): Promise<Array<{ id: string; title:
     throw err;
   }
 
-  const results: Array<{ id: string; title: string; status: string }> = [];
+  const results: IdeaListEntry[] = [];
   for (const entry of entries) {
     if (!/^[0-9a-f]{8}\.md$/.test(entry)) continue;
     try {
       const raw = await fs.readFile(path.join(dir, entry), "utf8");
       const parsed = parseIdeaArtifact(raw);
       if (parsed) {
-        results.push({ id: parsed.id, title: parsed.title, status: parsed.status });
+        results.push({ id: parsed.id, title: parsed.title, tags: parsed.tags, status: parsed.status, createdAt: parsed.createdAt });
       }
     } catch {
       // silently skip unreadable files
     }
   }
-  return results;
+
+  const statusFilter = filter?.status;
+  const queryFilter = filter?.query;
+
+  let filtered = results;
+
+  if (statusFilter === "open" || statusFilter === "closed") {
+    filtered = filtered.filter((e) => e.status === statusFilter);
+  }
+
+  if (queryFilter && queryFilter.length > 0) {
+    const q = queryFilter.toLowerCase();
+    filtered = filtered.filter((e) => {
+      const haystack = [`IDEA-${e.id}`, e.id, e.title, ...e.tags].join(" ").toLowerCase();
+      return haystack.includes(q);
+    });
+  }
+
+  return filtered;
+}
+
+export async function appendIdeaBody(dir: string, id: string, body: string): Promise<IdeaArtifact | undefined> {
+  const normalized = normalizeIdeaId(id);
+  if (!normalized) return undefined;
+  const existing = await readIdea(dir, normalized);
+  if (!existing) return undefined;
+  const nextBody = existing.body.length === 0 ? body : existing.body + "\n\n" + body;
+  const updated: IdeaArtifact = { ...existing, body: nextBody };
+  await writeIdea(dir, updated);
+  return updated;
+}
+
+export async function deleteIdea(dir: string, id: string): Promise<IdeaArtifact | undefined> {
+  const normalized = normalizeIdeaId(id);
+  if (!normalized) return undefined;
+  const existing = await readIdea(dir, normalized);
+  if (!existing) return undefined;
+  try {
+    await fs.unlink(path.join(dir, `${normalized}.md`));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+  }
+  return existing;
 }
