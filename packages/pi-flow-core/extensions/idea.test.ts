@@ -689,9 +689,10 @@ test("IdeaSelectorComponent render emits bordered layout with spacing between he
 
   const { host } = makeSelectorHost();
   const selector = new IdeaSelectorComponent(entries, "", host);
-  const lines = selector.render(80);
+  const width = 120;
+  const lines = selector.render(width);
 
-  const border = "─".repeat(80);
+  const border = "─".repeat(width);
   assert.equal(lines[0], border, "first line should be top border");
   assert.equal(lines[1], "", "blank line after top border");
   assert.match(lines[2], /^Ideas \(1 open, 1 closed\)$/);
@@ -753,6 +754,80 @@ test("IdeaSelectorComponent render: every line respects the supplied width", asy
   const selector = new IdeaSelectorComponent(entries, "", host);
   const width = 110;
   const lines = selector.render(width);
+  for (const [i, line] of lines.entries()) {
+    const w = visibleWidth(line);
+    assert.ok(w <= width, `line ${i} visible width ${w} exceeds ${width}: ${JSON.stringify(line)}`);
+  }
+});
+
+test("IdeaSelectorComponent render: quick reference does not contain 'Type to search' (search bar still does)", async () => {
+  const { IdeaSelectorComponent } = await import("./idea.ts");
+
+  const entries = [
+    { id: "11111111", title: "Alpha", tags: [], status: "open" as const, createdAt: "2026-01-01T00:00:00.000Z" },
+  ];
+
+  const { host } = makeSelectorHost();
+  const selector = new IdeaSelectorComponent(entries, "", host);
+  const lines = selector.render(120);
+
+  // Search bar (5th line, index 4) still shows the placeholder.
+  assert.match(lines[4], /\(type to search\)/, "search bar should still show '(type to search)' placeholder");
+
+  // The hint is the third-from-last line of the rendered block.
+  const hintLine = lines[lines.length - 3];
+  assert.doesNotMatch(hintLine, /Type to search/i, `hint should not contain 'Type to search', got: ${hintLine}`);
+  assert.match(hintLine, /↑↓ select/, `hint should start with arrow-key selection, got: ${hintLine}`);
+});
+
+test("IdeaSelectorComponent render: narrow width wraps a long idea row without losing content", async () => {
+  const { IdeaSelectorComponent } = await import("./idea.ts");
+
+  const longTitle = "A very lengthy idea title that should definitely exceed the narrow terminal width";
+  const entries = [
+    {
+      id: "11111111",
+      title: longTitle,
+      tags: ["alpha-tag-name", "beta-tag-name"],
+      status: "open" as const,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    },
+  ];
+
+  const { host } = makeSelectorHost();
+  const selector = new IdeaSelectorComponent(entries, "", host);
+  const width = 40;
+  const lines = selector.render(width);
+  const joined = lines.join("\n");
+
+  assert.ok(joined.includes(longTitle.split(/\s+/).slice(-1)[0]),
+    `last word of long title should still appear (wrapped) in output, got:\n${joined}`);
+  assert.ok(joined.includes("alpha-tag-name"), "first tag should still appear");
+  assert.ok(joined.includes("beta-tag-name"), "second tag should be present after wrapping");
+  assert.ok(joined.includes("(open)"), "status should still appear after wrapping");
+
+  for (const [i, line] of lines.entries()) {
+    const w = visibleWidth(line);
+    assert.ok(w <= width, `line ${i} visible width ${w} exceeds ${width}: ${JSON.stringify(line)}`);
+  }
+});
+
+test("IdeaSelectorComponent render: narrow width wraps the quick-reference hint without dropping later commands", async () => {
+  const { IdeaSelectorComponent } = await import("./idea.ts");
+
+  const entries = [
+    { id: "11111111", title: "Alpha", tags: [], status: "open" as const, createdAt: "2026-01-01T00:00:00.000Z" },
+  ];
+
+  const { host } = makeSelectorHost();
+  const selector = new IdeaSelectorComponent(entries, "", host);
+  const width = 40;
+  const lines = selector.render(width);
+  const joined = lines.join("\n");
+
+  assert.ok(joined.includes("Ctrl+Shift+S spec"), `hint should still include 'Ctrl+Shift+S spec' after wrapping, got:\n${joined}`);
+  assert.ok(joined.includes("Esc close"), `hint should still include 'Esc close' after wrapping, got:\n${joined}`);
+
   for (const [i, line] of lines.entries()) {
     const w = visibleWidth(line);
     assert.ok(w <= width, `line ${i} visible width ${w} exceeds ${width}: ${JSON.stringify(line)}`);

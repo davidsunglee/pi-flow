@@ -28,6 +28,7 @@ import {
   fuzzyMatch,
   truncateToWidth,
   visibleWidth,
+  wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import path from "node:path";
@@ -377,7 +378,7 @@ export interface IdeaSelectorHost {
 }
 
 const IDEA_SELECTOR_HINT =
-  "Type to search • ↑↓ select • Enter actions • Ctrl+Shift+R refine • Ctrl+Shift+F fastlane • Ctrl+Shift+S spec • Esc close";
+  "↑↓ select • Enter actions • Ctrl+Shift+R refine • Ctrl+Shift+F fastlane • Ctrl+Shift+S spec • Esc close";
 
 const IDEA_SELECTOR_MAX_ROWS = 12;
 
@@ -519,12 +520,12 @@ export class IdeaSelectorComponent implements Component {
           ? ` ${theme.fg("dim", "(closed)")}`
           : ` ${theme.fg("success", "(open)")}`;
         const line = `${prefix}${idPart} ${titlePart}${tagPart}${statusPart}`;
-        lines.push(truncateToWidth(line, width));
+        lines.push(...wrapTextWithAnsi(line, width));
       }
     }
 
     lines.push("");
-    lines.push(truncateToWidth(theme.fg("dim", IDEA_SELECTOR_HINT), width));
+    lines.push(...wrapTextWithAnsi(theme.fg("dim", IDEA_SELECTOR_HINT), width));
     lines.push("");
     lines.push(...border.render(width));
 
