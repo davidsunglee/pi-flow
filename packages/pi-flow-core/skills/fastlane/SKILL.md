@@ -361,9 +361,9 @@ Mirror `skills/execute-plan/SKILL.md` Step 16.2:
    - Else extract `Source: IDEA-<id>` from the spec preamble using a bounded `head -n 40`.
    - Else skip silently.
 
-2. Read the idea via the built-in `idea` tool (`action: "read"`, `id: "<id>"`). If missing or already status `done`, skip silently.
+2. Read the idea via the built-in `idea` tool (`action: "read"`, `id: "<id>"`). If missing or already status `closed`, skip silently.
 
-3. Call the built-in `idea` tool with `action: "update"`, `id: "<id>"`, `status: "done"`, and `body: "<existing body + \nCompleted via fastlane: <commit SHA>, spec: <spec path>>"` (or, when no spec was involved (input was an idea ID): `body: "<existing body + \nCompleted via fastlane: <commit SHA>, spec: (input was idea)>"`).
+3. Call the built-in `idea` tool with `action: "update"`, `id: "<id>"`, `status: "closed"`, and `body: "<existing body + \nCompleted via fastlane: <commit SHA>, spec: <spec path>>"` (or, when no spec was involved (input was an idea ID): `body: "<existing body + \nCompleted via fastlane: <commit SHA>, spec: (input was idea)>"`).
 
 ## Step 11: Post-completion
 

@@ -542,8 +542,8 @@ pi-flow helper _shared/cleanup-test-runs docs/test-runs/<plan-name>
 Scan the plan for a line matching `**Source:** IDEA-<id>`. If found:
 1. Extract the idea ID (e.g., `IDEA-5735f43b`).
 2. Read the idea via the built-in `idea` tool (`action: "read"`, `id: "<id>"`).
-3. If it exists and is not already "done": call the built-in `idea` tool with `action: "update"`, `id: "<id>"`, `status: "done"`, and `body: "<existing body + \nCompleted via plan: docs/plans/<plan-filename>.md>"`. Record the ID for the summary report.
-4. If the idea is missing, already done, or unreadable: skip silently.
+3. If it exists and is not already "closed": call the built-in `idea` tool with `action: "update"`, `id: "<id>"`, `status: "closed"`, and `body: "<existing body + \nCompleted via plan: docs/plans/<plan-filename>.md>"`. Record the ID for the summary report.
+4. If the idea is missing, already closed, or unreadable: skip silently.
 
 Skip the entire substep if no `**Source:** IDEA-<id>` line exists.
 

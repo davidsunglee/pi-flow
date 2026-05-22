@@ -384,7 +384,7 @@ test("registerIdea does not leak todo command or tool names", () => {
   assert.ok(commands.some((c) => c.name === "flow:idea"));
   assert.equal(commands.some((c) => c.name === "todo" || c.name === "flow:todo"), false);
   assert.equal(tools.some((t) => t.name === "todo" || t.name === "flow:todo"), false);
-  assert.deepEqual(commands.map((c) => c.name), ["flow:idea"]);
+  assert.deepEqual(commands.map((c) => c.name), ["flow:idea", "flow:ideas"]);
   assert.deepEqual(tools.map((t) => t.name), ["idea"]);
 });
 
@@ -535,4 +535,170 @@ test("parseFlowIdeasArgs last flag wins", async () => {
   const result = parseFlowIdeasArgs("--closed --all foo");
 
   assert.deepEqual(result, { query: "foo", status: "all" });
+});
+
+test("flow:ideas command in non-UI mode prints grouped list", async () => {
+  const sandbox = mkSandbox("pi-flow-ideas-cmd-grouped-");
+  const { commands } = bootExtension();
+  const cmd = commands.find((c) => c.name === "flow:ideas");
+  assert.ok(cmd, "flow:ideas command should be registered");
+
+  await seedIdea(sandbox, artifact("11111111", "Open idea one", "open"));
+  await seedIdea(sandbox, artifact("22222222", "Open idea two", "open"));
+  await seedIdea(sandbox, artifact("33333333", "Closed idea one", "closed"));
+
+  const ctx = makeCtx(sandbox, { hasUI: false });
+  await cmd.options.handler("", ctx);
+
+  assert.equal(ctx.notifyCalls.length, 1);
+  assert.equal(ctx.notifyCalls[0].level, "info");
+  assert.match(ctx.notifyCalls[0].message, /Open ideas/);
+  assert.match(ctx.notifyCalls[0].message, /Closed ideas/);
+});
+
+test("flow:ideas command respects --open flag", async () => {
+  const sandbox = mkSandbox("pi-flow-ideas-cmd-open-");
+  const { commands } = bootExtension();
+  const cmd = commands.find((c) => c.name === "flow:ideas");
+  assert.ok(cmd, "flow:ideas command should be registered");
+
+  await seedIdea(sandbox, artifact("aaaa1111", "Open one", "open"));
+  await seedIdea(sandbox, artifact("aaaa2222", "Open two", "open"));
+  await seedIdea(sandbox, artifact("aaaa3333", "Closed one", "closed"));
+
+  const ctx = makeCtx(sandbox, { hasUI: false });
+  await cmd.options.handler("--open", ctx);
+
+  assert.equal(ctx.notifyCalls.length, 1);
+  assert.equal(ctx.notifyCalls[0].level, "info");
+  assert.match(ctx.notifyCalls[0].message, /Open ideas/);
+  assert.doesNotMatch(ctx.notifyCalls[0].message, /Closed ideas/);
+});
+
+test("flow:ideas command filters by positional query", async () => {
+  const sandbox = mkSandbox("pi-flow-ideas-cmd-query-");
+  const { commands } = bootExtension();
+  const cmd = commands.find((c) => c.name === "flow:ideas");
+  assert.ok(cmd, "flow:ideas command should be registered");
+
+  await seedIdea(sandbox, artifact("bbbb1111", "Alpha unique title", "open"));
+  await seedIdea(sandbox, artifact("bbbb2222", "Beta something else", "open"));
+  await seedIdea(sandbox, artifact("bbbb3333", "Gamma other", "open"));
+
+  const ctx = makeCtx(sandbox, { hasUI: false });
+  await cmd.options.handler("unique", ctx);
+
+  assert.equal(ctx.notifyCalls.length, 1);
+  assert.match(ctx.notifyCalls[0].message, /Alpha unique title/);
+  assert.doesNotMatch(ctx.notifyCalls[0].message, /Beta something else/);
+  assert.doesNotMatch(ctx.notifyCalls[0].message, /Gamma other/);
+});
+
+test("flow:ideas command emits No matching ideas when query has no hits", async () => {
+  const sandbox = mkSandbox("pi-flow-ideas-cmd-no-match-");
+  const { commands } = bootExtension();
+  const cmd = commands.find((c) => c.name === "flow:ideas");
+  assert.ok(cmd, "flow:ideas command should be registered");
+
+  await seedIdea(sandbox, artifact("cccc1111", "Some idea", "open"));
+  await seedIdea(sandbox, artifact("cccc2222", "Another idea", "open"));
+
+  const ctx = makeCtx(sandbox, { hasUI: false });
+  await cmd.options.handler("zzzzzz", ctx);
+
+  assert.equal(ctx.notifyCalls.length, 1);
+  assert.equal(ctx.notifyCalls[0].message, "No matching ideas.");
+});
+
+function makeSelectorHost() {
+  const dispatched: any[] = [];
+  const requested: number[] = [];
+  let closed = 0;
+  const stubTheme: any = {
+    fg: (_color: string, s: string) => s,
+    bold: (s: string) => s,
+  };
+  const stubKeybindings: any = {
+    matches: (_data: string, _kb: string) => false,
+  };
+  const host: any = {
+    setActive(_c: any) {},
+    requestRender() { requested.push(1); },
+    notify(_m: string, _l: string) {},
+    close() { closed += 1; },
+    dispatch(action: any) { dispatched.push(action); },
+    theme: stubTheme,
+    keybindings: stubKeybindings,
+  };
+  return { host, dispatched, requested, get closed() { return closed; } };
+}
+
+test("IdeaSelectorComponent render shows header, ids, and hint line", async () => {
+  const { IdeaSelectorComponent } = await import("./idea.ts");
+
+  const entries = [
+    { id: "11111111", title: "Alpha feature", tags: [], status: "open" as const, createdAt: "2026-01-01T00:00:00.000Z" },
+    { id: "22222222", title: "Beta improvement", tags: [], status: "open" as const, createdAt: "2026-01-02T00:00:00.000Z" },
+    { id: "33333333", title: "Gamma archived", tags: [], status: "closed" as const, createdAt: "2026-01-03T00:00:00.000Z" },
+  ];
+
+  const { host } = makeSelectorHost();
+  const selector = new IdeaSelectorComponent(entries, "", host);
+  const out = selector.render(80).join("\n");
+
+  assert.match(out, /Ideas \(2 open, 1 closed\)/);
+  assert.match(out, /IDEA-11111111/);
+  assert.match(out, /IDEA-22222222/);
+  assert.match(out, /IDEA-33333333/);
+  assert.match(out, /Ctrl\+Shift\+R refine/);
+});
+
+test("IdeaSelectorComponent filters list as the user types, header counts unchanged", async () => {
+  const { IdeaSelectorComponent } = await import("./idea.ts");
+
+  const entries = [
+    { id: "aaaaaaaa", title: "Alpha feature", tags: [], status: "open" as const, createdAt: "2026-01-01T00:00:00.000Z" },
+    { id: "bbbbbbbb", title: "Beta improvement", tags: [], status: "open" as const, createdAt: "2026-01-02T00:00:00.000Z" },
+    { id: "cccccccc", title: "Gamma UNIQUE entry", tags: [], status: "closed" as const, createdAt: "2026-01-03T00:00:00.000Z" },
+  ];
+
+  const { host } = makeSelectorHost();
+  const selector = new IdeaSelectorComponent(entries, "", host);
+
+  for (const ch of "unique") {
+    selector.handleInput!(ch);
+  }
+
+  const out = selector.render(80).join("\n");
+
+  assert.match(out, /IDEA-cccccccc/);
+  assert.doesNotMatch(out, /IDEA-aaaaaaaa/);
+  assert.doesNotMatch(out, /IDEA-bbbbbbbb/);
+  assert.match(out, /Ideas \(2 open, 1 closed\)/);
+});
+
+test("idea tool registers renderCall and renderResult callbacks", () => {
+  const { tools } = bootExtension();
+  const definition = tools.find((t) => t.name === "idea") as any;
+  assert.ok(definition, "idea tool should be registered");
+  assert.equal(typeof definition.renderCall, "function");
+  assert.equal(typeof definition.renderResult, "function");
+});
+
+test("idea tool description contains all five canonical section headers and promptSnippet references IDEA-", () => {
+  const { tools } = bootExtension();
+  const definition = tools.find((t) => t.name === "idea") as any;
+  assert.ok(definition, "idea tool should be registered");
+  const desc: string = definition.description;
+  const snippet: string = definition.promptSnippet ?? "";
+  assert.ok(desc.includes("## Context"), "description missing ## Context");
+  assert.ok(desc.includes("## Goal"), "description missing ## Goal");
+  assert.ok(desc.includes("## Scope"), "description missing ## Scope");
+  assert.ok(desc.includes("## Acceptance Sketch"), "description missing ## Acceptance Sketch");
+  assert.ok(desc.includes("## Open Questions"), "description missing ## Open Questions");
+  assert.ok(snippet.includes("IDEA-"), "promptSnippet missing IDEA-");
+  assert.ok(
+    ["list", "read", "create", "update", "append", "delete"].some((a) => snippet.includes(a)),
+    "promptSnippet missing action name",
+  );
 });

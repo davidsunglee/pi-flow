@@ -4,8 +4,30 @@ import type {
   ExtensionCommandContext,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { defineTool } from "@earendil-works/pi-coding-agent";
-import { fuzzyMatch } from "@earendil-works/pi-tui";
+import {
+  defineTool,
+  DynamicBorder,
+  copyToClipboard,
+  getMarkdownTheme,
+  keyHint,
+  type Theme,
+  type KeybindingsManager,
+} from "@earendil-works/pi-coding-agent";
+import {
+  Container,
+  Input,
+  SelectList,
+  Markdown,
+  Spacer,
+  Text,
+  type Component,
+  type TUI,
+  Key,
+  matchesKey,
+  fuzzyMatch,
+  truncateToWidth,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import path from "node:path";
 
@@ -22,8 +44,19 @@ import {
   type IdeaListEntry,
 } from "./storage.ts";
 
-const IDEA_TOOL_DESCRIPTION =
-  "Capture, read, list, and update Flow ideas backed by docs/ideas/<8-hex>.md artifacts. Use this for durable user intent. Identifiers are IDEA-<8-hex> (case-insensitive); the user-facing surface calls them ideas.";
+const IDEA_TOOL_DESCRIPTION = `Capture, read, list, update, append to, and delete Flow ideas backed by docs/ideas/<8-hex>.md artifacts. Identifiers use the format IDEA-<8-hex> (case-insensitive).
+
+Use this tool when the user asks naturally in conversation to capture, refine, or list ideas — even informally phrased requests.
+
+Each idea body should follow this canonical 5-section shape:
+
+## Context
+## Goal
+## Scope
+## Acceptance Sketch
+## Open Questions
+
+Rule: ask at most one clarifying question, and only when missing information would materially change the artifact. Otherwise, create the idea immediately and report the resulting IDEA-<id>.`;
 
 const ideaParameters = Type.Object(
   {
@@ -105,7 +138,7 @@ async function executeIdeaTool(
     const summary = list.length === 0
       ? "No ideas found."
       : list.map((idea) => `IDEA-${idea.id} [${idea.status}] ${idea.title}`).join("\n");
-    return textResult(summary, { details: { list } });
+    return textResult(summary, { details: { list, __renderAction: "list" } });
   }
 
   if (params.action === "read") {
@@ -133,7 +166,7 @@ async function executeIdeaTool(
       status: params.status,
     });
     const finalPath = await writeIdea(dir, artifact);
-    return textResult(`IDEA-${artifact.id}\n${finalPath}`, { details: artifact });
+    return textResult(`IDEA-${artifact.id}\n${finalPath}`, { details: { ...artifact, __renderAction: params.action } });
   }
 
   if (params.action === "update") {
@@ -155,7 +188,7 @@ async function executeIdeaTool(
       ...(params.status === undefined ? {} : { status: params.status }),
     };
     const finalPath = await writeIdea(dir, updated);
-    return textResult(`IDEA-${updated.id}\n${finalPath}`, { details: updated });
+    return textResult(`IDEA-${updated.id}\n${finalPath}`, { details: { ...updated, __renderAction: params.action } });
   }
 
   if (params.action === "append") {
@@ -169,7 +202,7 @@ async function executeIdeaTool(
     const updated = await appendIdeaBody(dir, norm, params.body);
     if (!updated) return textResult(`not found: IDEA-${norm}`, { isError: true });
     return textResult(`IDEA-${updated.id}
-${path.join(dir, `${updated.id}.md`)}`, { details: updated });
+${path.join(dir, `${updated.id}.md`)}`, { details: { ...updated, __renderAction: params.action } });
   }
 
   if (params.action === "delete") {
@@ -181,7 +214,7 @@ ${path.join(dir, `${updated.id}.md`)}`, { details: updated });
     if (!norm) return textResult(`invalid id: ${params.id}`, { isError: true });
     const deleted = await deleteIdea(dir, norm);
     if (!deleted) return textResult(`not found: IDEA-${norm}`, { isError: true });
-    return textResult(`Deleted IDEA-${deleted.id}`, { details: deleted });
+    return textResult(`Deleted IDEA-${deleted.id}`, { details: { ...deleted, __renderAction: params.action } });
   }
 
   return textResult(`unknown action: ${(params as { action: string }).action}`, { isError: true });
@@ -325,9 +358,165 @@ export function parseFlowIdeasArgs(args: string): { query: string; status: "open
   return { query, status };
 }
 
+export type IdeaSelectorAction =
+  | { kind: "open"; idea: IdeaListEntry }
+  | { kind: "refine"; idea: IdeaListEntry }
+  | { kind: "fastlane"; idea: IdeaListEntry }
+  | { kind: "spec"; idea: IdeaListEntry }
+  | { kind: "cancel" };
+
+export interface IdeaSelectorHost {
+  setActive(component: Component & { invalidate(): void }): void;
+  requestRender(): void;
+  notify(message: string, level: "info" | "warning" | "error"): void;
+  close(): void;
+  dispatch(action: IdeaSelectorAction): void;
+  theme: Theme;
+  keybindings: KeybindingsManager;
+}
+
+const IDEA_SELECTOR_HINT =
+  "Type to search • ↑↓ select • Enter actions • Ctrl+Shift+R refine • Ctrl+Shift+F fastlane • Ctrl+Shift+S spec • Esc close";
+
+const IDEA_SELECTOR_MAX_ROWS = 12;
+
+export class IdeaSelectorComponent implements Component {
+  private entries: IdeaListEntry[];
+  private query: string;
+  private selectedIndex: number;
+  private filtered: IdeaListEntry[];
+  private host: IdeaSelectorHost;
+
+  constructor(entries: IdeaListEntry[], initialQuery: string, host: IdeaSelectorHost) {
+    this.entries = entries;
+    this.query = initialQuery;
+    this.host = host;
+    this.selectedIndex = 0;
+    this.filtered = filterAndRankIdeas(entries, this.query);
+  }
+
+  handleInput(data: string): void {
+    const current = this.filtered[this.selectedIndex];
+
+    // Quick-key branches (Ctrl+Shift+R/F/S) fire BEFORE confirm so Enter on a
+    // highlighted row falls through to "open" rather than these actions.
+    // pi-tui's Key.ctrlShift is typed for lowercase letters but matchesKey
+    // lowercases at runtime, so uppercase literals work equivalently.
+    if (matchesKey(data, Key.ctrlShift("R" as "r"))) {
+      if (current) this.host.dispatch({ kind: "refine", idea: current });
+      return;
+    }
+    if (matchesKey(data, Key.ctrlShift("F" as "f"))) {
+      if (current) this.host.dispatch({ kind: "fastlane", idea: current });
+      return;
+    }
+    if (matchesKey(data, Key.ctrlShift("S" as "s"))) {
+      if (current) this.host.dispatch({ kind: "spec", idea: current });
+      return;
+    }
+
+    if (this.host.keybindings.matches(data, "tui.select.cancel")) {
+      this.host.close();
+      return;
+    }
+
+    if (this.host.keybindings.matches(data, "tui.select.confirm")) {
+      if (current) this.host.dispatch({ kind: "open", idea: current });
+      return;
+    }
+
+    if (this.host.keybindings.matches(data, "tui.select.up")) {
+      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
+      this.host.requestRender();
+      return;
+    }
+    if (this.host.keybindings.matches(data, "tui.select.down")) {
+      this.selectedIndex = Math.min(Math.max(0, this.filtered.length - 1), this.selectedIndex + 1);
+      this.host.requestRender();
+      return;
+    }
+    if (this.host.keybindings.matches(data, "tui.select.pageUp")) {
+      this.selectedIndex = Math.max(0, this.selectedIndex - 10);
+      this.host.requestRender();
+      return;
+    }
+    if (this.host.keybindings.matches(data, "tui.select.pageDown")) {
+      this.selectedIndex = Math.min(Math.max(0, this.filtered.length - 1), this.selectedIndex + 10);
+      this.host.requestRender();
+      return;
+    }
+
+    let changed = false;
+    if (data === "\x7f" || data === "\b") {
+      if (this.query.length > 0) {
+        this.query = this.query.slice(0, -1);
+        changed = true;
+      }
+    } else if (data.length === 1 && data.charCodeAt(0) >= 0x20 && data.charCodeAt(0) < 0x7f) {
+      this.query += data;
+      changed = true;
+    }
+
+    if (changed) {
+      this.filtered = filterAndRankIdeas(this.entries, this.query);
+      const max = Math.max(0, this.filtered.length - 1);
+      if (this.selectedIndex > max) this.selectedIndex = max;
+      if (this.selectedIndex < 0) this.selectedIndex = 0;
+      this.host.requestRender();
+    }
+  }
+
+  invalidate(): void {}
+
+  render(width: number): string[] {
+    const theme = this.host.theme;
+    const openCount = this.entries.filter((e) => e.status === "open").length;
+    const closedCount = this.entries.filter((e) => e.status === "closed").length;
+
+    const lines: string[] = [];
+
+    const headerText = `Ideas (${openCount} open, ${closedCount} closed)`;
+    lines.push(theme.fg("accent", theme.bold(headerText)));
+
+    const searchPrefix = theme.fg("muted", "Search: ");
+    const searchValue = this.query.length === 0
+      ? theme.fg("dim", "(type to search)")
+      : this.query;
+    lines.push(`${searchPrefix}${searchValue}`);
+
+    if (this.entries.length === 0) {
+      lines.push(theme.fg("muted", "  No ideas"));
+    } else if (this.filtered.length === 0) {
+      lines.push(theme.fg("muted", "  No matching ideas"));
+    } else {
+      const rowCount = Math.min(this.filtered.length, IDEA_SELECTOR_MAX_ROWS);
+      for (let i = 0; i < rowCount; i++) {
+        const item = this.filtered[i];
+        const isSelected = i === this.selectedIndex;
+        const prefix = isSelected ? "→ " : "  ";
+        const idPart = theme.fg("accent", `IDEA-${item.id}`);
+        const titleColor = item.status === "closed" ? "dim" : "text";
+        const titlePart = theme.fg(titleColor, item.title);
+        const tagPart = item.tags.length > 0
+          ? ` ${theme.fg("muted", `[${item.tags.join(", ")}]`)}`
+          : "";
+        const statusPart = item.status === "closed"
+          ? ` ${theme.fg("dim", "(closed)")}`
+          : ` ${theme.fg("success", "(open)")}`;
+        const line = `${prefix}${idPart} ${titlePart}${tagPart}${statusPart}`;
+        lines.push(truncateToWidth(line, width));
+      }
+    }
+
+    lines.push(theme.fg("dim", IDEA_SELECTOR_HINT));
+
+    return lines;
+  }
+}
+
 export function registerIdea(pi: ExtensionAPI): void {
   pi.registerCommand("flow:idea", {
-    description: "Capture a durable Flow idea in docs/ideas/<8-hex>.md.",
+    description: "Capture a durable Flow idea in docs/ideas/<8-hex>.md. First line of arguments → title; remaining lines → body.",
     handler: async (args: string, ctx: ExtensionCommandContext) => {
       let seed = args.trim();
       if (seed.length === 0) {
@@ -355,14 +544,118 @@ export function registerIdea(pi: ExtensionAPI): void {
     },
   });
 
+  pi.registerCommand("flow:ideas", {
+    description:
+      "Browse and manage ideas in docs/ideas/. Opens a TUI when interactive; prints a grouped text list otherwise. Accepts an initial query; --open / --closed / --all scope the listing in non-interactive mode.",
+    handler: async (args: string, ctx: ExtensionCommandContext) => {
+      const { query, status } = parseFlowIdeasArgs(args);
+      const dir = await getIdeaDir(ctx.cwd);
+      const entries = await listIdeas(dir);
+
+      if (!ctx.hasUI) {
+        ctx.ui.notify(formatGroupedTextList(entries, { query, status }), "info");
+        return;
+      }
+
+      // TUI wiring lands in Task 9
+      ctx.ui.notify(formatGroupedTextList(entries, { query, status }), "info");
+    },
+  });
+
   pi.registerTool(defineTool({
     name: "idea",
     label: "Idea",
     description: IDEA_TOOL_DESCRIPTION,
-    promptSnippet: "idea — capture/read/list/update Flow ideas (IDEA-<8hex> canonical id).",
+    promptSnippet:
+      "idea — six actions: list / read / create / update / append / delete. Identifies artifacts as IDEA-<8-hex>. Body follows the canonical 5-section shape: ## Context, ## Goal, ## Scope, ## Acceptance Sketch, ## Open Questions.",
     parameters: ideaParameters,
     execute: async (_toolCallId, params, _signal, _onUpdate, ctx) => {
       return executeIdeaTool(params as IdeaToolParams, ctx);
+    },
+    renderCall: (args, theme) => {
+      let text = theme.fg("toolTitle", theme.bold("idea "));
+      text += theme.fg("muted", args.action ?? "");
+      if (args.id) {
+        text += " " + theme.fg("accent", `IDEA-${normalizeIdeaId(args.id) ?? args.id}`);
+      }
+      if (args.title) {
+        text += " " + theme.fg("dim", `"${args.title}"`);
+      }
+      return new Text(text, 0, 0);
+    },
+    renderResult: (result, { expanded }, theme) => {
+      if (result.isError) {
+        return new Text(
+          theme.fg("error", result.content[0]?.type === "text" ? result.content[0].text : "Error"),
+          0,
+          0,
+        );
+      }
+
+      const details = result.details as any;
+
+      if (details?.list && Array.isArray(details.list)) {
+        const open: any[] = details.list.filter((e: any) => e.status === "open");
+        const closed: any[] = details.list.filter((e: any) => e.status !== "open");
+        const lines: string[] = [];
+        let truncated = false;
+
+        for (const [group, label] of [[open, "Open"], [closed, "Closed"]] as [any[], string][]) {
+          if (group.length === 0) continue;
+          lines.push(theme.fg("accent", `${label} ideas (${group.length})`));
+          const visible = expanded ? group : group.slice(0, 3);
+          for (const item of visible) {
+            let line = `IDEA-${item.id} ${item.title}`;
+            if (item.tags?.length) line += theme.fg("muted", ` [${item.tags.join(", ")}]`);
+            lines.push(line);
+          }
+          if (!expanded && group.length > 3) {
+            lines.push(theme.fg("muted", `  ... ${group.length - 3} more`));
+            truncated = true;
+          }
+        }
+
+        if (!expanded && truncated) {
+          lines.push(theme.fg("dim", `(${keyHint("app.tools.expand", "to expand")})`));
+        }
+
+        return new Text(lines.join("\n"), 0, 0);
+      }
+
+      if (details?.id && details?.title && details?.status !== undefined) {
+        const action = details.__renderAction as string | undefined;
+        const verbMap: Record<string, string> = {
+          create: "✓ Created",
+          update: "✓ Updated",
+          append: "✓ Appended to",
+          delete: "✓ Deleted",
+        };
+        const verb = action ? verbMap[action] : undefined;
+        const isDim = details.status === "closed";
+        const lines: string[] = [];
+
+        let heading = "";
+        if (verb) heading += theme.fg("success", verb) + " ";
+        heading += theme.fg("accent", `IDEA-${details.id}`);
+        heading += " " + theme.fg(isDim ? "dim" : "text", details.title ?? "");
+        if (details.tags?.length) {
+          heading += " " + theme.fg("muted", `[${details.tags.join(", ")}]`);
+        }
+        lines.push(heading);
+
+        if (expanded) {
+          lines.push(details.status ?? "");
+          lines.push(
+            details.tags?.length ? details.tags.join(", ") : theme.fg("dim", "(no tags)"),
+          );
+          lines.push(details.createdAt ?? "");
+          if (details.body) lines.push(details.body);
+        }
+
+        return new Text(lines.join("\n"), 0, 0);
+      }
+
+      return new Text(result.content[0]?.text ?? "", 0, 0);
     },
   }));
 }
