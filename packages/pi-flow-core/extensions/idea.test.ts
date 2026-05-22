@@ -712,7 +712,7 @@ test("IdeaSelectorComponent render emits bordered layout with spacing between he
   assert.match(ideaRowText, /IDEA-22222222/);
 });
 
-test("IdeaSelectorComponent render: selected row IDEA id is accent + bold, unselected is border only", async () => {
+test("IdeaSelectorComponent render: selected row IDEA id is accent and NOT bold, unselected uses text token", async () => {
   const { IdeaSelectorComponent } = await import("./idea.ts");
 
   const entries = [
@@ -738,11 +738,21 @@ test("IdeaSelectorComponent render: selected row IDEA id is accent + bold, unsel
   const selector = new IdeaSelectorComponent(entries, "", host);
   const out = selector.render(120).join("\n");
 
-  // Selected row (index 0) should have its IDEA id wrapped in both bold and accent.
+  // Selected row (index 0) IDEA id: accent color only, NO bold wrapper.
   assert.match(
     out,
+    /<fg:accent>IDEA-11111111<\/fg:accent>/,
+    `selected IDEA id should be accent (no bold), got: ${out}`,
+  );
+  assert.doesNotMatch(
+    out,
     /<fg:accent><b>IDEA-11111111<\/b><\/fg:accent>/,
-    `selected IDEA id should be accent + bold, got: ${out}`,
+    `selected IDEA id should not be bold, got: ${out}`,
+  );
+  assert.doesNotMatch(
+    out,
+    /<b>IDEA-11111111<\/b>/,
+    `selected IDEA id should not be bold (any nesting), got: ${out}`,
   );
   // Unselected row should use `text` (not border, not accent) around its IDEA id.
   assert.match(
@@ -764,6 +774,63 @@ test("IdeaSelectorComponent render: selected row IDEA id is accent + bold, unsel
     out,
     /<fg:text><b>IDEA-22222222<\/b><\/fg:text>/,
     `unselected IDEA id should not be bold, got: ${out}`,
+  );
+});
+
+test("IdeaSelectorComponent render: selected title is accent; unselected open title stays text; unselected closed title stays dim", async () => {
+  const { IdeaSelectorComponent } = await import("./idea.ts");
+
+  const entries = [
+    { id: "11111111", title: "AlphaTitle", tags: [], status: "open" as const, createdAt: "2026-01-01T00:00:00.000Z" },
+    { id: "22222222", title: "BetaTitle", tags: [], status: "open" as const, createdAt: "2026-01-02T00:00:00.000Z" },
+    { id: "33333333", title: "GammaTitle", tags: [], status: "closed" as const, createdAt: "2026-01-03T00:00:00.000Z" },
+  ];
+
+  const taggingTheme: any = {
+    fg: (color: string, s: string) => `<fg:${color}>${s}</fg:${color}>`,
+    bold: (s: string) => `<b>${s}</b>`,
+  };
+  const stubKeybindings: any = { matches: () => false };
+  const host: any = {
+    setActive() {},
+    requestRender() {},
+    notify() {},
+    close() {},
+    dispatch() {},
+    theme: taggingTheme,
+    keybindings: stubKeybindings,
+  };
+
+  const selector = new IdeaSelectorComponent(entries, "", host);
+  const out = selector.render(120).join("\n");
+
+  // Selected row (index 0) — title should be accent so id+title color together.
+  assert.match(
+    out,
+    /<fg:accent>AlphaTitle<\/fg:accent>/,
+    `selected title should be accent, got: ${out}`,
+  );
+  // Unselected open title remains text.
+  assert.match(
+    out,
+    /<fg:text>BetaTitle<\/fg:text>/,
+    `unselected open title should remain text, got: ${out}`,
+  );
+  assert.doesNotMatch(
+    out,
+    /<fg:accent>BetaTitle<\/fg:accent>/,
+    `unselected open title should not be accent, got: ${out}`,
+  );
+  // Unselected closed title remains dim.
+  assert.match(
+    out,
+    /<fg:dim>GammaTitle<\/fg:dim>/,
+    `unselected closed title should remain dim, got: ${out}`,
+  );
+  assert.doesNotMatch(
+    out,
+    /<fg:accent>GammaTitle<\/fg:accent>/,
+    `unselected closed title should not be accent, got: ${out}`,
   );
 });
 
@@ -1169,6 +1236,59 @@ test("IdeaWorkSubmenuComponent renders descriptions for each skill", async () =>
   assert.ok(out.includes("Generate parallelizable tasks for execution"), `expected plan description, got:\n${out}`);
 });
 
+test("IdeaWorkSubmenuComponent uses border token for top and bottom borders", async () => {
+  const { IdeaWorkSubmenuComponent } = await import("./idea.ts");
+  const { host } = taggingMenuHost();
+  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open"), host);
+  const lines = c.render(80);
+
+  assert.match(lines[0], /^<fg:border>─+<\/fg:border>$/, `top border should use border token, got: ${lines[0]}`);
+  assert.match(lines[lines.length - 1], /^<fg:border>─+<\/fg:border>$/, `bottom border should use border token, got: ${lines[lines.length - 1]}`);
+});
+
+test("IdeaWorkSubmenuComponent renders left-aligned title 'Workflow actions for IDEA-...: \"<title>\"' with border token + bold", async () => {
+  const { IdeaWorkSubmenuComponent } = await import("./idea.ts");
+  const { host } = taggingMenuHost();
+  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open", "My idea title"), host);
+  const lines = c.render(120);
+
+  // line 0 = top border, line 1 = blank, line 2 = title
+  const titleLine = lines[2];
+  assert.match(
+    titleLine,
+    /^<fg:border><b>Workflow actions for IDEA-aaaabbbb: "My idea title"<\/b><\/fg:border>$/,
+    `expected left-aligned border+bold work submenu title, got: ${JSON.stringify(titleLine)}`,
+  );
+});
+
+test("IdeaWorkSubmenuComponent has blank-line spacing matching IdeaActionMenuComponent (border/blank/title/blank/list/blank/hint/blank/border)", async () => {
+  const { IdeaWorkSubmenuComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open"), host);
+  const lines = c.render(120);
+
+  assert.equal(lines[1], "", "blank line after top border");
+  assert.equal(lines[3], "", "blank line after title");
+  assert.equal(lines[lines.length - 2], "", "blank line before bottom border");
+  const hintIdx = lines.length - 3;
+  assert.match(lines[hintIdx], /Enter to confirm/, `expected 'Enter to confirm' quick reference on line before final blank, got: ${lines[hintIdx]}`);
+  assert.match(lines[hintIdx], /Esc back/, `expected 'Esc back' in quick reference, got: ${lines[hintIdx]}`);
+  assert.equal(lines[hintIdx - 1], "", "blank line between list and quick reference");
+});
+
+test("IdeaWorkSubmenuComponent: every line respects the supplied width even for long titles", async () => {
+  const { IdeaWorkSubmenuComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const longTitle = "A very lengthy idea title that should definitely exceed the narrow terminal width";
+  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open", longTitle), host);
+  const width = 40;
+  const lines = c.render(width);
+  for (const [i, line] of lines.entries()) {
+    const w = visibleWidth(line);
+    assert.ok(w <= width, `line ${i} visible width ${w} exceeds ${width}: ${JSON.stringify(line)}`);
+  }
+});
+
 test("IdeaOtherSubmenuComponent lists copy path, copy text, delete in order", async () => {
   const { IdeaOtherSubmenuComponent } = await import("./idea.ts");
   const { host } = stubMenuHost();
@@ -1191,6 +1311,58 @@ test("IdeaOtherSubmenuComponent renders descriptions for each action", async () 
   assert.ok(out.includes("Copy absolute path to clipboard"), `expected copy path description, got:\n${out}`);
   assert.ok(out.includes("Copy title and body to clipboard"), `expected copy text description, got:\n${out}`);
   assert.ok(out.includes("Delete idea"), `expected delete description, got:\n${out}`);
+});
+
+test("IdeaOtherSubmenuComponent uses border token for top and bottom borders", async () => {
+  const { IdeaOtherSubmenuComponent } = await import("./idea.ts");
+  const { host } = taggingMenuHost();
+  const c = new IdeaOtherSubmenuComponent(entry("aaaabbbb", "open"), host);
+  const lines = c.render(80);
+
+  assert.match(lines[0], /^<fg:border>─+<\/fg:border>$/, `top border should use border token, got: ${lines[0]}`);
+  assert.match(lines[lines.length - 1], /^<fg:border>─+<\/fg:border>$/, `bottom border should use border token, got: ${lines[lines.length - 1]}`);
+});
+
+test("IdeaOtherSubmenuComponent renders left-aligned title 'Other actions for IDEA-...: \"<title>\"' with border token + bold", async () => {
+  const { IdeaOtherSubmenuComponent } = await import("./idea.ts");
+  const { host } = taggingMenuHost();
+  const c = new IdeaOtherSubmenuComponent(entry("aaaabbbb", "open", "My idea title"), host);
+  const lines = c.render(120);
+
+  const titleLine = lines[2];
+  assert.match(
+    titleLine,
+    /^<fg:border><b>Other actions for IDEA-aaaabbbb: "My idea title"<\/b><\/fg:border>$/,
+    `expected left-aligned border+bold other submenu title, got: ${JSON.stringify(titleLine)}`,
+  );
+});
+
+test("IdeaOtherSubmenuComponent has blank-line spacing matching IdeaActionMenuComponent", async () => {
+  const { IdeaOtherSubmenuComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const c = new IdeaOtherSubmenuComponent(entry("aaaabbbb", "open"), host);
+  const lines = c.render(120);
+
+  assert.equal(lines[1], "", "blank line after top border");
+  assert.equal(lines[3], "", "blank line after title");
+  assert.equal(lines[lines.length - 2], "", "blank line before bottom border");
+  const hintIdx = lines.length - 3;
+  assert.match(lines[hintIdx], /Enter to confirm/, `expected 'Enter to confirm' quick reference on line before final blank, got: ${lines[hintIdx]}`);
+  assert.match(lines[hintIdx], /Esc back/, `expected 'Esc back' in quick reference, got: ${lines[hintIdx]}`);
+  assert.equal(lines[hintIdx - 1], "", "blank line between list and quick reference");
+});
+
+test("IdeaOtherSubmenuComponent: every line respects the supplied width even for long titles", async () => {
+  const { IdeaOtherSubmenuComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const longTitle = "A very lengthy idea title that should definitely exceed the narrow terminal width";
+  const c = new IdeaOtherSubmenuComponent(entry("aaaabbbb", "open", longTitle), host);
+  const width = 40;
+  const lines = c.render(width);
+  for (const [i, line] of lines.entries()) {
+    const w = visibleWidth(line);
+    assert.ok(w <= width, `line ${i} visible width ${w} exceeds ${width}: ${JSON.stringify(line)}`);
+  }
 });
 
 test("IdeaDeleteConfirmComponent renders exact prompt text", async () => {

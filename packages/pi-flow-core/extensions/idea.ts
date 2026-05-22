@@ -511,9 +511,11 @@ export class IdeaSelectorComponent implements Component {
         const prefix = isSelected ? theme.fg("accent", "→ ") : "  ";
         const rawId = `IDEA-${item.id}`;
         const idPart = isSelected
-          ? theme.fg("accent", theme.bold(rawId))
+          ? theme.fg("accent", rawId)
           : theme.fg("text", rawId);
-        const titleColor = item.status === "closed" ? "dim" : "text";
+        const titleColor = isSelected
+          ? "accent"
+          : item.status === "closed" ? "dim" : "text";
         const titlePart = theme.fg(titleColor, item.title);
         const tagPart = item.tags.length > 0
           ? ` ${theme.fg("muted", `[${item.tags.join(", ")}]`)}`
@@ -650,14 +652,20 @@ export class IdeaWorkSubmenuComponent implements Component {
 
   render(width: number): string[] {
     const theme = this.host.theme;
-    const border = new DynamicBorder((s) => theme.fg("muted", s));
-    const titleText = `IDEA-${this.idea.id} — work`;
-    const styled = theme.fg("accent", theme.bold(titleText));
+    const border = new DynamicBorder((s) => theme.fg("border", s));
+    const titleText = `Workflow actions for IDEA-${this.idea.id}: "${this.idea.title}"`;
+    const styledTitle = theme.fg("border", theme.bold(titleText));
+    const hintText = "Enter to confirm • Esc back";
 
     const lines: string[] = [];
     lines.push(...border.render(width));
-    lines.push(renderCenteredTitle(titleText, width, styled));
+    lines.push("");
+    lines.push(...wrapTextWithAnsi(styledTitle, width));
+    lines.push("");
     lines.push(...this.list.render(width));
+    lines.push("");
+    lines.push(...wrapTextWithAnsi(theme.fg("dim", hintText), width));
+    lines.push("");
     lines.push(...border.render(width));
     return lines;
   }
@@ -701,14 +709,20 @@ export class IdeaOtherSubmenuComponent implements Component {
 
   render(width: number): string[] {
     const theme = this.host.theme;
-    const border = new DynamicBorder((s) => theme.fg("muted", s));
-    const titleText = `IDEA-${this.idea.id} — other`;
-    const styled = theme.fg("accent", theme.bold(titleText));
+    const border = new DynamicBorder((s) => theme.fg("border", s));
+    const titleText = `Other actions for IDEA-${this.idea.id}: "${this.idea.title}"`;
+    const styledTitle = theme.fg("border", theme.bold(titleText));
+    const hintText = "Enter to confirm • Esc back";
 
     const lines: string[] = [];
     lines.push(...border.render(width));
-    lines.push(renderCenteredTitle(titleText, width, styled));
+    lines.push("");
+    lines.push(...wrapTextWithAnsi(styledTitle, width));
+    lines.push("");
     lines.push(...this.list.render(width));
+    lines.push("");
+    lines.push(...wrapTextWithAnsi(theme.fg("dim", hintText), width));
+    lines.push("");
     lines.push(...border.render(width));
     return lines;
   }
