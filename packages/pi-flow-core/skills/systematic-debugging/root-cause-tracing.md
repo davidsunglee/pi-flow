@@ -124,5 +124,3 @@ flowchart TD
 **Before operation:** Log before the dangerous operation, not after it fails
 **Include context:** Directory, cwd, environment variables, timestamps
 **Capture stack:** `new Error().stack` shows complete call chain
-
-<!-- Adapted from superpowers (https://github.com/obra/superpowers) -->

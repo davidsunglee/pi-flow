@@ -35,7 +35,7 @@ Read [review-code-prompt.md](review-code-prompt.md) in this directory.
 
 Fill these placeholders:
 - `{WHAT_WAS_IMPLEMENTED}` — what was built
-- `{PLAN_OR_REQUIREMENTS}` — what it should do (plan file contents, todo body, or spec)
+- `{PLAN_OR_REQUIREMENTS}` — what it should do (plan file contents, idea body, or spec)
 - `{BASE_SHA}` — starting commit
 - `{HEAD_SHA}` — ending commit
 - `{DESCRIPTION}` — brief summary of changes
@@ -110,5 +110,3 @@ HEAD_SHA=$(git rev-parse HEAD)
 **If reviewer wrong:**
 - Push back with technical reasoning
 - Show code/tests that prove correctness
-
-<!-- Adapted from superpowers (https://github.com/obra/superpowers) -->

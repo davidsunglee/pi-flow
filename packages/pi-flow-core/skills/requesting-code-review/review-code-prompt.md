@@ -1,4 +1,3 @@
-<!-- Adapted from superpowers (https://github.com/obra/superpowers) -->
 # Code Review Agent
 
 You are reviewing code changes for production readiness.

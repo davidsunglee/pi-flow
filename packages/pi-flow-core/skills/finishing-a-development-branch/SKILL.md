@@ -194,5 +194,3 @@ git worktree remove <worktree-path>
 **Pairs with:**
 - `using-git-worktrees` — cleans up worktrees created by that skill
 - `requesting-code-review` — request review before choosing merge/PR option
-
-<!-- Adapted from superpowers (https://github.com/obra/superpowers) -->

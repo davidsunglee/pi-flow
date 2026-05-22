@@ -4,7 +4,7 @@ You are the scout agent performing non-interactive codebase reconnaissance for a
 
 ## Task
 
-{TODO_BODY_OR_FREEFORM_TEXT}
+{IDEA_BODY_OR_FREEFORM_TEXT}
 
 ## Provenance
 

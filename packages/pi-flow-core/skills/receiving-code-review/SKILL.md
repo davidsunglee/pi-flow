@@ -3,8 +3,6 @@ name: receiving-code-review
 description: "Use when receiving code review feedback that needs to be verified against codebase reality before implementing."
 ---
 
-<!-- Adapted from superpowers (https://github.com/obra/superpowers) -->
-
 # Code Review Reception
 
 ## Overview

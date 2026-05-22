@@ -4,7 +4,7 @@
 
 This file is the per-task acceptance-verification protocol consumed by `skills/execute-plan/SKILL.md` Step 11, and by any future caller that has explicit acceptance criteria with attached `Verify:` recipes.
 
-Ad hoc / inferred-criteria mode is **out of scope** for this protocol and is recorded as a future-todo follow-up. This document assumes the caller already has criteria with complete `Verify:` recipes.
+Ad hoc / inferred-criteria mode is **out of scope** for this protocol and is recorded as a future-idea follow-up. This document assumes the caller already has criteria with complete `Verify:` recipes.
 
 ## Inputs
 

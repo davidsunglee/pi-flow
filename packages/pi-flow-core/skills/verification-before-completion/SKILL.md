@@ -120,5 +120,3 @@ Unverified claims waste time on rework and erode reliability.
 - Paraphrases and synonyms
 - Implications of success
 - ANY communication suggesting completion/correctness
-
-<!-- Adapted from superpowers (https://github.com/obra/superpowers) -->

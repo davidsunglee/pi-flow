@@ -84,9 +84,9 @@ function makeCtx(
 }
 
 async function listIdeaFiles(sandbox: string): Promise<string[]> {
-  const todoDir = path.join(sandbox, "docs", "ideas");
+  const ideaDir = path.join(sandbox, "docs", "ideas");
   try {
-    return (await fs.readdir(todoDir)).filter((name) => /^[0-9a-f]{8}\.md$/.test(name));
+    return (await fs.readdir(ideaDir)).filter((name) => /^[0-9a-f]{8}\.md$/.test(name));
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw err;
@@ -103,9 +103,9 @@ async function readOnlyArtifact(sandbox: string): Promise<IdeaArtifact> {
 }
 
 async function seedIdea(sandbox: string, artifact: IdeaArtifact): Promise<void> {
-  const todoDir = path.join(sandbox, "docs", "ideas");
-  await fs.mkdir(todoDir, { recursive: true });
-  await fs.writeFile(path.join(todoDir, `${artifact.id}.md`), formatIdeaArtifact(artifact), "utf8");
+  const ideaDir = path.join(sandbox, "docs", "ideas");
+  await fs.mkdir(ideaDir, { recursive: true });
+  await fs.writeFile(path.join(ideaDir, `${artifact.id}.md`), formatIdeaArtifact(artifact), "utf8");
 }
 
 const BASE_CREATED_AT = "2026-05-20T00:00:00.000Z";
@@ -406,7 +406,7 @@ test("buildRefineIdeaPrompt generates correct template", async () => {
 
   assert.match(result, /idea IDEA-abcd1234/);
   assert.match(result, /Test idea/);
-  assert.match(result, /provide a recommendation for each question/);
+  assert.match(result, /provide a recommendation for each question/i);
 
   const contextIdx = result.indexOf("## Context");
   const goalIdx = result.indexOf("## Goal");

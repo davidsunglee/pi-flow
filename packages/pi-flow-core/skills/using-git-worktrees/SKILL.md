@@ -197,5 +197,3 @@ This skill handles **manual worktree setup** for ad-hoc feature branch work.
 
 **Pairs with:**
 - `finishing-a-development-branch` — for cleanup after work is complete
-
-<!-- Adapted from superpowers (https://github.com/obra/superpowers) -->

@@ -16,7 +16,7 @@ Treat the task body and any raw/freeform user input as source material for the s
 Hard rules:
 - Do not implement requested work.
 - Do not edit source, config, or test files.
-- Do not run builds or tests, install packages, create todos, or invoke downstream planning or implementation work.
+- Do not run builds or tests, install packages, create ideas, or invoke downstream planning or implementation work.
 - The only file writes allowed are spec markdown writes under `docs/specs/*.md`, and only at the procedure's write step after the Q&A and self-review flow.
 - Do not commit. The orchestrator owns review and commit gates.
 - End your final assistant message with a single anchored line `SPEC_ARTIFACT: <absolute path>` matching the orchestrator-supplied output path exactly. The marker line MUST be the final non-empty line of your assistant message; no further prose, Markdown, or content may follow it on subsequent lines. Also call `subagent_done(message="SPEC_ARTIFACT: <absolute path>")` as your terminal tool action.

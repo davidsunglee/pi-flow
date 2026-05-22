@@ -24,7 +24,7 @@ Your task prompt has a `## Provenance` block followed by an optional `## Origina
 - A `Scout brief: docs/briefs/<filename>` line in `## Provenance` — optional. When present, read the brief file from disk and treat it as primary context alongside the task artifact. If the brief file is missing on disk, note that in your review and continue without it — do not abort.
 - The `## Original Spec (inline)` section will be empty in this shape.
 
-### Inline input (todo or freeform)
+### Inline input (idea or freeform)
 
 - A `Plan artifact: <path>` line is still present — read the plan from disk.
 - No `Task artifact:` line will appear in `## Provenance`.

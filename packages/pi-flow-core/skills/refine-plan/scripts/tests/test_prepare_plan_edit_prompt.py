@@ -71,7 +71,7 @@ class TestPreparePlanEditPrompt(unittest.TestCase):
             "  - **Why it matters:** The coordinator cannot validate the artifact destination.\n"
             "  - **Recommendation:** Return the absolute review path in structured JSON.\n"
         )
-        original_spec = write_temp_file("Inline todo text for refine-plan helper work.\n")
+        original_spec = write_temp_file("Inline idea text for refine-plan helper work.\n")
 
         try:
             proc = run_script(
@@ -90,7 +90,7 @@ class TestPreparePlanEditPrompt(unittest.TestCase):
             with open(data["prompt_path"], "r") as handle:
                 prompt = handle.read()
 
-            self.assertIn("Inline todo text for refine-plan helper work.", prompt)
+            self.assertIn("Inline idea text for refine-plan helper work.", prompt)
             self.assertIn("Add missing helper output field", prompt)
             self.assertIn("Write the edited plan to `docs/plans/example-plan.md`", prompt)
         finally:

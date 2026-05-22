@@ -14,13 +14,11 @@ function pkgPath(...parts) {
 const EXCLUDED_EXTENSIONS = [
   'answer.ts',
   'context.ts',
+  'env.ts',
   'files.ts',
-  'session-breakdown.ts',
-  'usage-bar.ts',
   'guardrails.ts',
   'herdr-agent-state.ts',
-  'todos.ts',
-  'env.ts',
+  'session-breakdown.ts'
 ];
 
 const EXPECTED_EXTENSION_ENTRIES = [

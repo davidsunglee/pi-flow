@@ -74,7 +74,7 @@ Carry: {CARRY_OVER_REVIEW}
                 "--template", template_file,
                 "--plan-path", "/path/to/plan.md",
                 "--task-artifact", "Task artifact content",
-                "--source-idea", "Source todo content",
+                "--source-idea", "Source idea content",
                 "--source-spec", "Source spec content",
                 "--scout-brief", "Scout brief content",
                 "--original-spec-inline", spec_file,
@@ -97,7 +97,7 @@ Carry: {CARRY_OVER_REVIEW}
             # Verify substitutions
             self.assertIn("/path/to/plan.md", content)
             self.assertIn("Task artifact content", content)
-            self.assertIn("Source todo content", content)
+            self.assertIn("Source idea content", content)
             self.assertIn("Source spec content", content)
             self.assertIn("Scout brief content", content)
             self.assertIn("Original spec inline content", content)
@@ -144,7 +144,7 @@ class TestInputMissingOrUnreadable(unittest.TestCase):
                 "--template", REAL_TEMPLATE,
                 "--plan-path", "/path/to/plan.md",
                 "--task-artifact", "Task artifact",
-                "--source-idea", "Source todo",
+                "--source-idea", "Source idea",
                 "--source-spec", "Source spec",
                 "--scout-brief", "Scout brief",
                 "--original-spec-inline", "/nonexistent",
@@ -191,7 +191,7 @@ class TestUnreplacedPlaceholder(unittest.TestCase):
                 "--template", template_file,
                 "--plan-path", "/path/to/plan.md",
                 "--task-artifact", "Task artifact",
-                "--source-idea", "Source todo",
+                "--source-idea", "Source idea",
                 "--source-spec", "Source spec",
                 "--scout-brief", "Scout brief",
                 "--original-spec-inline", spec_file,
@@ -238,7 +238,7 @@ class TestEmptyStringSubstitution(unittest.TestCase):
                 "--template", template_file,
                 "--plan-path", "/path/to/plan.md",
                 "--task-artifact", "",
-                "--source-idea", "Source todo",
+                "--source-idea", "Source idea",
                 "--source-spec", "Source spec",
                 "--scout-brief", "Scout brief",
                 "--original-spec-inline", spec_file,
@@ -372,7 +372,7 @@ class TestStartingEraStringified(unittest.TestCase):
                 "--template", template_file,
                 "--plan-path", "/path/to/plan.md",
                 "--task-artifact", "Task artifact",
-                "--source-idea", "Source todo",
+                "--source-idea", "Source idea",
                 "--source-spec", "Source spec",
                 "--scout-brief", "Scout brief",
                 "--original-spec-inline", spec_file,
@@ -418,7 +418,7 @@ class TestOutputDashWritesStdout(unittest.TestCase):
                     "--template", template_file,
                     "--plan-path", "/path/to/plan.md",
                     "--task-artifact", "Task artifact",
-                    "--source-idea", "Source todo",
+                    "--source-idea", "Source idea",
                     "--source-spec", "Source spec",
                     "--scout-brief", "Scout brief",
                     "--original-spec-inline", spec_file,
@@ -471,7 +471,7 @@ class TestCarryOverReviewPopulated(unittest.TestCase):
                 "--template", template_file,
                 "--plan-path", "/path/to/plan.md",
                 "--task-artifact", "Task artifact",
-                "--source-idea", "Source todo",
+                "--source-idea", "Source idea",
                 "--source-spec", "Source spec",
                 "--scout-brief", "Scout brief",
                 "--original-spec-inline", spec_file,

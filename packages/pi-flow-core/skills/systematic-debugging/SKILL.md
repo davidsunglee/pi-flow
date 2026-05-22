@@ -273,5 +273,3 @@ These techniques are part of systematic debugging and available in this director
 **Related skills:**
 - The `test-driven-development` skill - For creating failing test case (Phase 4, Step 1)
 - The `verification-before-completion` skill - Verify fix worked before claiming success
-
-<!-- Adapted from superpowers (https://github.com/obra/superpowers) -->

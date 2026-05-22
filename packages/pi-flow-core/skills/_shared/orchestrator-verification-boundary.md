@@ -61,7 +61,7 @@ substantive subagents:
 - Protocol-marker parsing via `parse-artifact-handoff.py`, `parse-test-runner-artifact.py`,
   `parse-verifier-report.py`, `parse-refine-code-summary.py`.
 - Provenance validation via `validate-review-provenance.py`.
-- Completion bookkeeping (moving artifacts, closing todos, checking git status, post-helper
+- Completion bookkeeping (moving artifacts, closing ideas, checking git status, post-helper
   cache cleanup via `cleanup-test-runs.py` / `cleanup-pycache.py`).
 
 These activities never produce a substantive PASS/FAIL verdict on subagent acceptance

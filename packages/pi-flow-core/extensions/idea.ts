@@ -224,7 +224,7 @@ ${path.join(dir, `${updated.id}.md`)}`, { details: { ...updated, __renderAction:
 export function buildRefineIdeaPrompt(id: string, title: string): string {
   return `Refine the idea IDEA-${id} ("${title}").
 
-Before rewriting or updating the idea, ask the user clarifying questions whose answers would materially change the artifact. (provide a recommendation for each question) Do not rewrite the idea body before the user answers.
+Before rewriting or updating the idea, ask the user clarifying questions whose answers would materially change the artifact. Provide a recommendation for each question. Do not rewrite the idea body before the user answers.
 
 Once the user has answered enough to draft the structured description, write it into the idea body using exactly these section headers in this order:
 

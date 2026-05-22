@@ -102,5 +102,3 @@ All four layers were necessary. During testing, each layer caught bugs the other
 - Debug logging identified structural misuse
 
 **Don't stop at one validation point.** Add checks at every layer.
-
-<!-- Adapted from superpowers (https://github.com/obra/superpowers) -->
