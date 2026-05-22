@@ -1,27 +1,47 @@
 #!/usr/bin/env python3
 """
-detect-mux-backend.py — Probe the environment and emit a JSON mux/backend decision.
+detect-mux-backend.py — Adapter that delegates runtime multiplexer detection
+to `pi-mux-detect` (from `@aphotic/pi-mux-subagents`) and maps the result
+onto the define-spec helper contract.
 
-Rules (first match wins):
+Evaluation order:
 
-  1. PI_SUBAGENT_MODE=headless (case-insensitive) → inline branch
-  2. PI_SUBAGENT_MODE=pane    (case-insensitive) → mux branch
-  3. PI_SUBAGENT_MUX=cmux|tmux|zellij|wezterm   → evaluate only that backend;
-     available → mux; unavailable → inline (no fallback to other backends);
-     empty or unrecognized → fall through to rule 4
-  4. CMUX_SOCKET_PATH set + command -v cmux      → mux (cmux)
-  5. TMUX set and non-empty + command -v tmux    → mux (tmux)
-  6. (ZELLIJ or ZELLIJ_SESSION_NAME) + zellij    → mux (zellij)
-  7. WEZTERM_UNIX_SOCKET set + command -v wezterm → mux (wezterm)
-  8. Otherwise                                   → inline
+  1. If `--user-input` contains an inline-override substring
+     (case-insensitive), return the inline-override result immediately
+     WITHOUT invoking the detector. This lets users force inline mode even
+     when `pi-mux-detect` is missing or broken.
+  2. Otherwise invoke `pi-mux-detect` (resolved on `PATH` first, then via
+     `node_modules/.bin/pi-mux-detect` discovered by walking upward from
+     this script's directory) and map its JSON payload:
+       - `backend == "pane"`     → `branch="mux"`,    `backend=<mux>`
+                                   (e.g. "herdr", "cmux", "tmux",
+                                   "zellij", "wezterm")
+       - `backend == "headless"` → `branch="inline"`, `backend=null`
 
-Status messages:
-  mux branch:            Running spec design in subagent pane (mux detected, no override).
-  inline (no mux):       Running spec design in this session (no multiplexer detected).
-  inline (override):     Running spec design in this session (per user override: --no-subagent or equivalent).
+Stdout success contract:
+  Exactly one JSON object terminated by a single newline. Schema:
+    {
+      "branch":         "mux" | "inline",
+      "backend":        <string or null>,
+      "reason":         <string>,
+      "status_message": <string>
+    }
+
+Status messages (preserved across the refactor):
+  mux branch:        Running spec design in subagent pane (mux detected, no override).
+  inline (no mux):   Running spec design in this session (no multiplexer detected).
+  inline (override): Running spec design in this session (per user override: --no-subagent or equivalent).
 
 --user-input override substrings (case-insensitive, first match wins):
   --no-subagent, without a subagent, without subagent, no subagent, skip subagent
+
+Failure contract:
+  On detector resolution failure, detector execution failure, detector
+  emitting non-JSON output, missing/invalid `backend` field, or unknown
+  `backend` value, exit non-zero and write a single-line JSON object with
+  a `failure` field to stderr. The helper does NOT silently fall back to
+  `inline` on detector failure — a broken peer dependency should be
+  surfaced loudly rather than masked as a "no mux" decision.
 """
 
 import argparse
@@ -29,13 +49,12 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 
 MSG_MUX = "Running spec design in subagent pane (mux detected, no override)."
 MSG_INLINE_NO_MUX = "Running spec design in this session (no multiplexer detected)."
 MSG_INLINE_OVERRIDE = "Running spec design in this session (per user override: --no-subagent or equivalent)."
-
-PINNED_BACKENDS = {"cmux", "tmux", "zellij", "wezterm"}
 
 OVERRIDE_SUBSTRINGS = [
     "--no-subagent",
@@ -46,63 +65,127 @@ OVERRIDE_SUBSTRINGS = [
 ]
 
 
-def _cmd_available(name: str) -> bool:
-    return shutil.which(name) is not None
+def _find_override(user_input: str):
+    for substring in OVERRIDE_SUBSTRINGS:
+        if re.search(r"(?i)" + re.escape(substring), user_input):
+            return substring
+    return None
 
 
-def _check_backend(backend: str) -> bool:
-    env = os.environ
-    if backend == "cmux":
-        return bool(env.get("CMUX_SOCKET_PATH", "")) and _cmd_available("cmux")
-    if backend == "tmux":
-        return bool(env.get("TMUX", "")) and _cmd_available("tmux")
-    if backend == "zellij":
-        zellij_set = bool(env.get("ZELLIJ", "")) or bool(env.get("ZELLIJ_SESSION_NAME", ""))
-        return zellij_set and _cmd_available("zellij")
-    if backend == "wezterm":
-        return bool(env.get("WEZTERM_UNIX_SOCKET", "")) and _cmd_available("wezterm")
-    return False
+def _resolve_detector():
+    on_path = shutil.which("pi-mux-detect")
+    if on_path:
+        return on_path
+    current = os.path.abspath(os.path.dirname(__file__))
+    while True:
+        candidate = os.path.join(current, "node_modules", ".bin", "pi-mux-detect")
+        if os.path.exists(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+        parent = os.path.dirname(current)
+        if parent == current:
+            return None
+        current = parent
 
 
-def _mux_probe() -> dict:
-    env = os.environ
-    pi_mode = env.get("PI_SUBAGENT_MODE", "").lower()
+def _fail(failure: str, **extra) -> None:
+    payload = {"failure": failure}
+    payload.update(extra)
+    sys.stderr.write(json.dumps(payload) + "\n")
+    sys.exit(1)
 
-    if pi_mode == "headless":
-        return {"branch": "inline", "backend": None, "reason": "pi_subagent_mode_headless",
-                "status_message": MSG_INLINE_NO_MUX}
 
-    if pi_mode == "pane":
-        return {"branch": "mux", "backend": None, "reason": "pi_subagent_mode_pane",
-                "status_message": MSG_MUX}
+def _invoke_detector() -> dict:
+    detector = _resolve_detector()
+    if detector is None:
+        _fail(
+            "pi-mux-detect not found on PATH or in any node_modules/.bin",
+            hint="Install @aphotic/pi-mux-subagents (peer dependency of pi-flow-core).",
+        )
 
-    pi_mux = env.get("PI_SUBAGENT_MUX", "").lower()
-    if pi_mux in PINNED_BACKENDS:
-        if _check_backend(pi_mux):
-            return {"branch": "mux", "backend": pi_mux, "reason": "pi_subagent_mux_pinned",
-                    "status_message": MSG_MUX}
-        return {"branch": "inline", "backend": None, "reason": "pi_subagent_mux_pinned_unavailable",
-                "status_message": MSG_INLINE_NO_MUX}
+    try:
+        completed = subprocess.run(
+            [detector],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:
+        _fail(
+            "pi-mux-detect failed to execute",
+            detector=detector,
+            error=str(exc),
+        )
 
-    for backend in ["cmux", "tmux", "zellij", "wezterm"]:
-        if _check_backend(backend):
-            return {"branch": "mux", "backend": backend, "reason": f"{backend}_detected",
-                    "status_message": MSG_MUX}
+    if completed.returncode != 0:
+        _fail(
+            "pi-mux-detect exited with nonzero status",
+            detector=detector,
+            exit_code=completed.returncode,
+            stderr=completed.stderr.strip(),
+        )
 
-    return {"branch": "inline", "backend": None, "reason": "no_mux_detected",
-            "status_message": MSG_INLINE_NO_MUX}
+    raw = completed.stdout.strip()
+    if not raw:
+        _fail(
+            "pi-mux-detect produced empty stdout",
+            detector=detector,
+            stderr=completed.stderr.strip(),
+        )
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        _fail(
+            "pi-mux-detect produced invalid JSON",
+            detector=detector,
+            error=str(exc),
+            stdout=raw[:200],
+        )
+
+    if not isinstance(payload, dict) or "backend" not in payload:
+        _fail(
+            "pi-mux-detect payload missing required 'backend' field",
+            detector=detector,
+        )
+
+    return payload
 
 
 def detect(user_input: str) -> dict:
-    result = _mux_probe()
+    override = _find_override(user_input)
+    if override is not None:
+        return {
+            "branch": "inline",
+            "backend": None,
+            "reason": f"user_input_override_{override}",
+            "status_message": MSG_INLINE_OVERRIDE,
+        }
 
-    for substring in OVERRIDE_SUBSTRINGS:
-        if re.search(r"(?i)" + re.escape(substring), user_input):
-            return {"branch": "inline", "backend": None,
-                    "reason": f"user_input_override_{substring}",
-                    "status_message": MSG_INLINE_OVERRIDE}
+    payload = _invoke_detector()
+    backend = payload.get("backend")
+    mux = payload.get("mux")
+    detector_reason = payload.get("reason")
 
-    return result
+    if backend == "pane":
+        return {
+            "branch": "mux",
+            "backend": mux,
+            "reason": detector_reason or "pi_mux_detect_pane",
+            "status_message": MSG_MUX,
+        }
+
+    if backend == "headless":
+        return {
+            "branch": "inline",
+            "backend": None,
+            "reason": detector_reason or "pi_mux_detect_headless",
+            "status_message": MSG_INLINE_NO_MUX,
+        }
+
+    _fail(
+        "pi-mux-detect returned unknown backend value",
+        backend=backend,
+    )
 
 
 def main() -> None:
@@ -117,7 +200,9 @@ def main() -> None:
         help=(
             "User slash-command input to scan for inline-branch override substrings: "
             "--no-subagent, 'without a subagent', 'without subagent', "
-            "'no subagent', 'skip subagent' (case-insensitive)."
+            "'no subagent', 'skip subagent' (case-insensitive). When an override "
+            "matches, the helper returns the inline-override result without "
+            "invoking pi-mux-detect."
         ),
     )
     args = parser.parse_args()
