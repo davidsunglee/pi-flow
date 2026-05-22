@@ -780,18 +780,44 @@ export class IdeaDeleteConfirmComponent implements Component {
   }
 }
 
+// Trim a composed overlay line array to `cap` while keeping the bottom border
+// (the final line) anchored. Drops blank separators first, then content rows
+// from the end (footer, body, title) before sacrificing the top border.
+function capLinesPreserveBottomBorder(lines: string[], cap: number): string[] {
+  if (cap <= 0) return [];
+  if (lines.length <= cap) return lines;
+  const last = lines[lines.length - 1];
+  if (cap === 1) return [last];
+
+  const middle = lines.slice(0, -1);
+  for (let i = middle.length - 1; i >= 0 && middle.length + 1 > cap; i--) {
+    if (middle[i] === "") middle.splice(i, 1);
+  }
+  while (middle.length + 1 > cap) middle.pop();
+  return [...middle, last];
+}
+
+interface IdeaDetailOverlayHost {
+  close(): void;
+  theme: Theme;
+  keybindings: KeybindingsManager;
+  requestRender(): void;
+  getMaxRows?(): number;
+}
+
 class IdeaDetailOverlayComponent implements Component {
   private idea: IdeaArtifact;
-  private host: { close(): void; theme: Theme; keybindings: KeybindingsManager; requestRender(): void };
+  private host: IdeaDetailOverlayHost;
   private scrollOffset: number = 0;
   private lastViewHeight: number = 20;
   private maxVisibleLines: number | undefined;
   private markdown: Markdown;
   private cachedMarkdownLines: string[] | null = null;
+  private cachedMarkdownWidth: number | null = null;
 
   constructor(
     idea: IdeaArtifact,
-    host: { close(): void; theme: Theme; keybindings: KeybindingsManager; requestRender(): void },
+    host: IdeaDetailOverlayHost,
     opts?: { maxVisibleLines?: number },
   ) {
     this.idea = idea;
@@ -802,59 +828,151 @@ class IdeaDetailOverlayComponent implements Component {
 
   invalidate(): void {
     this.cachedMarkdownLines = null;
+    this.cachedMarkdownWidth = null;
     this.markdown.invalidate();
+  }
+
+  private buildFooterText(start: number, viewHeight: number, totalLines: number): string {
+    const startDisp = totalLines === 0 ? 0 : Math.min(start, Math.max(0, totalLines - 1));
+    const endDisp = totalLines === 0 ? 0 : Math.min(start + viewHeight - 1, totalLines - 1);
+    const counter = `Lines ${startDisp}-${endDisp} of ${totalLines}`;
+    return `${counter} • Esc back • ↑↓ scroll • ←→ page`;
   }
 
   render(width: number): string[] {
     const theme = this.host.theme;
     const idea = this.idea;
+    const border = new DynamicBorder((s) => theme.fg("border", s));
 
-    // Top border with title
-    const titlePart = ` ${theme.fg("accent", idea.title)} `;
-    const leftBorder = theme.fg("borderMuted", "─".repeat(3));
-    const rightBorderCount = Math.max(0, width - 3 - visibleWidth(titlePart) - 3);
-    const rightBorder = theme.fg("borderMuted", "─".repeat(rightBorderCount));
-    const borderLine = leftBorder + titlePart + rightBorder;
-
-    // Meta line
-    const tagStr = idea.tags.length > 0 ? `[${idea.tags.join(", ")}]` : "no tags";
-    const metaLine = theme.fg("muted", `IDEA-${idea.id} • ${idea.status} • ${tagStr}`);
-
-    // Render and cache markdown
-    if (!this.cachedMarkdownLines) {
+    if (!this.cachedMarkdownLines || this.cachedMarkdownWidth !== width) {
+      this.markdown.invalidate();
       this.cachedMarkdownLines = this.markdown.render(width);
+      this.cachedMarkdownWidth = width;
     }
     const allLines = this.cachedMarkdownLines;
     const totalLines = allLines.length;
 
-    // Determine visible height
-    const derivedViewHeight = Math.max(1, totalLines);
-    const visibleLines = this.maxVisibleLines
-      ? Math.min(this.maxVisibleLines, derivedViewHeight)
-      : derivedViewHeight;
-    this.lastViewHeight = visibleLines;
+    // Title line: `IDEA-<id> "<title>"` (border + bold) • <status> • <tags>
+    const idAndTitle = idea.title.length > 0
+      ? `IDEA-${idea.id} "${idea.title}"`
+      : `IDEA-${idea.id}`;
+    const titleStyled = theme.fg("border", theme.bold(idAndTitle));
+    const statusColor = idea.status === "open" ? "success" : "dim";
+    const statusStyled = theme.fg(statusColor, idea.status);
+    const tagText = idea.tags.length > 0 ? `[${idea.tags.join(", ")}]` : "no tags";
+    const tagStyled = theme.fg("muted", tagText);
+    const sep = theme.fg("muted", " • ");
+    const titleLine = `${titleStyled}${sep}${statusStyled}${sep}${tagStyled}`;
+    const titleRows = wrapTextWithAnsi(titleLine, width);
 
-    // Slice by scroll offset
-    const start = Math.min(this.scrollOffset, Math.max(0, totalLines - 1));
-    const end = start + visibleLines;
+    const topBorder = border.render(width);
+    const bottomBorder = border.render(width);
+
+    const buildFooterRows = (vh: number): string[] => {
+      const maxOff = Math.max(0, totalLines - vh);
+      const s = Math.max(0, Math.min(this.scrollOffset, maxOff));
+      return wrapTextWithAnsi(theme.fg("dim", this.buildFooterText(s, vh, totalLines)), width);
+    };
+
+    let viewHeight: number;
+    let footerRows: string[];
+    let renderTitleRows: string[];
+
+    if (this.maxVisibleLines !== undefined) {
+      // Test override: body viewport height is fixed; chrome can extend total height.
+      viewHeight = Math.max(1, this.maxVisibleLines);
+      footerRows = buildFooterRows(viewHeight);
+      renderTitleRows = titleRows;
+    } else {
+      const maxRows = this.host.getMaxRows?.();
+      if (maxRows === undefined) {
+        viewHeight = Math.max(1, totalLines);
+        footerRows = buildFooterRows(viewHeight);
+        renderTitleRows = titleRows;
+      } else {
+        // Production: hard-cap total overlay rows to floor(maxRows * 0.8).
+        // Layout overhead: 2 borders + 4 blank lines = 6 rows. Remaining content
+        // budget is split among title, body, and footer. Title is capped to at
+        // most half of the content budget so pathological wrapping (narrow width
+        // + very long title) cannot push the bottom border out of budget. Body
+        // viewport collapses to 0 in extreme cases to keep border/footer visible.
+        const totalBudget = Math.floor(maxRows * 0.8);
+        const fixedOverhead = topBorder.length + bottomBorder.length + 4;
+        const contentBudget = Math.max(0, totalBudget - fixedOverhead);
+
+        const maxTitleAllowed = contentBudget === 0
+          ? 0
+          : Math.max(1, Math.floor(contentBudget / 2));
+        renderTitleRows = titleRows.slice(0, Math.min(titleRows.length, maxTitleAllowed));
+
+        // Iterate to a fixed point: footer row count depends on view height
+        // (line-counter digits widen the wrapped footer at narrow widths).
+        viewHeight = Math.max(0, contentBudget - renderTitleRows.length - 1);
+        footerRows = buildFooterRows(Math.max(1, viewHeight));
+        let cappedFooter = footerRows.slice(
+          0,
+          Math.max(0, contentBudget - renderTitleRows.length),
+        );
+        for (let i = 0; i < 4; i++) {
+          const titleFooterBudget = Math.max(0, contentBudget - renderTitleRows.length);
+          cappedFooter = footerRows.slice(0, Math.min(footerRows.length, titleFooterBudget));
+          const bodyMax = Math.max(
+            0,
+            contentBudget - renderTitleRows.length - cappedFooter.length,
+          );
+          // Compact for short bodies; full bodyMax for scrollable bodies.
+          const nextVH = Math.min(totalLines, bodyMax);
+          if (nextVH === viewHeight) break;
+          viewHeight = nextVH;
+          footerRows = buildFooterRows(Math.max(1, viewHeight));
+        }
+        const titleFooterBudget = Math.max(0, contentBudget - renderTitleRows.length);
+        footerRows = footerRows.slice(0, Math.min(footerRows.length, titleFooterBudget));
+      }
+    }
+
+    this.lastViewHeight = Math.max(1, viewHeight);
+
+    // Clamp scroll offset against the final view height before slicing.
+    const maxOffset = Math.max(0, totalLines - viewHeight);
+    this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxOffset));
+
+    const start = this.scrollOffset;
+    const end = start + viewHeight;
     const bodyLines = allLines.slice(start, end);
+    while (bodyLines.length < viewHeight) bodyLines.push("");
 
-    // Scroll position footer
-    const endLine = totalLines > 0 ? Math.min(start + visibleLines - 1, totalLines - 1) : 0;
-    const footerLine = theme.fg("dim", `Lines ${start}-${endLine} of ${totalLines}`);
+    const composed = [
+      ...topBorder,
+      "",
+      ...renderTitleRows,
+      "",
+      ...bodyLines,
+      "",
+      ...footerRows,
+      "",
+      ...bottomBorder,
+    ];
 
-    return [borderLine, metaLine, ...bodyLines, footerLine];
+    if (this.maxVisibleLines === undefined) {
+      const maxRows = this.host.getMaxRows?.();
+      if (maxRows !== undefined) {
+        const cap = Math.floor(maxRows * 0.8);
+        if (composed.length > cap) {
+          return capLinesPreserveBottomBorder(composed, cap);
+        }
+      }
+    }
+
+    return composed;
   }
 
   handleInput(data: string): void {
     const kb = this.host.keybindings;
     const totalLines = this.cachedMarkdownLines?.length ?? 0;
+    const maxOffset = Math.max(0, totalLines - this.lastViewHeight);
 
     if (kb.matches(data, "tui.select.cancel")) {
-      this.host.close();
-      return;
-    }
-    if (kb.matches(data, "tui.select.confirm")) {
       this.host.close();
       return;
     }
@@ -864,7 +982,7 @@ class IdeaDetailOverlayComponent implements Component {
       return;
     }
     if (kb.matches(data, "tui.select.down")) {
-      this.scrollOffset = Math.min(Math.max(0, totalLines - 1), this.scrollOffset + 1);
+      this.scrollOffset = Math.min(maxOffset, this.scrollOffset + 1);
       this.host.requestRender();
       return;
     }
@@ -874,7 +992,7 @@ class IdeaDetailOverlayComponent implements Component {
       return;
     }
     if (kb.matches(data, "tui.select.pageDown") || matchesKey(data, Key.right)) {
-      this.scrollOffset = Math.min(Math.max(0, totalLines - 1), this.scrollOffset + this.lastViewHeight);
+      this.scrollOffset = Math.min(maxOffset, this.scrollOffset + this.lastViewHeight);
       this.host.requestRender();
       return;
     }
@@ -1033,6 +1151,7 @@ export function registerIdea(pi: ExtensionAPI): void {
               theme,
               keybindings: overlayKeybindings,
               requestRender: () => _overlayTui.requestRender(),
+              getMaxRows: () => _overlayTui.terminal.rows,
             });
             return {
               render: (w) => overlay.render(w),

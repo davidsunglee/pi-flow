@@ -1419,7 +1419,7 @@ function makeOverlayHost() {
   return result;
 }
 
-test("IdeaDetailOverlayComponent smoke test — renders border with title and meta line with IDEA id", async () => {
+test("IdeaDetailOverlayComponent smoke test — renders top/bottom border, title line with IDEA id, and body", async () => {
   const { initTheme } = await import("@earendil-works/pi-coding-agent");
   initTheme();
 
@@ -1440,18 +1440,194 @@ test("IdeaDetailOverlayComponent smoke test — renders border with title and me
   const lines = overlay.render(80);
   const out = lines.join("\n");
 
-  // First line: border contains ─── and the title
-  assert.match(lines[0], /─{3,}\s+Test idea/);
-
-  // Second line: meta contains IDEA-<id>
-  assert.match(lines[1], /IDEA-aabb1122/);
-
   // Body text contains both heading strings somewhere
   assert.ok(out.includes("Heading"), "rendered output should include 'Heading'");
   assert.ok(out.includes("Subheading"), "rendered output should include 'Subheading'");
+  // IDEA-<id> appears somewhere in the rendered output
+  assert.ok(out.includes("IDEA-aabb1122"), "rendered output should include IDEA-aabb1122");
 });
 
-test("IdeaDetailOverlayComponent scroll test — scrollOffset advances on down and pageDown", async () => {
+test("IdeaDetailOverlayComponent uses border token for top and bottom borders", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+  const taggingTheme: any = {
+    fg: (color: string, s: string) => `<fg:${color}>${s}</fg:${color}>`,
+    bold: (s: string) => `<b>${s}</b>`,
+  };
+  const stubKeybindings: any = { matches: () => false };
+  const host: any = {
+    close() {},
+    requestRender() {},
+    theme: taggingTheme,
+    keybindings: stubKeybindings,
+  };
+
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: "Test idea",
+    tags: [],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body: "body line",
+  };
+
+  const overlay = new _internalsForTest.IdeaDetailOverlayComponent(idea, host, { maxVisibleLines: 5 });
+  const lines = overlay.render(80);
+
+  assert.match(lines[0], /^<fg:border>─+<\/fg:border>$/, `top border should use border token, got: ${lines[0]}`);
+  assert.match(lines[lines.length - 1], /^<fg:border>─+<\/fg:border>$/, `bottom border should use border token, got: ${lines[lines.length - 1]}`);
+});
+
+test("IdeaDetailOverlayComponent title line: IDEA-<id> and title use border+bold; status uses success for open; tags muted", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+  const taggingTheme: any = {
+    fg: (color: string, s: string) => `<fg:${color}>${s}</fg:${color}>`,
+    bold: (s: string) => `<b>${s}</b>`,
+  };
+  const stubKeybindings: any = { matches: () => false };
+  const host: any = {
+    close() {},
+    requestRender() {},
+    theme: taggingTheme,
+    keybindings: stubKeybindings,
+  };
+
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: "Test idea",
+    tags: ["alpha", "beta"],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body: "body",
+  };
+
+  const overlay = new IdeaDetailOverlayComponent(idea, host, { maxVisibleLines: 3 });
+  const lines = overlay.render(500);
+  // Layout: [0]=border, [1]=blank, [2]=title-line (no wrap at width=500)
+  const titleLine = lines[2];
+
+  assert.match(
+    titleLine,
+    /<fg:border><b>IDEA-aabb1122 "Test idea"<\/b><\/fg:border>/,
+    `expected border+bold IDEA-<id> and title, got: ${titleLine}`,
+  );
+  assert.match(
+    titleLine,
+    /<fg:success>open<\/fg:success>/,
+    `expected success-colored 'open' status, got: ${titleLine}`,
+  );
+  assert.match(
+    titleLine,
+    /<fg:muted>\[alpha, beta\]<\/fg:muted>/,
+    `expected muted tags '[alpha, beta]', got: ${titleLine}`,
+  );
+});
+
+test("IdeaDetailOverlayComponent title line: closed status uses dim color", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+  const taggingTheme: any = {
+    fg: (color: string, s: string) => `<fg:${color}>${s}</fg:${color}>`,
+    bold: (s: string) => `<b>${s}</b>`,
+  };
+  const stubKeybindings: any = { matches: () => false };
+  const host: any = {
+    close() {},
+    requestRender() {},
+    theme: taggingTheme,
+    keybindings: stubKeybindings,
+  };
+
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: "Closed idea",
+    tags: [],
+    status: "closed",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body: "body",
+  };
+
+  const overlay = new IdeaDetailOverlayComponent(idea, host, { maxVisibleLines: 3 });
+  const titleLine = overlay.render(500)[2];
+
+  assert.match(
+    titleLine,
+    /<fg:dim>closed<\/fg:dim>/,
+    `expected dim 'closed' status, got: ${titleLine}`,
+  );
+  assert.doesNotMatch(
+    titleLine,
+    /<fg:success>closed<\/fg:success>/,
+    `closed status should not use success, got: ${titleLine}`,
+  );
+});
+
+test("IdeaDetailOverlayComponent footer: includes Esc back, ↑↓, ←→ and line counter, omits Enter", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+  const stubTheme: any = {
+    fg: (_color: string, s: string) => s,
+    bold: (s: string) => s,
+  };
+  const stubKeybindings: any = { matches: () => false };
+  const host: any = {
+    close() {},
+    requestRender() {},
+    theme: stubTheme,
+    keybindings: stubKeybindings,
+  };
+
+  const body = Array.from({ length: 30 }, (_, i) => `line ${i}`).join("\n\n");
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: "Footer test",
+    tags: [],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body,
+  };
+
+  const overlay = new IdeaDetailOverlayComponent(idea, host, { maxVisibleLines: 5 });
+  const lines = overlay.render(120);
+  // Footer is lines[length - 3] (border, blank, footer, blank, border or border, footer, border etc.)
+  // Actually: [..., body lines, blank, footer, blank, border]
+  const footer = lines[lines.length - 3];
+
+  assert.match(footer, /Esc back/i, `footer should include 'Esc back', got: ${footer}`);
+  assert.match(footer, /↑↓/, `footer should include ↑↓ arrows, got: ${footer}`);
+  assert.match(footer, /←→/, `footer should include ←→ arrows, got: ${footer}`);
+  assert.match(footer, /\b\d+\b.*\b\d+\b/, `footer should include a line counter, got: ${footer}`);
+
+  // Should not include 'Enter' as a command anywhere in the overlay.
+  const joined = lines.join("\n");
+  assert.doesNotMatch(joined, /\bEnter\b/i, `detail overlay should not include 'Enter' command, got: ${joined}`);
+});
+
+test("IdeaDetailOverlayComponent Enter does not dispatch or close the overlay", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: "Enter test",
+    tags: [],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body: "body",
+  };
+
+  const h = makeOverlayHost();
+  const overlay = new IdeaDetailOverlayComponent(idea, h.host, { maxVisibleLines: 3 });
+
+  // tui.select.confirm is the Enter binding. Send a "\r" with that binding active.
+  h.setBinding("tui.select.confirm");
+  overlay.handleInput!("\r");
+
+  assert.equal(h.closed, 0, "Enter must NOT close the detail overlay");
+});
+
+test("IdeaDetailOverlayComponent scroll test — line counter advances on down and pageDown", async () => {
   const { _internalsForTest } = await import("./idea.ts");
   const { IdeaDetailOverlayComponent } = _internalsForTest;
 
@@ -1468,26 +1644,429 @@ test("IdeaDetailOverlayComponent scroll test — scrollOffset advances on down a
   const h = makeOverlayHost();
   const overlay = new IdeaDetailOverlayComponent(idea, h.host, { maxVisibleLines: 5 });
 
-  // Initial render — footer shows Lines 0-4
+  // Footer line lives at index length - 3 (border, blank, footer, blank, border) — wait, actually
+  // layout: [..., body lines, blank, footer, blank, border] => footer at length-3.
   const lines0 = overlay.render(80);
-  const footer0 = lines0[lines0.length - 1];
-  assert.match(footer0, /Lines 0-4 of /);
+  const footerIdx = lines0.length - 3;
+  const footer0 = lines0[footerIdx];
+  assert.match(footer0, /\b0-4\b|Lines 0-4/, `initial footer should show line range starting at 0, got: ${footer0}`);
 
-  // Scroll down by 1
   h.setBinding("tui.select.down");
   overlay.handleInput!("\x1b[B");
 
   const lines1 = overlay.render(80);
-  const footer1 = lines1[lines1.length - 1];
-  assert.match(footer1, /Lines 1-5 of /);
-  // First body line (after border + meta) should differ
-  assert.notEqual(lines1[2], lines0[2], "first body line should shift after scroll down");
+  const footer1 = lines1[lines1.length - 3];
+  assert.match(footer1, /\b1-5\b|Lines 1-5/, `footer after one down should show 1-5, got: ${footer1}`);
 
-  // Scroll page down — lastViewHeight is 5, so offset becomes 1+5=6
   h.setBinding("tui.select.pageDown");
   overlay.handleInput!("\x1b[B");
 
   const lines2 = overlay.render(80);
-  const footer2 = lines2[lines2.length - 1];
-  assert.match(footer2, /Lines 6-10 of /);
+  const footer2 = lines2[lines2.length - 3];
+  assert.match(footer2, /\b6-10\b|Lines 6-10/, `footer after pageDown should show 6-10, got: ${footer2}`);
+});
+
+test("IdeaDetailOverlayComponent: rapid Down past bottom keeps rendered line count stable, bottom border anchored, width respected", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+
+  const body = Array.from({ length: 30 }, (_, i) => `line ${i}`).join("\n\n");
+  const idea: IdeaArtifact = {
+    id: "ccdd3344",
+    title: "Shrink test",
+    tags: [],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body,
+  };
+
+  const h = makeOverlayHost();
+  const overlay = new IdeaDetailOverlayComponent(idea, h.host, { maxVisibleLines: 5 });
+  const width = 80;
+
+  const initial = overlay.render(width);
+  const initialLineCount = initial.length;
+  const initialBorder = initial[initial.length - 1];
+
+  h.setBinding("tui.select.down");
+  let lastLines = initial;
+  for (let i = 0; i < 100; i++) {
+    overlay.handleInput!("\x1b[B");
+    lastLines = overlay.render(width);
+    assert.equal(
+      lastLines.length,
+      initialLineCount,
+      `iteration ${i}: rendered line count changed from ${initialLineCount} to ${lastLines.length}`,
+    );
+    assert.equal(
+      lastLines[lastLines.length - 1],
+      initialBorder,
+      `iteration ${i}: bottom border drifted (was ${initialBorder}, now ${lastLines[lastLines.length - 1]})`,
+    );
+    for (const [idx, line] of lastLines.entries()) {
+      assert.ok(
+        visibleWidth(line) <= width,
+        `iteration ${i} line ${idx}: visible width ${visibleWidth(line)} exceeds ${width}: ${JSON.stringify(line)}`,
+      );
+    }
+  }
+});
+
+test("IdeaDetailOverlayComponent: production getMaxRows path budgets full overlay rows including wrapped title/footer", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+
+  // Narrow width forces title and footer-counter wrapping; long body ensures
+  // the counter reaches large numbers that affect footer width.
+  const longTitle = "This is a very long idea title that will absolutely wrap across multiple visual rows at a narrow terminal width";
+  const body = Array.from({ length: 200 }, (_, i) => `line number ${i} content for scroll testing`).join("\n\n");
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: longTitle,
+    tags: ["alpha-tag", "beta-tag"],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body,
+  };
+
+  const rows = 40;
+  const width = 30;
+  const budget = Math.floor(rows * 0.8); // 32
+
+  const h = makeOverlayHost();
+  h.host.getMaxRows = () => rows;
+
+  // Use production-style construction (no maxVisibleLines override).
+  const overlay = new IdeaDetailOverlayComponent(idea, h.host);
+  const initial = overlay.render(width);
+
+  // Total rendered rows must fit overlay max-height budget.
+  assert.ok(
+    initial.length <= budget,
+    `initial render length ${initial.length} exceeds overlay budget ${budget}`,
+  );
+  // Bottom border must be the final line and visible (matches border pattern).
+  assert.match(
+    initial[initial.length - 1],
+    /─/,
+    `last line should be a border, got: ${JSON.stringify(initial[initial.length - 1])}`,
+  );
+  // Width safety on initial render.
+  for (const [i, line] of initial.entries()) {
+    assert.ok(
+      visibleWidth(line) <= width,
+      `initial line ${i} visible width ${visibleWidth(line)} exceeds ${width}: ${JSON.stringify(line)}`,
+    );
+  }
+
+  // Repeated Down at/near bottom must not change rendered line count or push
+  // bottom border out of the budget.
+  const initialLineCount = initial.length;
+  const initialBottom = initial[initial.length - 1];
+
+  h.setBinding("tui.select.down");
+  for (let i = 0; i < 300; i++) {
+    overlay.handleInput!("\x1b[B");
+    const r = overlay.render(width);
+    assert.equal(
+      r.length,
+      initialLineCount,
+      `iter ${i}: rendered line count drifted from ${initialLineCount} to ${r.length}`,
+    );
+    assert.ok(
+      r.length <= budget,
+      `iter ${i}: rendered length ${r.length} exceeds budget ${budget}`,
+    );
+    assert.equal(
+      r[r.length - 1],
+      initialBottom,
+      `iter ${i}: bottom border drifted (was ${initialBottom}, now ${r[r.length - 1]})`,
+    );
+    for (const [k, line] of r.entries()) {
+      assert.ok(
+        visibleWidth(line) <= width,
+        `iter ${i} line ${k}: visible width ${visibleWidth(line)} exceeds ${width}: ${JSON.stringify(line)}`,
+      );
+    }
+  }
+});
+
+test("IdeaDetailOverlayComponent: Up after hitting bottom still scrolls up normally", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+
+  const body = Array.from({ length: 30 }, (_, i) => `line ${i}`).join("\n\n");
+  const idea: IdeaArtifact = {
+    id: "ccdd3344",
+    title: "Up test",
+    tags: [],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body,
+  };
+
+  const h = makeOverlayHost();
+  const overlay = new IdeaDetailOverlayComponent(idea, h.host, { maxVisibleLines: 5 });
+
+  // Initial render populates the markdown cache and lastViewHeight, so the
+  // down handler can clamp correctly.
+  overlay.render(80);
+
+  // Scroll all the way down
+  h.setBinding("tui.select.down");
+  for (let i = 0; i < 200; i++) overlay.handleInput!("\x1b[B");
+  const atBottom = overlay.render(80);
+  const bottomFooter = atBottom[atBottom.length - 3];
+  const bottomMatch = bottomFooter.match(/(\d+)-(\d+)/);
+  assert.ok(bottomMatch, `bottom footer should expose a numeric range, got: ${bottomFooter}`);
+  const bottomStart = Number(bottomMatch[1]);
+
+  // Now press Up once
+  h.setBinding("tui.select.up");
+  overlay.handleInput!("\x1b[A");
+  const oneUp = overlay.render(80);
+  const oneUpFooter = oneUp[oneUp.length - 3];
+  const oneUpMatch = oneUpFooter.match(/(\d+)-(\d+)/);
+  assert.ok(oneUpMatch, `up-once footer should expose a numeric range, got: ${oneUpFooter}`);
+  const oneUpStart = Number(oneUpMatch[1]);
+
+  assert.equal(
+    oneUpStart,
+    bottomStart - 1,
+    `Up should decrement start by 1 from bottom (was ${bottomStart}, now ${oneUpStart})`,
+  );
+});
+
+test("IdeaDetailOverlayComponent: production getMaxRows path hard-caps total rows even when wrapped chrome alone exceeds budget", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+
+  // Extremely narrow width forces title to wrap into many rows.
+  // At width 15, the title text easily wraps to 20+ rows.
+  const longTitle = "This is a very long idea title that absolutely will wrap across many many many many rows at narrow width " +
+    "with additional padding so wrapped chrome alone would consume more than the overlay budget of thirty two rows total.";
+  const body = Array.from({ length: 200 }, (_, i) => `body line ${i}`).join("\n\n");
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: longTitle,
+    tags: ["alpha-tag", "beta-tag", "gamma-tag"],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body,
+  };
+
+  const rows = 40;
+  const width = 15;
+  const budget = Math.floor(rows * 0.8); // 32
+
+  const h = makeOverlayHost();
+  h.host.getMaxRows = () => rows;
+
+  const overlay = new IdeaDetailOverlayComponent(idea, h.host);
+  const initial = overlay.render(width);
+
+  assert.ok(
+    initial.length <= budget,
+    `initial render length ${initial.length} exceeds overlay budget ${budget}`,
+  );
+  assert.match(
+    initial[initial.length - 1],
+    /─/,
+    `last line should be a border, got: ${JSON.stringify(initial[initial.length - 1])}`,
+  );
+  for (const [i, line] of initial.entries()) {
+    assert.ok(
+      visibleWidth(line) <= width,
+      `initial line ${i} visible width ${visibleWidth(line)} exceeds ${width}: ${JSON.stringify(line)}`,
+    );
+  }
+
+  const initialLineCount = initial.length;
+  const initialBottom = initial[initial.length - 1];
+
+  h.setBinding("tui.select.down");
+  for (let i = 0; i < 200; i++) {
+    overlay.handleInput!("\x1b[B");
+    const r = overlay.render(width);
+    assert.ok(
+      r.length <= budget,
+      `iter ${i}: rendered length ${r.length} exceeds budget ${budget}`,
+    );
+    assert.equal(
+      r.length,
+      initialLineCount,
+      `iter ${i}: rendered line count drifted from ${initialLineCount} to ${r.length}`,
+    );
+    assert.equal(
+      r[r.length - 1],
+      initialBottom,
+      `iter ${i}: bottom border drifted (was ${initialBottom}, now ${r[r.length - 1]})`,
+    );
+    for (const [k, line] of r.entries()) {
+      assert.ok(
+        visibleWidth(line) <= width,
+        `iter ${i} line ${k}: visible width ${visibleWidth(line)} exceeds ${width}: ${JSON.stringify(line)}`,
+      );
+    }
+  }
+});
+
+test("IdeaDetailOverlayComponent: short body production path is compact and does not pad to full 80% budget", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: "Short",
+    tags: [],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body: "one line",
+  };
+
+  const rows = 40;
+  const width = 80;
+  const budget = Math.floor(rows * 0.8); // 32
+
+  const h = makeOverlayHost();
+  h.host.getMaxRows = () => rows;
+
+  const overlay = new IdeaDetailOverlayComponent(idea, h.host);
+  const lines = overlay.render(width);
+
+  assert.ok(
+    lines.length < budget,
+    `short-body render length ${lines.length} should be clearly less than full budget ${budget}, got lines:\n${lines.join("\n")}`,
+  );
+  // Compact: should be small (chrome + 1 body line). Allow some headroom but well under budget.
+  assert.ok(
+    lines.length <= 12,
+    `short-body render length ${lines.length} should be small (~chrome + 1 body line), got lines:\n${lines.join("\n")}`,
+  );
+  assert.match(
+    lines[lines.length - 1],
+    /─/,
+    `last line should be a border, got: ${JSON.stringify(lines[lines.length - 1])}`,
+  );
+  // Footer should still be present (search for "Esc back").
+  const joined = lines.join("\n");
+  assert.match(joined, /Esc back/, `footer should still be present, got:\n${joined}`);
+});
+
+test("IdeaDetailOverlayComponent: tiny production height budgets never exceed floor(rows * 0.8)", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: "Short title",
+    tags: [],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body: "first body line\n\nsecond body line",
+  };
+
+  const width = 80;
+
+  for (const rows of [5, 6, 7, 8, 9, 10]) {
+    const budget = Math.floor(rows * 0.8);
+    const h = makeOverlayHost();
+    h.host.getMaxRows = () => rows;
+    const overlay = new IdeaDetailOverlayComponent(idea, h.host);
+    const lines = overlay.render(width);
+
+    assert.ok(
+      lines.length <= budget,
+      `rows=${rows} budget=${budget} rendered=${lines.length} — must fit budget, got lines:\n${lines.join("\n")}`,
+    );
+    for (const [i, line] of lines.entries()) {
+      assert.ok(
+        visibleWidth(line) <= width,
+        `rows=${rows} line ${i}: visible width ${visibleWidth(line)} exceeds ${width}: ${JSON.stringify(line)}`,
+      );
+    }
+    if (budget >= 1) {
+      assert.match(
+        lines[lines.length - 1],
+        /─/,
+        `rows=${rows} budget=${budget}: bottom border must be final line when any border can fit, got: ${JSON.stringify(lines[lines.length - 1])}`,
+      );
+    }
+    if (budget >= 2) {
+      assert.match(
+        lines[0],
+        /─/,
+        `rows=${rows} budget=${budget}: top border should also be present when budget >= 2, got first line: ${JSON.stringify(lines[0])}`,
+      );
+    }
+  }
+});
+
+test("IdeaDetailOverlayComponent: budget 0 renders nothing; budget 1 renders just the bottom border", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: "Title",
+    tags: [],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body: "body",
+  };
+
+  const width = 80;
+
+  // budget 0: floor(0 * 0.8) = 0
+  {
+    const h = makeOverlayHost();
+    h.host.getMaxRows = () => 0;
+    const overlay = new IdeaDetailOverlayComponent(idea, h.host);
+    const lines = overlay.render(width);
+    assert.equal(lines.length, 0, `budget 0: expected zero lines, got: ${JSON.stringify(lines)}`);
+  }
+
+  // budget 1: floor(2 * 0.8) = 1
+  {
+    const h = makeOverlayHost();
+    h.host.getMaxRows = () => 2;
+    const overlay = new IdeaDetailOverlayComponent(idea, h.host);
+    const lines = overlay.render(width);
+    assert.equal(lines.length, 1, `budget 1: expected exactly one line, got: ${JSON.stringify(lines)}`);
+    assert.match(lines[0], /─/, `budget 1: the single line should be a border, got: ${JSON.stringify(lines[0])}`);
+  }
+});
+
+test("IdeaDetailOverlayComponent: rendering wide then narrow re-wraps body to new width", async () => {
+  const { _internalsForTest } = await import("./idea.ts");
+  const { IdeaDetailOverlayComponent } = _internalsForTest;
+
+  // Body line longer than the narrow width so it must wrap when rendered narrow.
+  // If markdown lines are cached at the first (wide) width and reused, the
+  // narrow render returns rows that exceed the new width.
+  const longBodyLine = "this is a single body line that is much longer than the narrow width and must wrap when the overlay is resized";
+  const idea: IdeaArtifact = {
+    id: "aabb1122",
+    title: "Title",
+    tags: [],
+    status: "open",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    body: longBodyLine,
+  };
+
+  const h = makeOverlayHost();
+  const overlay = new IdeaDetailOverlayComponent(idea, h.host, { maxVisibleLines: 10 });
+
+  // First render wide so cachedMarkdownLines (if any) is built for width 120.
+  overlay.render(120);
+
+  // Then render narrow. Every line must respect the new narrow width.
+  const narrow = 20;
+  const narrowLines = overlay.render(narrow);
+  for (const [i, line] of narrowLines.entries()) {
+    assert.ok(
+      visibleWidth(line) <= narrow,
+      `after wide-then-narrow render: line ${i} visible width ${visibleWidth(line)} exceeds ${narrow}: ${JSON.stringify(line)}`,
+    );
+  }
 });
