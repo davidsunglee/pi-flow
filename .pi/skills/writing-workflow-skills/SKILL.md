@@ -23,6 +23,7 @@ Make workflow skills shorter and clearer without changing agent behavior.
 - Preserve gates, verification steps, subagent boundaries, and user checkpoints.
 - Preserve byte-exact text when tests or downstream parsers may depend on it.
 - Use imperative steps. Prefer bullets, tables, and exact output blocks over paragraphs.
+- Use consistent numbering. Keep top-level step headings for major phases; inside a step, prefer local ordered lists (`1.`, `2.`, `3.`) over decimal substep headings (`Step 11.2`) unless external links, tests, or parsers require the decimal label.
 - Keep formatting consistent with the surrounding workflow skills.
 - Preserve readable spacing; do not remove blank lines just to reduce line count.
 - Keep skills pleasant for humans to scan as well as reliable for agents to follow.
@@ -38,8 +39,9 @@ Make workflow skills shorter and clearer without changing agent behavior.
 1. Shrink the description to triggering conditions, not a workflow summary.
 2. Keep the main path easy to scan from top to bottom.
 3. Put customization menus and exact emitted text in fenced blocks.
-4. Move detailed rationale below the procedure or into a reference file.
-5. Re-run relevant tests and inspect the diff for accidental behavior changes.
+4. Before renaming numbered headings, search for references and either update them or keep a compatibility phrase.
+5. Move detailed rationale below the procedure or into a reference file.
+6. Re-run relevant tests and inspect the diff for accidental behavior changes.
 
 ## Verification
 

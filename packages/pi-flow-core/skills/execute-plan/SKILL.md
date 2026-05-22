@@ -1,70 +1,80 @@
 ---
 name: execute-plan
-description: "Executes a structured plan file from docs/plans/. Decomposes tasks into dependency-ordered waves and dispatches coder subagents in parallel. Use when the user wants to execute an existing plan."
+description: 'Use when executing an existing structured plan under docs/plans/.'
 ---
 
 # Execute Plan
 
+## Execution contract
+
+- Run the git/worktree preflight, plan validation, settings menu, and existing-output gate before any worker dispatch.
+- Execute dependency waves only through `coder` subagents, then route `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, and `BLOCKED` mechanically through Steps 9-13.
+- Verify task acceptance only with fresh `verifier` subagents and `pi-flow helper execute-plan/parse-verifier-report`; `VERDICT: PASS` is required before Step 12.
+- Run integration suites only through `test-runner` artifacts under `docs/test-runs/<plan-name>/`; reconcile via `current_failing_stable`, `current_non_reconcilable`, `current_non_baseline_stable`, and frozen `baseline_failures`.
+- Preserve all user checkpoints: dirty reused workspace, settings, existing output files, blocked tasks, concerns, verifier failures, integration failures, retry exhaustion, refine-code budget exhaustion, final gate, and branch completion.
+- After all waves, run `refine-code` with the configured iteration budget, enforce the final integration regression gate, clean artifacts, close linked ideas through the built-in `idea` tool, and offer branch completion.
+
+### Non-negotiable boundaries
+
+> The orchestrator MUST NOT run the configured test command itself or synthesize a `test-runner` artifact from locally-run output. All integration-test execution and artifact writing must be performed by the `test-runner` subagent.
+>
+> After a `coder` returns `DONE` or `DONE_WITH_CONCERNS`, the orchestrator MUST NOT run local grep / Python / assertion scripts, spot checks, or final-acceptance checks to decide whether the implementation satisfies the task. The only sanctioned path for substantive task verification is dispatching a fresh `verifier` subagent (Step 11).
+>
+> Completion cleanup, linked idea closure, and branch completion MUST NOT run while either final-gate regression set is non-empty: `current_non_baseline_stable ∪ current_non_reconcilable`.
+
+See [`../_shared/orchestrator-verification-boundary.md`](../_shared/orchestrator-verification-boundary.md) for the shared boundary statement.
+
 ## Step 0: Worktree pre-flight
 
-Before starting execution, determine the workspace.
+Run `pi-flow helper _shared/git-workspace-status --working-dir <working-dir>`. If `.is_git_repo` is `false`, stop with: `execute-plan requires a git repository.` Otherwise consume `IS_WORKTREE`, `IS_FEATURE_BRANCH`, `CURRENT_BRANCH`, `BRANCH_LABEL`, and `WORKSPACE_PATH` from the helper output.
 
-**Auto-detect:** Run `pi-flow helper _shared/git-workspace-status --working-dir <working-dir>`. The helper emits a JSON object with `is_git_repo`, `is_worktree`, `is_feature_branch`, `current_branch`, `branch_label`, and `workspace_path` fields. If `.is_git_repo` is `false`, stop with: `execute-plan requires a git repository.` Otherwise consume `IS_WORKTREE`, `IS_FEATURE_BRANCH`, `CURRENT_BRANCH`, `BRANCH_LABEL`, and `WORKSPACE_PATH` from the helper output.
+| State | Action |
+|---|---|
+| `IS_WORKTREE=1` | Reuse the workspace; log `Reusing current workspace: <WORKSPACE_PATH> (reason: already inside worktree for branch '<BRANCH_LABEL>')`. |
+| `IS_FEATURE_BRANCH=1` | Reuse the workspace; log `Reusing current workspace: <WORKSPACE_PATH> (reason: already on feature branch '<BRANCH_LABEL>')`. |
+| main/master/develop and not in a worktree | Default to a new worktree with branch name derived from the plan filename. |
+| User later chooses `(n) Create a new worktree instead` | Fall through to the same new-worktree flow. |
 
-**If `IS_WORKTREE=1` or `IS_FEATURE_BRANCH=1`:** Reuse the existing workspace, but log and safety-check it first.
+If both `IS_WORKTREE=1` and `IS_FEATURE_BRANCH=1`, use the `IS_WORKTREE=1` row.
 
-1. **Log the reused workspace explicitly.** Emit one message (worktree takes priority over feature-branch):
-   - If `IS_WORKTREE=1`: `Reusing current workspace: <WORKSPACE_PATH> (reason: already inside worktree for branch '<BRANCH_LABEL>')`
-   - Else (`IS_FEATURE_BRANCH=1`): `Reusing current workspace: <WORKSPACE_PATH> (reason: already on feature branch '<BRANCH_LABEL>')`
+For a reused workspace, run `DIRTY_STATUS=$(git status --porcelain)`.
 
-   This log is mandatory for every reuse.
+- If clean, auto-proceed to Step 1 after the reuse log.
+- If dirty, show this prompt exactly:
 
-2. **Check whether the reused workspace is dirty.** Run `DIRTY_STATUS=$(git status --porcelain)`. The workspace is dirty if `DIRTY_STATUS` is non-empty (it covers modified tracked files, staged changes, and untracked files).
+```
+⚠️ Reused workspace <WORKSPACE_PATH> has uncommitted changes:
+<DIRTY_STATUS>
 
-3. **If the reused workspace is clean:** auto-proceed to Step 1 after the reuse log.
+Options:
+(c) Continue in this workspace    — proceed as-is, mixing plan work with existing changes
+(n) Create a new worktree instead — abandon reuse and fall back to the normal new-worktree flow
+(x) Stop                          — cancel execution
+```
 
-4. **If the reused workspace is dirty:** warn the user before continuing and offer three choices:
-   ```
-   ⚠️ Reused workspace <WORKSPACE_PATH> has uncommitted changes:
-   <DIRTY_STATUS>
+Route choices:
+- `(c)` proceed in the current workspace; Step 3 shows `Workspace: current workspace (on <BRANCH_LABEL>)`.
+- `(n)` use the new-worktree default; Step 3 shows `Workspace: new worktree (branch: <suggested-branch>)`.
+- `(x)` stop with `Plan execution cancelled.`
 
-   Options:
-   (c) Continue in this workspace — proceed as-is, mixing plan work with existing changes
-   (n) Create a new worktree instead — abandon reuse and fall back to the normal new-worktree flow
-   (x) Stop — cancel execution
-   ```
-
-   - **(c) Continue:** proceed to Step 1 in the current workspace.
-   - **(x) Stop:** stop with `Plan execution cancelled.`
-   - **(n) New worktree instead:** fall through to the new-worktree flow below (the same flow used when starting from main/master/develop), including the usual suggested branch name derived from the plan filename. The settings summary (Step 3) will then show `new worktree (branch: <suggested-branch>)`.
-
-Once reuse is accepted (clean, or dirty with `(c) Continue`), the settings summary (Step 3) shows `Workspace: current workspace (on <BRANCH_LABEL>)`.
-
-**If on main/master/develop and NOT in a worktree, or the user chose `(n) Create a new worktree instead`:** the settings summary (Step 3) shows `new worktree (branch: <suggested-branch>)` as the default.
-
-If the user accepts the worktree default (or selects it during customization):
-1. Suggest a branch name derived from the plan filename: strip the leading date and `.md`, keep a slash-free slug (e.g. `2026-04-06-execute-plan-enhancements.md` → `execute-plan-enhancements`). Avoid `/` prefixes (they produce nested worktree directories).
-2. Follow the `using-git-worktrees` skill: directory selection (existing `.worktrees/` > project config > ask), safety verification (`git check-ignore`), project setup (`package.json`, `Cargo.toml`, etc.), baseline test verification.
-3. Continue subsequent steps in the worktree.
-
-If the user picks "current workspace" during customization, proceed without a worktree.
+When a new worktree is selected, suggest a slash-free branch slug from the plan filename by stripping the leading date and `.md` (for example `2026-04-06-execute-plan-enhancements.md` -> `execute-plan-enhancements`). Follow the `using-git-worktrees` skill for directory selection, `git check-ignore` safety verification, project setup, and baseline test verification; continue subsequent steps in the worktree. If the user picks current workspace during customization, proceed without a worktree.
 
 ## Step 1: Locate the plan file
 
 - If the user provides a path, use it directly.
-- If the user says "run the plan" or similar without a path, list `docs/plans/` and let the user pick.
+- If the user says run the plan or similar without a path, list `docs/plans/` and let the user pick.
 - If only one plan exists, confirm with the user before proceeding.
 - Read the full contents of the plan file.
 
 ## Step 2: Validate the plan
 
-Run `pi-flow helper execute-plan/extract-plan-tasks --plan <PLAN_PATH>`; on non-zero exit, surface the stderr JSON `missing_required_section` / `dependency_unknown_target` / `dependency_cycle` errors verbatim and stop. Suggest re-running `generate-plan`.
+Run `pi-flow helper execute-plan/extract-plan-tasks --plan <PLAN_PATH>`. On non-zero exit, surface the stderr JSON `missing_required_section` / `dependency_unknown_target` / `dependency_cycle` errors verbatim, suggest re-running `generate-plan`, and stop.
 
-The plan may also contain an optional `## Test Command` section with a bash command for running the project's test suite. If present, extract the command (the content of the bash fenced code block inside `## Test Command`) for use in later steps (baseline capture and integration tests). If absent, test command detection falls back to auto-detect in Step 3.
+If the plan contains `## Test Command`, extract the bash fenced command inside it for later baseline and integration runs. If absent, Step 3 auto-detects the command.
 
 ## Step 3: Confirm execution settings
 
-Present a single settings confirmation showing the plan context and recommended defaults:
+Present one settings confirmation:
 
 ```
 Plan:  <plan filename>
@@ -75,7 +85,7 @@ Workspace:          <see workspace values below>
 TDD:                enabled
 Execution:          parallel, pause on failure
 Integration test:   <see defaults below>
-Final review:       enabled (max 3 remediation iterations)
+Final review:       required (max 5 remediation iterations)
 
 Ready to execute:
 (s) Start
@@ -83,93 +93,79 @@ Ready to execute:
 (x) Stop
 ```
 
-**Workspace values:** if reuse was accepted in Step 0 (clean, or dirty with `(c) Continue`), show `current workspace (on <BRANCH_LABEL>)`; otherwise show `new worktree (branch: <suggested-branch>)`. Declined reuse follows the new-worktree default.
+**Workspace values:** reused workspace accepted in Step 0 -> `current workspace (on <BRANCH_LABEL>)`; otherwise `new worktree (branch: <suggested-branch>)`.
 
-**Integration test value:** when enabled and a test command is available, show `enabled (<command>)`; otherwise `disabled (no test command)`.
+**Integration test value:** if enabled and a command is available, show `enabled (<command>)`; otherwise `disabled (no test command)`.
 
-**Defaults:**
+| Setting | Default | Customization |
+|---|---|---|
+| Workspace | new worktree, unless Step 0 reuse was accepted | Skip this prompt if Step 0 reuse was accepted. |
+| TDD | enabled | Can disable for non-code plans (docs, config, content). |
+| Execution | parallel, pause on failure | Can switch to sequential or pause every wave. |
+| Integration test | enabled when a command is available | Prompt for a command if enabling and none was detected. |
+| Final review | required (max 5 iterations) | Can adjust max iterations; cannot disable. |
 
-| Setting | Default | Notes |
-|---------|---------|-------|
-| Workspace | new worktree | See Step 0 for the reuse-vs-new-worktree decision rules. |
-| TDD | enabled | Can disable for non-code plans (docs, config, content) |
-| Execution | parallel, pause on failure | Can customize to sequential, or change pacing |
-| Integration test | enabled | If a test command is available, show `enabled (<command>)`. If no test command, show `disabled (no test command)` |
-| Final review | enabled (max 3 iterations) | Iterative review-remediate loop after all waves — can disable or adjust max iterations |
+Resolve the test command in order:
+1. Use the plan's `## Test Command` command from Step 2.
+2. Otherwise run `pi-flow helper _shared/detect-test-command --working-dir <working-dir>` and consume `.command`.
+3. If neither yields a command, show `not detected`; during customization let the user provide one or confirm no tests.
 
-**Test command resolution order:**
-1. If the plan contains a `## Test Command` section (extracted in Step 2), use that command.
-2. Otherwise, run `pi-flow helper _shared/detect-test-command --working-dir <working-dir>` and consume the helper's `.command` field.
-3. If neither yields a command, show "not detected" in the settings. During customize, allow the user to provide a command or confirm no tests.
+Route choices:
+- `(s)` accept defaults and proceed to Step 4.
+- `(c)` ask each setting individually, with final review limited to its max-iteration count, then show the final summary for confirmation.
+- `(x)` stop with `Plan execution cancelled.`
 
-**If `s`:** Accept all defaults and proceed to Step 4.
-
-**If `c`:** Ask each setting individually — Workspace (skip if Step 0 reuse was accepted), TDD, Execution mode (Sequential/Parallel), Wave pacing if parallel ((f) Pause only on failure [default] / (w) Pause every wave), Integration test (prompt for command if enabling and none detected), Final review (prompt for max iterations if enabling). After customization, show the final settings summary for confirmation.
-
-**If `x`:** stop with `Plan execution cancelled.`
-
-After settings are confirmed, if Worktree was selected and Step 0 hasn't executed worktree setup yet, execute it now.
+After settings are confirmed, execute worktree setup now if it was selected and not already performed.
 
 ## Step 4: Check for existing output files
 
-Before execution, scan the plan's task list for output file paths. If any already exist (from a prior partial run), ask the user:
-- **Skip** those tasks (and their dependents if outputs appear valid)
-- **Re-run** them (overwrite existing files)
+Before execution, scan the plan's task list for output file paths. If any already exist from a prior partial run, ask the user whether to:
+
+- **Skip** those tasks, and their dependents if outputs appear valid.
+- **Re-run** them, overwriting existing files.
 
 ## Step 5: Build dependency graph and group into waves
 
-Read the `waves` array from `extract-plan-tasks.py` output (Step 2 invocation). Each entry is `{wave, subwave, tasks}`; dispatch each subwave in order. The cap `MAX_PARALLEL_HARD_CAP = 8` is enforced by the helper; pass `--max-parallel-hard-cap N` to override.
-
-Worked example (illustrative only — helper output is authoritative):
-```
-Dependencies:
-- Task 3 depends on: Task 1, Task 2
-- Task 4 depends on: Task 1
-- Task 5 depends on: Task 3, Task 4
-
-Wave 1: [Task 1, Task 2]
-Wave 2: [Task 3, Task 4]
-Wave 3: [Task 5]
-```
+Use the `waves` array from `extract-plan-tasks` output. Each entry is `{wave, subwave, tasks}`; dispatch each subwave in order. The helper enforces `MAX_PARALLEL_HARD_CAP = 8`; pass `--max-parallel-hard-cap N` only when deliberately overriding the cap.
 
 ## Step 6: Resolve model tiers
 
-Map each task's model recommendation to the tier map:
+Map plan recommendations to tiers:
 
-| Task recommendation | Model to use |
-|---------------------|-------------|
-| `capable` | `capable` from model-tiers.json |
-| `standard` | `standard` from model-tiers.json |
-| `cheap` | `cheap` from model-tiers.json |
+| Task recommendation | Tier |
+|---|---|
+| `capable` | `capable` from `model-tiers.json` |
+| `standard` | `standard` from `model-tiers.json` |
+| `cheap` | `cheap` from `model-tiers.json` |
 
-If a task has no tier specified, apply this rubric:
-- Touches 1–2 files with a complete spec → `cheap`
-- Touches multiple files with integration concerns → `standard`
-- Requires design judgment or broad codebase understanding → `capable`
+If a task has no tier, apply this rubric:
+- 1-2 files and a complete spec -> `cheap`.
+- Multiple files or integration concerns -> `standard`.
+- Design judgment or broad codebase understanding -> `capable`.
 
-Resolve `(model, cli)` per task by invoking `pi-flow helper _shared/resolve-model-dispatch --tier <task-tier> --agent coder`. The full procedure is documented in [`skills/_shared/model-tier-resolution.md`](../_shared/model-tier-resolution.md). Surface byte-equal canonical Template (1)–(4) on non-zero exit and stop the call site.
-
-Always pass `cli` explicitly on every orchestration call, even when it resolves to `"pi"`.
+For each task, invoke `pi-flow helper _shared/resolve-model-dispatch --tier <task-tier> --agent coder` and pass both resolved `model` and `cli` on every orchestration call, even when `cli` is `pi`. On non-zero exit, surface the byte-equal canonical Templates (1)-(4) from [`../_shared/model-tier-resolution.md`](../_shared/model-tier-resolution.md) and stop.
 
 ## Step 7: Baseline test capture
 
-**Skip if:** Integration test is disabled (Step 3 settings) or no test command is available.
+Skip this step if integration testing is disabled or no test command is available.
 
-Before the first wave, run the integration suite via `test-runner` (see the shared dispatch subsection below) with `{ARTIFACT_PATH} = <working-dir>/docs/test-runs/<plan-name>/baseline.log` and `{PHASE_LABEL} = baseline`. The agent applies the two-bucket extraction contract from `agent/agents/test-runner.md`: stable suite-native identifiers in `FAILING_IDENTIFIERS:` and non-reconcilable evidence (panics, build errors, collection errors) in `NON_RECONCILABLE_FAILURES:`. The orchestrator reads both buckets from the artifact.
+1. Compute `<plan-name>` as the plan filename without `.md`; create `docs/test-runs/<plan-name>/` before the first test-runner dispatch.
+2. Dispatch `test-runner` per [`../_shared/test-runner-dispatch.md`](../_shared/test-runner-dispatch.md) with `artifact_path = <working-dir>/docs/test-runs/<plan-name>/baseline.log` and `phase_label = baseline`. The agent records stable suite-native identifiers in `FAILING_IDENTIFIERS:` and non-reconcilable evidence (panics, build errors, collection errors) in `NON_RECONCILABLE_FAILURES:`.
+3. Parse the artifact handoff and format with `pi-flow helper _shared/parse-test-runner-artifact`.
+4. Run `pi-flow helper _shared/reconcile-test-run --artifact <baseline-artifact-path> --mode capture > <working-dir>/docs/test-runs/<plan-name>/baseline-failures.json`; treat that file as `<baseline-json-path>`.
+5. Read `.classification` (`clean` | `stable-failures-only` | `contains-non-reconcilable-evidence`) and `.baseline_failures`.
 
-#### Baseline recording
+Route baseline classifications:
 
-After artifact readback, run `pi-flow helper _shared/reconcile-test-run --artifact <baseline-artifact-path> --mode capture > <working-dir>/docs/test-runs/<plan-name>/baseline-failures.json`. Treat that file as `<baseline-json-path>` for every later reconcile call. Read `.classification` (`clean` | `stable-failures-only` | `contains-non-reconcilable-evidence`) and `.baseline_failures` from the saved JSON, then route to the per-classification user prompts below.
+- `clean`: record `baseline_failures := ∅` and proceed.
+- `stable-failures-only`: record `.baseline_failures`, warn, then proceed:
 
-**`clean`:** record `baseline_failures := ∅` and proceed.
-
-**`stable-failures-only`:** record `baseline_failures` from the helper's `.baseline_failures`. Warn the user:
 ```
 ⚠️ Baseline: N tests already failing before execution. Only failures with stable identifiers not in this baseline will be flagged after each wave.
 ```
-Then proceed.
 
-**`contains-non-reconcilable-evidence`:** record `baseline_failures` from `.baseline_failures` (may be empty). Non-reconcilable entries are never set members of `baseline_failures`. Present the user with an explicit decision:
+- `contains-non-reconcilable-evidence`: record `.baseline_failures` (possibly empty). Non-reconcilable entries are never set members of `baseline_failures`. Present:
+
 ```
 ⚠️ Baseline contains <M> non-reconcilable failure(s) (failures with no stable suite-native identifier).
 These cannot be safely exempted by stable-identifier comparison: each later integration run will treat any non-reconcilable failure as a current gate-blocking failure, including ones that may already exist before this plan runs.
@@ -177,115 +173,95 @@ These cannot be safely exempted by stable-identifier comparison: each later inte
 <render the three-section user-facing summary from integration-regression-gate.md, with current_failing_stable from FAILING_IDENTIFIERS and current_non_reconcilable from NON_RECONCILABLE_FAILURES>
 
 Options:
-(c) Continue anyway — proceed with the baseline as-is; later non-reconcilable failures will block their gates and require Debug or Stop.
-(x) Stop plan execution — fix the suite first.
+(c) Continue anyway     — proceed with the baseline as-is; later non-reconcilable failures will block their gates and require Debug or Stop
+(x) Stop plan execution — fix the suite first
 ```
-- **(c) Continue anyway:** freeze `baseline_failures` (which may be empty) and proceed.
-- **(x) Stop plan execution:** stop with `Plan execution cancelled — fix baseline non-reconcilable failures first.` The per-plan `docs/test-runs/<plan-name>/` directory is preserved on every stop exit so the user can inspect run artifacts.
 
-In all branches, `baseline_failures` is frozen once recorded and never mutated by any later wave, debugging pass, or final-gate run.
+  - `(c)` freeze `baseline_failures` and proceed.
+  - `(x)` stop with `Plan execution cancelled — fix baseline non-reconcilable failures first.` Preserve `docs/test-runs/<plan-name>/`.
 
-#### Integration regression gate
+`baseline_failures` is frozen once recorded and never mutated by later waves, debugging passes, or the final gate. The reconciliation model, byte-for-byte comparison rules, classifications, and three-section summary live in [`integration-regression-gate.md`](integration-regression-gate.md).
 
-See [`integration-regression-gate.md`](integration-regression-gate.md) for the baseline-only reconciliation model: the frozen `baseline_failures` set, per-run inputs (`current_failing_stable`, `current_non_reconcilable`, `current_non_baseline_stable`), the byte-for-byte set-comparison rules, the pass/fail classification, and the user-facing summary format. Step 12, the Step 12 Debugger-first flow, and Step 16 all consume this same model.
+### Test-runner call sites
 
-#### Test-runner dispatch (shared)
+> The orchestrator MUST NOT run the configured test command itself or synthesize a `test-runner` artifact from locally-run output. All integration-test execution and artifact writing must be performed by the `test-runner` subagent. The orchestrator may only create the parent directory with `mkdir -p docs/test-runs/<plan-name>/`, dispatch `test-runner` via `subagent_run_serial` with the filled `test-runner-prompt.md`, parse/validate the artifact with `pi-flow helper _shared/parse-test-runner-artifact`, and reconcile it against frozen `baseline_failures`.
 
-### Boundary: orchestrator MUST NOT run the test command itself
+Use the four protocol inputs from [`../_shared/test-runner-dispatch.md`](../_shared/test-runner-dispatch.md): `test_command`, `working_dir`, absolute `artifact_path`, and `phase_label`.
 
-> The orchestrator MUST NOT run the configured test command itself or synthesize a `test-runner` artifact from locally-run output. All integration-test execution and artifact writing must be performed by the `test-runner` subagent. The orchestrator may only:
-> - Create the parent directory `docs/test-runs/<plan-name>/` (via `mkdir -p`).
-> - Dispatch `test-runner` via `subagent_run_serial` with the filled `test-runner-prompt.md` template.
-> - Parse the artifact handoff marker via `pi-flow helper _shared/parse-test-runner-artifact`.
-> - Validate the artifact format via the same `pi-flow helper _shared/parse-test-runner-artifact` helper, which performs both the handoff parse and the structural format checks (required-header presence and order, `EXIT_CODE` integer parse, `FAILING_IDENTIFIERS_COUNT` / `NON_RECONCILABLE_COUNT` integer parse and count reconciliation, raw-output marker presence).
-> - Reconcile the parsed `FAILING_IDENTIFIERS:` and `NON_RECONCILABLE_FAILURES:` against the frozen `baseline_failures` per `integration-regression-gate.md`.
->
-> This boundary applies identically at Step 7 (baseline), Step 12 (post-wave), the Step 12 Debugger-first re-test, and Step 16 (final-gate). See `skills/_shared/orchestrator-verification-boundary.md` for the shared statement.
-
-**Per-plan runs directory.** Compute `<plan-name>` as the plan filename without the `.md` extension; before the first `test-runner` dispatch in the plan, create it with `mkdir -p docs/test-runs/<plan-name>`.
-
-**Filename scheme.** `{ARTIFACT_PATH}` is the absolute path formed by joining `<working-dir>` with one of:
+Artifact paths:
 - Step 7 baseline: `docs/test-runs/<plan-name>/baseline.log` (written exactly once).
-- Step 12.2 post-wave + Debugger-first re-test: `docs/test-runs/<plan-name>/wave-<N>-attempt-<K>.log`, where `<K>` increments on every re-entry within wave `<N>`.
+- Step 12.2 post-wave and Debugger-first re-test: `docs/test-runs/<plan-name>/wave-<N>-attempt-<K>.log`, where `<K>` increments on every re-entry within wave `<N>`.
 - Step 16 final-gate: `docs/test-runs/<plan-name>/final-gate-<seq>.log`, where `<seq>` increments on every gate entry.
 
-Test-runner invocations follow the protocol in [`skills/_shared/test-runner-dispatch.md`](../_shared/test-runner-dispatch.md). For each invocation, supply the four protocol inputs: `test_command` from Step 3 settings; `working_dir` = the absolute working directory; `artifact_path` = an absolute path under `docs/test-runs/<plan-name>/` per the filename scheme above; `phase_label` = the appropriate label for the call site (`baseline`, `wave-<N>-attempt-<K>`, or `final-gate-<seq>`).
+This boundary applies identically at Step 7, Step 12, the Step 12 Debugger-first re-test, and Step 16.
 
 ## Step 8: Execute waves
 
-Before dispatching the first wave, record the current HEAD SHA for the post-completion review: `PRE_EXECUTION_SHA=$(git rev-parse HEAD)`.
+Before the first wave, record `PRE_EXECUTION_SHA=$(git rev-parse HEAD)` for Step 15/16 review and final-gate ranges.
 
-### Direct-branch warning
-
-If executing directly in the current workspace (not a worktree), emit this warning once before the first wave (continue without an extra confirmation):
+If executing directly in the current workspace (not a worktree), emit once before the first wave:
 
 ```
 ⚠️ You're on `<branch_name>`. Commits will be made directly to <branch_name> after each wave.
 ```
 
-For each wave, dispatch all tasks in parallel via `subagent_run_parallel`; in sequential mode, dispatch one at a time via `subagent_run_serial`. Each task entry has shape `{ name: "<task-N>: <task-title>", agent: "coder", task: "<self-contained prompt>", model: "<resolved>", cli: "<resolved>" }`.
+For each wave/subwave:
+1. Fill `$(pi-flow template execute-plan/execute-task-prompt)` via `pi-flow helper execute-plan/assemble-coder-prompt --task-spec <path-or-dash> --context <path-or-dash> --working-dir <abs-dir> --tdd-block <enabled|disabled> --output <filled-prompt-path>`; use a path or `-` for each path-or-dash input. `enabled` inlines `tdd-block.md`; `disabled` substitutes empty. The helper performs single-pass literal substitution and fails closed on unreplaced placeholders.
+2. Dispatch all tasks in parallel via `subagent_run_parallel`; in sequential mode, dispatch one at a time via `subagent_run_serial`.
+3. Use task entries shaped like `{ name: '<task-N>: <task-title>', agent: 'coder', task: '<filled prompt>', model: '<resolved>', cli: '<resolved>' }`.
+4. Parse each `finalMessage` with `pi-flow helper execute-plan/parse-coder-report --report <results[i].finalMessage path>`. `subagent_run_parallel` preserves input-task order.
 
-For each result, run `pi-flow helper execute-plan/parse-coder-report --report <results[i].finalMessage path>`; route on `.status` (`DONE` / `DONE_WITH_CONCERNS` / `NEEDS_CONTEXT` / `BLOCKED`). `subagent_run_parallel` preserves input-task order.
-
-### Assembling worker prompts
-
-For each task, fill `$(pi-flow template execute-plan/execute-task-prompt)` via `pi-flow helper execute-plan/assemble-coder-prompt --task-spec <path-or-`-`> --context <path-or-`-`> --working-dir <abs-dir> --tdd-block <enabled|disabled> --output <filled-prompt-path>` (`enabled` inlines `tdd-block.md`; `disabled` substitutes empty). The helper enforces single-pass literal substitution and fails closed on any unreplaced placeholder.
-
-The filled template becomes the `coder` task prompt; it already includes self-review, escalation, code-organization, and report-format guidance — do not add these separately.
+The filled `execute-task-prompt.md` already includes TDD, self-review, escalation, code-organization, and report-format guidance; do not add those separately.
 
 ## Step 9: Handle worker status codes
 
-After each wave completes, process each worker response:
+Route parsed `.status` values mechanically:
 
-- **DONE** → proceed to verification (Step 11).
-- **DONE_WITH_CONCERNS** → record the freeform concerns; do NOT resolve inline. Step 10 presents a single combined checkpoint for all concerned tasks before Step 11.
-- **NEEDS_CONTEXT** → provide the missing context and re-dispatch immediately.
-- **BLOCKED** → do NOT recover inline. Record the blocker; Step 10 (wave gate) handles the combined escalation. The four canonical interventions (more context, better model, split, stop) live in Step 10.
+| Status | Route |
+|---|---|
+| `DONE` | Proceed to Step 10, then verification in Step 11. |
+| `DONE_WITH_CONCERNS` | Record freeform concerns; do not resolve inline. Step 10 presents one combined checkpoint before Step 11. |
+| `NEEDS_CONTEXT` | Provide the missing context and re-dispatch immediately. |
+| `BLOCKED` | Record the blocker; do not recover inline. Step 10 handles the combined escalation with the canonical interventions. |
 
-After the wave drains, Step 10 handles `BLOCKED` first then `DONE_WITH_CONCERNS`. Step 11 runs only after the gate exits.
+After the wave drains, Step 10 handles `BLOCKED` first, then `DONE_WITH_CONCERNS`. Step 11 runs only after Step 10 exits. Never ignore an escalation or re-dispatch the same task to the same model without changes.
 
-**Never ignore an escalation or re-dispatch the same task to the same model without changes.**
-
-### Boundary: orchestrator MUST NOT verify coder output itself
+### Acceptance-verification boundary
 
 > After a `coder` returns `DONE` or `DONE_WITH_CONCERNS`, the orchestrator MUST NOT run local grep / Python / assertion scripts, spot checks, or final-acceptance checks to decide whether the implementation satisfies the task. The only sanctioned path for substantive task verification is dispatching a fresh `verifier` subagent (Step 11) with the planner-authored acceptance criteria and `Verify:` recipes, then mechanically parsing the verifier's protocol output via `pi-flow helper execute-plan/parse-verifier-report`.
-> Forbidden behaviors (illustrative, not exhaustive): writing Python / grep / `Read` scripts that independently check criteria; running spot checks against implemented files to decide whether criteria pass; synthesizing a "final acceptance" script that re-checks task-specific expected strings; interpreting local command output as evidence that a task passed.
-> See `skills/_shared/orchestrator-verification-boundary.md` for the shared statement that anchors this rule across `execute-plan`, `refine-code`, and `refine-plan`.
-
-### Allowed mechanical work (orchestrator)
-
-> The orchestrator's sanctioned activities are mechanical glue connecting substantive subagents. None of these produces a PASS/FAIL verdict on implementation acceptance criteria — those judgments belong to `verifier` and `test-runner`.
 >
-> | Activity | Helper |
-> |---|---|
-> | Plan parsing (task spec, files, criteria, recipes) | `pi-flow helper execute-plan/extract-plan-tasks` |
-> | Coder prompt assembly | `pi-flow helper execute-plan/assemble-coder-prompt` |
-> | Verifier prompt assembly | `pi-flow helper execute-plan/assemble-verifier-prompt` |
-> | Diff context generation | `pi-flow helper execute-plan/collect-diff-context` |
-> | Verifier-visible file-set assembly | orchestrator-computed (union rule, Step 11.2) |
-> | Model-tier resolution | `pi-flow helper _shared/resolve-model-dispatch` |
-> | Test-runner artifact parsing | `pi-flow helper _shared/parse-test-runner-artifact` |
-> | Verifier report parsing | `pi-flow helper execute-plan/parse-verifier-report` |
-> | Per-plan test-runs cleanup (success exit only) | `pi-flow helper _shared/cleanup-test-runs` |
-> | Post-helper Python bytecode cache cleanup | `pi-flow helper _shared/cleanup-pycache` |
-> | Completion bookkeeping (idea close, branch finish) | native git / idea tool |
+> Forbidden behaviors include writing Python / grep / `Read` scripts that independently check criteria, running spot checks against implemented files to decide whether criteria pass, synthesizing a final acceptance script that re-checks task-specific expected strings, or interpreting local command output as evidence that a task passed.
+
+Allowed mechanical glue:
+
+| Activity | Helper |
+|---|---|
+| Plan parsing | `pi-flow helper execute-plan/extract-plan-tasks` |
+| Coder prompt assembly | `pi-flow helper execute-plan/assemble-coder-prompt` |
+| Verifier prompt assembly | `pi-flow helper execute-plan/assemble-verifier-prompt` |
+| Diff context generation | `pi-flow helper execute-plan/collect-diff-context` |
+| Verifier-visible file-set assembly | orchestrator-computed union rule (Step 11.2 compatibility label) |
+| Model-tier resolution | `pi-flow helper _shared/resolve-model-dispatch` |
+| Test-runner artifact parsing | `pi-flow helper _shared/parse-test-runner-artifact` |
+| Verifier report parsing | `pi-flow helper execute-plan/parse-verifier-report` |
+| Per-plan test-runs cleanup | `pi-flow helper _shared/cleanup-test-runs` |
+| Post-helper Python bytecode cache cleanup | `pi-flow helper _shared/cleanup-pycache` |
+| Completion bookkeeping | native git / built-in `idea` tool |
 
 ## Step 10: Wave gate: blocked and concerns handling
 
-Run this gate once per wave after every dispatched worker is classified. Order: blocked handling first, then concerns handling, then exit to Step 11. Any `BLOCKED` pauses execution before any later wave / Step 11 / Step 12. A wave with no `BLOCKED` and no `DONE_WITH_CONCERNS` passes through silently.
+Run once per wave after every dispatched worker is classified. Order: drain wave -> blocked handling -> concerns handling -> exit. Do not start later waves, Step 11, or Step 12 while this gate is active. A wave with no `BLOCKED` and no `DONE_WITH_CONCERNS` passes through silently.
 
 ### 1. Drain the current wave
 
-Wait for every dispatched worker to return and be classified by Step 9. Do not start the next wave or run Step 11/12 yet. Build `BLOCKED_TASKS` from `parse-coder-report.py` output (`.status == "BLOCKED"`) and `CONCERNED_TASKS` from `.status == "DONE_WITH_CONCERNS"`. Use the helper's `.blocker_text` or `.concerns_block` field for the user-facing escalation view.
+Wait for every worker. Build `BLOCKED_TASKS` from `.status == "BLOCKED"` and `CONCERNED_TASKS` from `.status == "DONE_WITH_CONCERNS"`; use `.blocker_text` or `.concerns_block` for user-facing text.
 
 ### 2. Blocked handling (runs first)
 
-If `BLOCKED_TASKS` is empty, skip to §3.
-
-Otherwise present a single combined escalation view (do NOT prompt one-at-a-time) containing:
-1. A header line naming the wave, e.g., `🚫 Wave <N>: <count> task(s) BLOCKED. Execution paused before any later wave.`
-2. A "Wave outcomes" summary listing every task in the wave with its Step 9 status (DONE / DONE_WITH_CONCERNS / BLOCKED), task number, and title. Successful same-wave tasks MUST appear here.
-3. A "Blocked tasks" block, one entry per task: number + title, full untruncated blocker text from the worker's `## Concerns / Needs / Blocker`, and the task's `**Files:**` scope.
+If `BLOCKED_TASKS` is empty, skip to concerns handling. Otherwise present one combined escalation view (not one prompt per task) containing:
+1. Header: `🚫 Wave <N>: <count> task(s) BLOCKED. Execution paused before any later wave.`
+2. Wave outcomes for every task in the wave, including successful same-wave tasks, with status, number, and title.
+3. Blocked tasks with number, title, full untruncated blocker text from `## Concerns / Needs / Blocker`, and the task's `**Files:**` scope.
 
 Example layout:
 
@@ -304,35 +280,30 @@ Blocked tasks:
     <full blocker text from the worker report>
 ~~~
 
-After the combined view, ask per-task for an intervention (one task at a time, independent choices):
+Then ask per blocked task, one at a time:
 
 ~~~
 Task <N>: <task_title> (current tier: <tier>) — choose an intervention:
-  (c) More context      — re-dispatch this task with additional context you supply
-  (m) Better model      — re-dispatch this task with a more capable model tier
+(c) More context         — re-dispatch this task with additional context you supply
+(m) Better model         — re-dispatch this task with a more capable model tier
                             [omit this line if current tier is already `capable`]
-  (s) Split into sub-tasks — break this task into smaller sub-tasks and dispatch them
-(x) Stop execution — halt the plan; prior wave commits remain in git history
+(s) Split into sub-tasks — break this task into smaller sub-tasks and dispatch them
+(x) Stop execution       — halt the plan; prior wave commits remain in git history
 ~~~
 
-These are the canonical intervention options. The `(m) Better model` option is suppressed when the task's tier is already `capable` (no higher tier exists; re-dispatching to the same model violates the Step 9 rule). When suppressed, the user must pick `(c)`, `(s)`, or `(x)`.
+Canonical interventions:
+- `(c) More context`: prompt for context; re-dispatch the original task plus `## Additional Context`. Keep the tier unless `(m)` is also chosen.
+- `(m) Better model`: only when current tier is `cheap` or `standard`; escalate `cheap` -> `standard` or `standard` -> `capable` and resolve per Step 6. Suppress this option at `capable`.
+- `(s) Split into sub-tasks`: decompose in-session. Sub-tasks must preserve the same output files and acceptance-criteria coverage. Dispatch as a mini-wave bounded by `MAX_PARALLEL_HARD_CAP` (sequential if naturally ordered). Replace the parent slot with the sub-tasks; each sub-task is classified independently. Split dispatches run pre-commit, so their changes must remain in the working tree at Step 11 (see the Step 11.2 compatibility file-set fallback). Retry budget follows Step 13.
+- `(x) Stop execution`: halt immediately; do not run Step 11/12 for this wave. Report via Step 14. Prior wave commits remain; `docs/test-runs/<plan-name>/` is preserved.
 
-- **(c) More context:** prompt the user for additional context. Re-dispatch the task to a `coder` worker with the original task spec plus the supplied context appended under `## Additional Context`. Keep the existing tier unless `(m)` is also chosen.
-- **(m) Better model:** offered only when current tier is `cheap` or `standard`. Re-dispatch using the next tier up (`cheap` → `standard`, `standard` → `capable`); resolve the concrete model per Step 6.
-- **(s) Split into sub-tasks:** decompose in-session. Sub-tasks must collectively preserve the same output files and acceptance-criteria coverage (no criterion dropped). Dispatch as a mini-wave bounded by `MAX_PARALLEL_HARD_CAP` (sequential if ordering is natural). The parent's slot is replaced by the sub-tasks; each sub-task is independent for Step 9 classification and gate re-entry. ⚠ Sub-task dispatches run pre-commit; their changes must remain in the working tree at Step 11 (see Step 11.2 fallback). Retry budget: see Step 13.
-- **(x) Stop execution:** halt immediately. Do NOT run Step 11 or Step 12 for this wave. Report partial progress via Step 14. Prior wave commits remain in git history; `docs/test-runs/<plan-name>/` is preserved on every stop exit.
-
-If the user picks `(x)` for any blocked task, stop the whole plan; do not continue asking about remaining blocked tasks.
-
-After collecting a non-stop intervention for every task in `BLOCKED_TASKS`, re-dispatch them together (parallel, capped by `MAX_PARALLEL_HARD_CAP`) using Step 8's dispatch shape. Wait, apply Step 9, rebuild `BLOCKED_TASKS` / `CONCERNED_TASKS`, and re-enter §2. Repeat until empty or `(x)`. For tasks where `(s)` was chosen, the sub-tasks' responses replace the parent's slot; any sub-task returning `BLOCKED` appears in `BLOCKED_TASKS` on the next pass. Each re-dispatch counts toward the per-task retry budget (Step 13).
+If any blocked task chooses `(x)`, stop the whole plan without prompting remaining blocked tasks. Otherwise re-dispatch the selected tasks together (parallel, capped by `MAX_PARALLEL_HARD_CAP`) using Step 8's dispatch shape; apply Step 9, rebuild `BLOCKED_TASKS` / `CONCERNED_TASKS`, and re-enter blocked handling until empty or stopped. Each re-dispatch counts toward Step 13.
 
 ### 3. Concerns handling (runs second)
 
-**Precondition:** §2 has exited (i.e., `BLOCKED_TASKS` is empty); every task in the wave is `DONE` or `DONE_WITH_CONCERNS`.
+Precondition: `BLOCKED_TASKS` is empty and every task is `DONE` or `DONE_WITH_CONCERNS`.
 
-If `CONCERNED_TASKS` is empty, skip to §4 (gate exit) and proceed directly to Step 11.
-
-Otherwise, present every concerned task together in a single combined message — do not prompt one-task-at-a-time:
+If `CONCERNED_TASKS` is empty, skip to gate exit. Otherwise present all concerned tasks together:
 
 ```
 ⚠️ Wave <N>: <M> task(s) returned DONE_WITH_CONCERNS. Review before verification.
@@ -345,55 +316,41 @@ Otherwise, present every concerned task together in a single combined message �
 ───────────────────────────────────────────────────────────
 
 Options:
-  (c) Continue to verification — proceed to Step 11 with all tasks as-is
-  (r) Remediate selected task(s) — specify task number(s) and guidance; re-dispatch those tasks
-(x) Stop execution — halt the plan; prior wave commits remain in git history
+(c) Continue to verification   — proceed to Step 11 with all tasks as-is
+(r) Remediate selected task(s) — specify task number(s) and guidance; re-dispatch those tasks
+(x) Stop execution             — halt the plan; prior wave commits remain in git history
 ```
 
-- **(c) Continue to verification.** Exit §3 with concerned tasks' status unchanged; the verifier is the next gate.
-- **(r) Remediate selected task(s).** Prompt for (a) task numbers from `CONCERNED_TASKS` and (b) a freeform guidance block. Re-dispatch each selected task to a fresh `coder` with the original spec plus the worker's concerns block and the user's guidance appended under `## Concerns To Address`. Each re-dispatch counts toward Step 13's budget. Apply Step 9 to responses; any `BLOCKED` returns to §2; otherwise rebuild `CONCERNED_TASKS` and re-enter §3. Tasks not selected keep their prior status and re-appear.
-- **(x) Stop execution.** Halt immediately. Do NOT run Step 11/12 for this wave. Report via Step 14; `docs/test-runs/<plan-name>/` is preserved.
+Route choices:
+- `(c)` exit concerns handling; verifier is the next gate.
+- `(r)` prompt for task numbers from `CONCERNED_TASKS` and a freeform guidance block. Re-dispatch selected tasks to fresh `coder` workers with the original spec plus the worker concerns and user guidance under `## Concerns To Address`. Count each re-dispatch toward Step 13, apply Step 9, route any `BLOCKED` back to blocked handling, rebuild `CONCERNED_TASKS`, and re-enter concerns handling. Unselected tasks keep their prior status and re-appear.
+- `(x)` halt immediately; do not run Step 11/12 for this wave. Report via Step 14; preserve `docs/test-runs/<plan-name>/`.
 
-Repeat §3 until `CONCERNED_TASKS` is empty or the user picks `(x)`.
+Repeat until `CONCERNED_TASKS` is empty or the user chooses `(x)`.
 
 ### 4. Gate exit
 
-The gate exits when `BLOCKED_TASKS` is empty and `CONCERNED_TASKS` is either empty or the user picked `(c)`. Tasks still `DONE_WITH_CONCERNS` flow into Step 11 as-is; the verifier's verdict is authoritative. Selecting `(x)` from §2 or §3 halts the plan via Step 14 without running Step 11/12 for this wave.
+Exit only when `BLOCKED_TASKS` is empty and `CONCERNED_TASKS` is empty or the user chose `(c)`. Tasks still `DONE_WITH_CONCERNS` flow into Step 11 as-is; the verifier's verdict is authoritative.
 
 ## Step 11: Verify wave output
 
-**Precondition:** Step 10 must have exited. Each task is verified in a fresh-context `verifier` subagent via `skills/execute-plan/verify-task-prompt.md`: Phase 1 collects command evidence (executing each `Verify:` recipe byte-equal verbatim), Phase 2 judges each criterion. The orchestrator dispatches and routes the verdict.
+Precondition: Step 10 has exited. Verify every non-blocked task in the wave with a fresh-context `verifier` subagent and the protocol in [`acceptance-criteria-verification.md`](acceptance-criteria-verification.md). That file owns template placeholders, recipe classification, diff collection, prompt assembly, dispatch resolution, parser invocation, per-criterion output shape, `VERDICT:` shape, full-coverage rule, and Phase 1 evidence-block protocol errors.
 
-**Protocol-error stop — missing `Verify:` recipes:** before dispatching the verifier, check that every acceptance criterion for the task has an attached `Verify:` recipe. If any is missing, STOP this wave: report the task number and criterion text, recommend re-running `generate-plan`, and do not dispatch the verifier or treat the task as passing. A plan without complete `Verify:` recipes is a protocol error and must be regenerated before execution continues.
+Before dispatching a verifier, check that every acceptance criterion has a non-empty `Verify:` recipe. If any is missing, stop this wave, report the task number and criterion text, recommend re-running `generate-plan`, and do not dispatch the verifier or treat the task as passing. A plan without complete `Verify:` recipes is a protocol error and must be regenerated before execution continues.
 
-### Step 11.2: Dispatch the verifier
+1. **Dispatch verifiers (compatibility: Step 11.2 verifier dispatch).** Launch verifier work for the wave concurrently, bounded by the `@aphotic/pi-mux-subagents` `MAX_PARALLEL_HARD_CAP`; wait for all before parsing. For each task, compute `{MODIFIED_FILES}` with `pi-flow helper execute-plan/compute-verifier-file-set --task-files <task-files-json> --worker-files <worker-files-json> --observed-status <git-status-output-path-or-dash> --observed-diff-paths <diff-paths-json> --wave-shape <single-task|parallel-multi-task>` and consume `.verifier_visible_files`. Pass `--observed-status` as a path to verbatim `git status --porcelain` output, or `-` for stdin; never pass porcelain text directly as the argument value. The prompt records that the set is orchestrator-assembled.
 
-Verifier dispatches for the wave run in parallel, bounded by the `@aphotic/pi-mux-subagents` `MAX_PARALLEL_HARD_CAP` cap (see Step 5). Issue all verifier subagents concurrently up to the cap and wait for all of them to return before parsing in Step 11.3.
+   **Sub-task carve-out:** Step 10 split-into-sub-tasks dispatches MUST run pre-commit; their changes must remain in the working tree at Step 11 so `git diff HEAD` captures them. Step 12's commit is the only sanctioned working-tree -> committed transition. If a sub-task's changes were committed before Step 11 (protocol violation), substitute `git diff <pre-subtask-commit>..HEAD -- <modified files>` for those criteria.
 
-**Verifier-visible file set (`{MODIFIED_FILES}`).** For each task in the wave, run `pi-flow helper execute-plan/compute-verifier-file-set --task-files <task-files-json> --worker-files <worker-files-json> --observed-status <git-status-output-path-or-dash> --observed-diff-paths <diff-paths-json> --wave-shape <single-task|parallel-multi-task>`; consume `.verifier_visible_files` as `{MODIFIED_FILES}`. The `--observed-status` argument is the path to a file holding the verbatim `git status --porcelain` output, or `-` to stream that output via stdin (matches the helper's `PATH_OR_DASH` contract); never pass the porcelain text directly as the argument value. The prompt records that the set is orchestrator-assembled, not the worker's self-report.
+2. **Parse verifier output and gate the wave (compatibility: Step 11.3 parser gate).** Parse each report with `pi-flow helper execute-plan/parse-verifier-report`. Route `VERDICT: PASS` as passing. Route `VERDICT: FAIL` (including malformed output or Phase 1 protocol errors) into Step 13 with the per-criterion `FAIL` entries and `reason:` text. Protocol errors never pass and are never silently interpreted as `PASS`.
 
-**Sub-task carve-out:** Step 10 split-into-sub-tasks dispatches MUST run pre-commit; their changes must remain in the working tree at Step 11 so `git diff HEAD` captures them. (Step 12's commit is the only sanctioned working-tree → committed transition.) If a sub-task's changes were committed before Step 11 (protocol violation), substitute `git diff <pre-subtask-commit>..HEAD -- <modified files>` for those criteria.
-
-For each task in the wave (regardless of its Step 9 status, except `BLOCKED` which is already handled in Step 10), follow the per-task verification protocol in [`acceptance-criteria-verification.md`](acceptance-criteria-verification.md) — it owns template placeholders, the dispatch sequence (extract-plan-tasks → classify recipes → collect-diff-context → assemble-verifier-prompt → resolve dispatch → dispatch verifier), and the parser invocation. The wave-level orchestration here only assembles `{MODIFIED_FILES}` per the union rule above and dispatches the per-task protocol concurrently across the wave (parallel, capped by `MAX_PARALLEL_HARD_CAP`).
-
-### Step 11.3: Parse verifier output and gate the wave
-
-For each task, parse the verifier's report per the protocol in [`acceptance-criteria-verification.md`](acceptance-criteria-verification.md) (which owns the per-criterion header shape, overall `VERDICT:` shape, full-coverage rule, and Phase 1 evidence-block protocol errors). The parser yields a per-task `VERDICT: PASS` or `VERDICT: FAIL`.
-
-Route each parsed result:
-
-- `VERDICT: PASS` — the task passes wave verification.
-- `VERDICT: FAIL` (including any malformed-output or Phase 1 protocol error surfaced by the script) — route the task into Step 13's retry loop, including the per-criterion `FAIL` entries and their `reason:` text so the retry has concrete remediation targets. Protocol errors never pass the wave gate and are never silently interpreted as `PASS`.
-
-**Wave gate exit:** The wave exits Step 11 successfully only when every task in the wave has `VERDICT: PASS`. If any task has `VERDICT: FAIL`, the wave is not verified and Step 12 MUST NOT run until Step 13's retry loop produces a `VERDICT: PASS` for every failed task.
+Step 11 exits successfully only when every task in the wave has `VERDICT: PASS`. If any task has `VERDICT: FAIL`, Step 12 MUST NOT run until Step 13 produces `VERDICT: PASS` for every failed task.
 
 ## Step 12: Post-wave commit and integration tests
 
-**Precondition:** Step 10 (wave gate) must have exited and Step 11 must report `VERDICT: PASS` for every task in the wave. If any precondition is unmet, return to the responsible gate (Step 10 for BLOCKED or unresolved concerns, Step 13's retry loop for `VERDICT: FAIL`). Both the post-wave commit and the integration-test run are withheld until the wave completes successfully.
+Precondition: Step 10 has exited and Step 11 reports `VERDICT: PASS` for every task in the wave. If not, return to Step 10 or Step 13. Both commit and integration test run are withheld until the wave succeeds.
 
-### 1. Commit wave changes
-
-Stage and commit all changes from the completed wave:
+1. **Commit wave changes.** Stage and commit all changes from the completed wave:
 
 ```bash
 git add -A
@@ -403,63 +360,61 @@ git commit -m "feat(plan): wave <N> - <plan_goal_summary>
 - Task <Y>: <task_title>"
 ```
 
-**Commit message format:** subject `feat(plan): wave <N> - <plan_goal_summary>` (truncate Goal with `...` to stay near 72 chars), blank line, then one body line per task as `- Task <X>: <task_title>`.
+Subject: `feat(plan): wave <N> - <plan_goal_summary>` (truncate Goal with `...` near 72 chars), blank line, then one `- Task <X>: <task_title>` body line per task. If `git add -A` stages nothing, skip the commit silently.
 
-**If `git add -A` stages nothing** (e.g., verification-only wave): skip the commit silently.
+2. **Run integration tests (compatibility: Step 12.2 post-wave reconcile).** Skip if integration testing is disabled or no test command is available. Dispatch `test-runner` with `artifact_path = <working-dir>/docs/test-runs/<plan-name>/wave-<N>-attempt-<K>.log` and `phase_label = wave-<N>-attempt-<K>`, where `<K>` is a 1-based wave attempt counter incremented on every Debugger-first re-test. Then run `pi-flow helper _shared/reconcile-test-run --artifact <wave-artifact-path> --mode reconcile --baseline-failures <baseline-json-path>` and consume `.current_failing_stable`, `.current_non_reconcilable`, `.current_non_baseline_stable`, and `.classification` (`pass` | `fail`). Render the [`integration-regression-gate.md`](integration-regression-gate.md) three-section summary.
 
-### 2. Run integration tests
-
-**Skip if:** Integration test is disabled (Step 3 settings) or no test command is available.
-
-Run the integration suite via `test-runner` (see Step 7's shared dispatch subsection) with `{ARTIFACT_PATH} = <working-dir>/docs/test-runs/<plan-name>/wave-<N>-attempt-<K>.log` (`<K>` is a 1-based attempt counter for the wave, incremented on each Debugger-first re-test) and `{PHASE_LABEL} = wave-<N>-attempt-<K>`. Run `pi-flow helper _shared/reconcile-test-run --artifact <wave-artifact-path> --mode reconcile --baseline-failures <baseline-json-path>`; consume `.current_failing_stable`, `.current_non_reconcilable`, `.current_non_baseline_stable`, and `.classification` (`pass`|`fail`). Render the [`integration-regression-gate.md`](integration-regression-gate.md) three-section summary from those fields.
-
-**Pass (`.classification == "pass"`):** proceed to wave `<N+1>` (or Step 15/16 if final).
-
-**Fail (`.classification == "fail"`):** render the three-section summary with the Step 12 fail-path header, then present the menu below.
-
-#### Menu
-
-The menu differs between intermediate and final waves.
+   - `pass`: proceed to wave `<N+1>`, or Step 15/16 if final.
+   - `fail`: render the Step 12 fail-path header and present the appropriate menu.
 
 **Intermediate-wave menu** (`<N> < total_waves`):
 
 ```
 Options:
-(d) Debug failures now       — dispatch the Debugger-first flow against current_non_baseline_stable ∪ current_non_reconcilable, then re-test
+(d) Debug failures now        — dispatch the Debugger-first flow against current_non_baseline_stable ∪ current_non_reconcilable, then re-test
 (c) Continue despite failures — proceed to wave <N+1> without modifying baseline_failures
-(x) Stop execution — halt the plan; prior wave commits remain in git history
+(x) Stop execution            — halt the plan; prior wave commits remain in git history
 ```
 
-- **(d) Debug failures now:** Follow [`integration-regression-debugging.md`](integration-regression-debugging.md) using the **Step 12 (post-wave)** parameter row, scoped to `current_non_baseline_stable ∪ current_non_reconcilable`. `change_range` = the wave commit SHA; `suspect_universe` = wave `<N>`'s tasks whose modified files appear in failing stack traces (or all wave tasks if ambiguous); `re_test_callback` re-invokes test-runner-dispatch with a fresh `wave-<N>-attempt-<K>` artifact and recomputes via `integration-regression-gate.md`. Do NOT undo the wave commit up front; the debugging dispatch inspects the committed state. Counts as a retry toward Step 13's 3-retry limit.
-- **(c) Continue despite failures:** proceed to wave `<N+1>`. **`baseline_failures` is NOT mutated**; the next wave reconciles against the original frozen baseline, so unresolved failures will be flagged again. Final plan completion remains blocked until both `current_non_baseline_stable` and `current_non_reconcilable` are empty — `(c)` defers but does not waive that gate. Warn the user accordingly.
-- **(x) Stop plan execution:** halt. Prior wave commits remain in git history; report via Step 14; `docs/test-runs/<plan-name>/` is preserved.
+- `(d)` follow [`integration-regression-debugging.md`](integration-regression-debugging.md) using the **Step 12 (post-wave)** parameter row, scoped to `current_non_baseline_stable ∪ current_non_reconcilable`. `change_range` = the wave commit SHA; `suspect_universe` = wave `<N>` tasks whose modified files appear in failing stack traces, or all wave tasks if ambiguous; `re_test_callback` re-invokes test-runner dispatch with a fresh `wave-<N>-attempt-<K>` artifact and recomputes via `integration-regression-gate.md`. Do not undo the wave commit up front. Counts toward Step 13's 3-retry limit.
+- `(c)` proceed to wave `<N+1>`. `baseline_failures` is NOT mutated; unresolved failures will be flagged again. Final completion remains blocked until both `current_non_baseline_stable` and `current_non_reconcilable` are empty. Warn the user accordingly.
+- `(x)` halt; prior wave commits remain. Report via Step 14; preserve `docs/test-runs/<plan-name>/`.
 
 **Final-wave menu** (`<N> == total_waves`):
 
 ```
 Options:
-(d) Debug failures now   — dispatch the Debugger-first flow against current_non_baseline_stable ∪ current_non_reconcilable, then re-test
-(x) Stop execution — halt the plan; prior wave commits remain in git history
+(d) Debug failures now — dispatch the Debugger-first flow against current_non_baseline_stable ∪ current_non_reconcilable, then re-test
+(x) Stop execution     — halt the plan; prior wave commits remain in git history
 ```
 
-No continue option on the final wave: there is no subsequent wave to absorb unresolved failures, and the final-completion precondition forbids silently shipping them. The user MUST either debug or stop.
+No continue option on the final wave. The user MUST either debug or stop.
 
-- **(d) Debug failures now:** same as the intermediate-wave `(d)`. Step 16's final-gate applies the same baseline-only reconciliation before the plan can report success.
-- **(x) Stop plan execution:** halt. Prior wave commits remain; report via Step 14; `docs/test-runs/<plan-name>/` is preserved.
+- `(d)` same as the intermediate-wave debug path. Step 16's final gate still applies.
+- `(x)` halt; prior wave commits remain. Report via Step 14; preserve `docs/test-runs/<plan-name>/`.
 
 ## Step 13: Handle failures and retries
 
-If a worker produces empty, missing, or incorrect output:
-1. Retry automatically up to **3 times** (improving the prompt where possible). **Shared counter:** all re-dispatches from Step 10 Blocked handling, Step 10 Concerns `(r)` remediation, and Step 11 `VERDICT: FAIL` routing share a single per-task retry counter. Exhaustion in one path exhausts it everywhere; subsequent failures go directly to step 2 below. **Split rule:** choosing `(s) Split into sub-tasks` in Step 10 consumes 1 retry against the parent's budget, and each sub-task inherits the parent's remaining count (no fresh 3-budget) — this closes the split-to-bypass-exhaustion path.
-2. If still failing after 3 retries, **notify the user at the end of the wave** and ask:
-   ```
-   Options:
-   (r) Retry again — optionally with a different model or more context. Resets the per-task budget back to 3 for that task only.
-(x) Stop execution — halt the plan; prior wave commits remain in git history
-   ```
-   `docs/test-runs/<plan-name>/` is preserved on `(x)`. There is no skip option. Any unresolved failure — including Step 11 `VERDICT: FAIL` — must be `(r)` retried to resolution or `(x)` stopped.
+All re-dispatches from Step 10 blocked handling, Step 10 concerns remediation, Step 11 `VERDICT: FAIL` routing, and Step 12/16 integration debugging share the same per-task retry rules:
 
-Apply wave pacing from Step 3 — `(f)` Pause only on failure (default) or `(w)` Pause every wave. Pacing only governs waves where Step 10 has exited and every task is `VERDICT: PASS`. `BLOCKED`, unresolved concerns, and `VERDICT: FAIL` always pause via the gates regardless of wave pacing.
+| Rule | Behavior |
+|---|---|
+| Automatic retries | Retry automatically up to **3 times**, improving the prompt where possible. |
+| Shared counter | Exhaustion in one path exhausts the budget everywhere; later failures go directly to the exhaustion menu. |
+| Split rule | `(s) Split into sub-tasks` consumes 1 retry from the parent; each sub-task inherits the parent's remaining count, not a fresh budget. |
+| Verifier failures | Unresolved `VERDICT: FAIL` must be retried to `VERDICT: PASS` or stopped. |
+
+After 3 failed retries, notify the user at the end of the wave and ask:
+
+```
+Options:
+(r) Retry again    — optionally with a different model or more context. Resets the per-task budget back to 3 for that task only.
+(x) Stop execution — halt the plan; prior wave commits remain in git history
+```
+
+`docs/test-runs/<plan-name>/` is preserved on `(x)`. There is no skip option.
+
+Apply wave pacing from Step 3 only after Step 10 has exited and every task has `VERDICT: PASS`; `BLOCKED`, unresolved concerns, and `VERDICT: FAIL` always pause regardless of pacing.
 
 ```
 Options:
@@ -469,9 +424,9 @@ Options:
 
 ## Step 14: Report partial progress
 
-When execution stops early: leave the plan file in `docs/plans/` for reference and report which tasks completed, failed, and remain.
+When execution stops early, leave the plan file in `docs/plans/` and report completed, failed, and remaining tasks.
 
-**Most recent integration run failures:** if any `test-runner` artifact exists (post-wave `wave-<N>-attempt-<K>.log` or `final-gate-<seq>.log`), run `pi-flow helper _shared/reconcile-test-run --artifact <most-recent-artifact-path> --mode reconcile --baseline-failures <baseline-json-path>`; render `.current_non_baseline_stable` and `.current_non_reconcilable` into the report sections below:
+If any post-wave or final-gate `test-runner` artifact exists, reconcile the most recent artifact with `pi-flow helper _shared/reconcile-test-run --artifact <most-recent-artifact-path> --mode reconcile --baseline-failures <baseline-json-path>` and render:
 
 ```
 ### Most recent integration run failures (unresolved)
@@ -484,54 +439,54 @@ These failures were observed in the most recent integration run on this branch a
 They must be debugged before this branch is considered shippable.
 ```
 
-`docs/test-runs/<plan-name>/` is preserved on every stop exit so the user can inspect raw run output alongside this report.
+Preserve `docs/test-runs/<plan-name>/` on every stop exit so the user can inspect raw output.
 
 ## Step 15: Request code review
 
-After all waves complete successfully (and if review was enabled in Step 3):
+After all waves complete successfully, run the required final review:
 
-1. **Gather inputs:** `BASE_SHA` = `PRE_EXECUTION_SHA` (Step 8); `HEAD_SHA` = `git rev-parse HEAD`; Description = plan Goal; Requirements = full plan; Max iterations = Step 3 setting (default 3); Working directory = current workspace; Review output path = `docs/reviews/<plan-name>-code-review`.
-2. **Invoke the `refine-code` skill** with those inputs.
-3. **Handle the result:** Run `pi-flow helper refine-code/parse-refine-code-summary --summary <path-or-`-`>` to obtain `{status, iterations, issues_found_total, issues_found_critical, issues_found_important, issues_found_minor, issues_fixed, issues_remaining, review_file, remaining_issues, failure_reason}`. Route on `status`: `approved` → include iteration count and review file in the Step 16 report; `approved_with_concerns` → also point the user at the review file's `### Outcome` reasoning; `not_approved_within_budget` → present `remaining_issues` plus the menu below; `failed` → surface `failure_reason` and stop per Step 14.
+1. Gather inputs: `BASE_SHA = PRE_EXECUTION_SHA`; `HEAD_SHA = git rev-parse HEAD`; Description = plan Goal; Requirements = full plan; Max iterations = Step 3 setting (default 5); Working directory = current workspace; Review output path = `docs/reviews/<plan-name>-code-review`.
+2. Invoke the `refine-code` skill with those inputs.
+3. Parse the summary with `pi-flow helper refine-code/parse-refine-code-summary --summary <path-or-dash>` to obtain `{status, iterations, issues_found_total, issues_found_critical, issues_found_important, issues_found_minor, issues_fixed, issues_remaining, review_file, remaining_issues, failure_reason}`.
+4. Route `status`: `approved` -> include iteration count and review file in Step 16; `approved_with_concerns` -> also point to the review file's `### Outcome`; `failed` -> surface `failure_reason` and stop via Step 14; `not_approved_within_budget` -> present `remaining_issues` and this menu:
 
    **`not_approved_within_budget` menu:**
    ```
    Options:
    (c) Continue iterating — fresh budget; new era starts with a remediation pass on the prior era's findings before the next review.
    (p) Proceed with issues noted
-(x) Stop execution — halt the plan; prior wave commits remain in git history
+   (x) Stop execution     — halt the plan; prior wave commits remain in git history
    ```
-   `docs/test-runs/<plan-name>/` is preserved on `(x)`.
 
-   **Review disabled:** skip to Step 16.
+   Preserve `docs/test-runs/<plan-name>/` on `(x)`.
 
 ## Step 16: Complete
 
 ### Final integration regression gate (precondition)
 
-**Skip if:** Integration tests are disabled (Step 3 settings) or no test command is available.
+Skip only if integration tests are disabled or no test command is available. Otherwise always re-run the full integration suite before marking the plan complete. Use the same baseline-only model in [`integration-regression-gate.md`](integration-regression-gate.md): compare against frozen `baseline_failures` and treat any non-reconcilable failure as blocking.
 
-Otherwise, always run this gate: re-run the full integration suite and confirm no plan-introduced regression remains before marking the plan complete. The gate uses the same baseline-only reconciliation defined in [`integration-regression-gate.md`](integration-regression-gate.md) — comparing the final-gate run's stable failures against the frozen `baseline_failures` and treating any non-reconcilable failure as a blocker.
+Gate protocol:
+1. Dispatch `test-runner` per Step 7 with `artifact_path = <working-dir>/docs/test-runs/<plan-name>/final-gate-<seq>.log` and `phase_label = final-gate-<seq>`, where `<seq>` increments on every gate entry.
+2. Run `pi-flow helper _shared/reconcile-test-run --artifact <final-gate-artifact-path> --mode reconcile --baseline-failures <baseline-json-path>` and consume `.current_failing_stable`, `.current_non_reconcilable`, `.current_non_baseline_stable`, and `.classification`.
+3. If both `current_non_baseline_stable` and `current_non_reconcilable` are empty, the gate passes; proceed to cleanup. Otherwise render the three-section summary with header `⚠️ Final completion blocked: current integration failures remain.` and note that both sets must be empty, then present:
 
-**Gate protocol:**
-1. **Re-dispatch the integration suite via `test-runner`** per Step 7's shared dispatch subsection with `{ARTIFACT_PATH} = <working-dir>/docs/test-runs/<plan-name>/final-gate-<seq>.log` (where `<seq>` is a 1-based counter incremented on every gate entry) and `{PHASE_LABEL} = final-gate-<seq>`. Read back the artifact.
-2. **Compute the per-run inputs:** Run `pi-flow helper _shared/reconcile-test-run --artifact <final-gate-artifact-path> --mode reconcile --baseline-failures <baseline-json-path>`; consume `.current_failing_stable`, `.current_non_reconcilable`, `.current_non_baseline_stable`, `.classification`.
-3. **Gate on `current_non_baseline_stable ∪ current_non_reconcilable`:** if both are empty, the gate passes — proceed to `### 1. Cleanup`. Otherwise the plan cannot be marked complete: render the three-section [User-facing summary](integration-regression-gate.md#user-facing-summary-format) with header `⚠️ Final completion blocked: current integration failures remain.` and a trailing note that both sets must be empty, then present:
    ```
    Options:
-   (d) Debug failures now — follow integration-regression-debugging.md (Step 16 final-gate row) against current_non_baseline_stable ∪ current_non_reconcilable; on success, re-enter this gate.
-(x) Stop execution — halt the plan; prior wave commits remain in git history
+   (d) Debug failures now — follow integration-regression-debugging.md (Step 16 final-gate row) against current_non_baseline_stable ∪ current_non_reconcilable; on success, re-enter this gate
+   (x) Stop execution     — halt the plan; prior wave commits remain in git history
    ```
-   Empty sections render as `(none)`. No continue option by design (matches the Step 12 final-wave menu).
-4. **Menu actions:**
-   - **(d) Debug failures now:** Follow [`integration-regression-debugging.md`](integration-regression-debugging.md) using the **Step 16 (final-gate)** parameter row. `change_range` = `BASE_SHA..HEAD_SHA` (`BASE_SHA` = `PRE_EXECUTION_SHA` from Step 8, `HEAD_SHA` = `git rev-parse HEAD`); `suspect_universe` = every plan task whose `**Files:**` scope intersects `git diff --name-only BASE_SHA HEAD_SHA`; `re_test_callback` re-enters this gate at step 1. Repeat until both gate-blocking sets are empty or the user picks `(x)`. Each attempt counts toward Step 13's retry budget.
-   - **(x) Stop execution:** halt. Report via Step 14 (list unresolved `current_non_baseline_stable` and `current_non_reconcilable` from the most recent final-gate artifact). Do NOT close the idea or run branch completion. `docs/test-runs/<plan-name>/` is preserved.
 
-**Blocking guarantee:** `### 1. Cleanup`, `### 2. Close linked idea`, and `### 4. Branch completion` MUST NOT execute while either set is non-empty. The only exits are gate-pass or `(x)`.
+   Empty sections render as `(none)`. There is no continue option.
+4. Route menu actions:
+   - `(d)` follow [`integration-regression-debugging.md`](integration-regression-debugging.md) using the **Step 16 (final-gate)** parameter row. `change_range = BASE_SHA..HEAD_SHA`, with `BASE_SHA = PRE_EXECUTION_SHA` and `HEAD_SHA = git rev-parse HEAD`; `suspect_universe` = every plan task whose `**Files:**` scope intersects `git diff --name-only BASE_SHA HEAD_SHA`; `re_test_callback` re-enters this gate at step 1. Repeat until both gate-blocking sets are empty or the user picks `(x)`. Each attempt counts toward Step 13.
+   - `(x)` halt. Report via Step 14 using unresolved `current_non_baseline_stable` and `current_non_reconcilable` from the most recent final-gate artifact. Do NOT close the idea or run branch completion. Preserve `docs/test-runs/<plan-name>/`.
+
+**Blocking guarantee:** cleanup, linked idea closure, and branch completion MUST NOT execute while `current_non_baseline_stable ∪ current_non_reconcilable` is non-empty. The only exits are gate-pass or `(x)`.
 
 ### 1. Cleanup
 
-**Precondition:** `current_non_baseline_stable ∪ current_non_reconcilable` is empty AND this run reached this substep via the final-gate success exit (never via any `(x) Stop execution` path; every stop exit leaves `docs/test-runs/<plan-name>/` in place so the user can inspect run artifacts). Delete the per-plan test-runs directory via the sanctioned helper (argument validation is the safety surface — see the helper for the exact validation contract):
+Precondition: `current_non_baseline_stable ∪ current_non_reconcilable` is empty and this run reached cleanup via final-gate success, never through a stop path. Delete the per-plan test-runs directory only via:
 
 ```bash
 pi-flow helper _shared/cleanup-test-runs docs/test-runs/<plan-name>
@@ -539,20 +494,20 @@ pi-flow helper _shared/cleanup-test-runs docs/test-runs/<plan-name>
 
 ### 2. Close linked idea
 
-Scan the plan for a line matching `**Source:** IDEA-<id>`. If found:
-1. Extract the idea ID (e.g., `IDEA-5735f43b`).
+Scan the plan for `**Source:** IDEA-<id>`. If found:
+1. Extract the idea ID, for example `IDEA-5735f43b`.
 2. Read the idea via the built-in `idea` tool (`action: "read"`, `id: "<id>"`).
 3. If it exists and is not already "closed": call the built-in `idea` tool with `action: "update"`, `id: "<id>"`, `status: "closed"`, and `body: "<existing body + \nCompleted via plan: docs/plans/<plan-filename>.md>"`. Record the ID for the summary report.
-4. If the idea is missing, already closed, or unreadable: skip silently.
+4. If the idea is missing, already closed, or unreadable, skip silently.
 
-Skip the entire substep if no `**Source:** IDEA-<id>` line exists.
+Skip this substep if no source line exists.
 
 ### 3. Report summary
 
-Report: number of tasks completed, concerns noted, review status/notes (if performed), total time taken, and any closed idea (e.g., "Closed IDEA-5735f43b").
+Report the number of tasks completed, concerns noted, review status/notes if performed, total time taken, and any closed idea (for example `Closed IDEA-5735f43b`).
 
 ### 4. Branch completion (if applicable)
 
-**Only when running in a worktree or on a feature branch** (not main/master/develop): invoke the `finishing-a-development-branch` skill, which verifies tests, determines the base branch, presents merge/PR/keep/discard options, executes the choice, and cleans up the worktree if applicable. Branch completion is offered even if review issues are pending.
+Only when running in a worktree or on a feature branch (not main/master/develop), invoke `finishing-a-development-branch`. It verifies tests, determines the base branch, presents merge/PR/keep/discard options, executes the choice, and cleans up the worktree if applicable. Offer branch completion even if review issues are pending.
 
-**When on main/master:** skip; just report the summary from step 3.
+When on main/master, skip branch completion and report the Step 16.3 summary.
