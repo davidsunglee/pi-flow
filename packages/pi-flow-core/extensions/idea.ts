@@ -481,7 +481,7 @@ export class IdeaSelectorComponent implements Component {
     const theme = this.host.theme;
     const openCount = this.entries.filter((e) => e.status === "open").length;
     const closedCount = this.entries.filter((e) => e.status === "closed").length;
-    const border = new DynamicBorder((s) => theme.fg("muted", s));
+    const border = new DynamicBorder((s) => theme.fg("accent", s));
 
     const lines: string[] = [];
 

@@ -711,6 +711,37 @@ test("IdeaSelectorComponent render emits bordered layout with spacing between he
   assert.match(ideaRowText, /IDEA-22222222/);
 });
 
+test("IdeaSelectorComponent render: top and bottom border use accent color", async () => {
+  const { IdeaSelectorComponent } = await import("./idea.ts");
+
+  const entries = [
+    { id: "11111111", title: "Alpha feature", tags: [], status: "open" as const, createdAt: "2026-01-01T00:00:00.000Z" },
+  ];
+
+  const taggingTheme: any = {
+    fg: (color: string, s: string) => `<${color}>${s}</${color}>`,
+    bold: (s: string) => s,
+  };
+  const stubKeybindings: any = { matches: () => false };
+  const host: any = {
+    setActive() {},
+    requestRender() {},
+    notify() {},
+    close() {},
+    dispatch() {},
+    theme: taggingTheme,
+    keybindings: stubKeybindings,
+  };
+
+  const selector = new IdeaSelectorComponent(entries, "", host);
+  const lines = selector.render(80);
+
+  const firstBorder = lines[0];
+  const lastBorder = lines[lines.length - 1];
+  assert.match(firstBorder, /^<accent>─+<\/accent>$/, `top border should use accent, got: ${firstBorder}`);
+  assert.match(lastBorder, /^<accent>─+<\/accent>$/, `bottom border should use accent, got: ${lastBorder}`);
+});
+
 test("IdeaSelectorComponent render: every line respects the supplied width", async () => {
   const { IdeaSelectorComponent } = await import("./idea.ts");
 
