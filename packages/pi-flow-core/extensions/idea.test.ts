@@ -678,6 +678,38 @@ test("IdeaSelectorComponent render shows header, ids, and hint line", async () =
   assert.match(out, /Ctrl\+Shift\+R refine/);
 });
 
+test("IdeaSelectorComponent render emits bordered layout with spacing between header, search, list, hint", async () => {
+  const { IdeaSelectorComponent } = await import("./idea.ts");
+
+  const entries = [
+    { id: "11111111", title: "Alpha feature", tags: [], status: "open" as const, createdAt: "2026-01-01T00:00:00.000Z" },
+    { id: "22222222", title: "Beta improvement", tags: [], status: "closed" as const, createdAt: "2026-01-02T00:00:00.000Z" },
+  ];
+
+  const { host } = makeSelectorHost();
+  const selector = new IdeaSelectorComponent(entries, "", host);
+  const lines = selector.render(80);
+
+  const border = "─".repeat(80);
+  assert.equal(lines[0], border, "first line should be top border");
+  assert.equal(lines[1], "", "blank line after top border");
+  assert.match(lines[2], /^Ideas \(1 open, 1 closed\)$/);
+  assert.equal(lines[3], "", "blank line after header");
+  assert.match(lines[4], /^Search: /);
+  assert.equal(lines[5], "", "blank line after search");
+
+  assert.equal(lines[lines.length - 1], border, "last line should be bottom border");
+  assert.equal(lines[lines.length - 2], "", "blank line before bottom border");
+  assert.match(lines[lines.length - 3], /Ctrl\+Shift\+R refine/);
+  assert.equal(lines[lines.length - 4], "", "blank line before hint");
+
+  // Idea rows are between line 6 and lines.length - 4, with a blank separator just before hint area.
+  const middle = lines.slice(6, lines.length - 4);
+  const ideaRowText = middle.join("\n");
+  assert.match(ideaRowText, /IDEA-11111111/);
+  assert.match(ideaRowText, /IDEA-22222222/);
+});
+
 test("IdeaSelectorComponent filters list as the user types, header counts unchanged", async () => {
   const { IdeaSelectorComponent } = await import("./idea.ts");
 

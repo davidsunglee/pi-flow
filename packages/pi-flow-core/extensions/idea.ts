@@ -481,17 +481,23 @@ export class IdeaSelectorComponent implements Component {
     const theme = this.host.theme;
     const openCount = this.entries.filter((e) => e.status === "open").length;
     const closedCount = this.entries.filter((e) => e.status === "closed").length;
+    const border = new DynamicBorder((s) => theme.fg("muted", s));
 
     const lines: string[] = [];
 
+    lines.push(...border.render(width));
+    lines.push("");
+
     const headerText = `Ideas (${openCount} open, ${closedCount} closed)`;
     lines.push(theme.fg("accent", theme.bold(headerText)));
+    lines.push("");
 
     const searchPrefix = theme.fg("muted", "Search: ");
     const searchValue = this.query.length === 0
       ? theme.fg("dim", "(type to search)")
       : this.query;
     lines.push(`${searchPrefix}${searchValue}`);
+    lines.push("");
 
     if (this.entries.length === 0) {
       lines.push(theme.fg("muted", "  No ideas"));
@@ -517,7 +523,10 @@ export class IdeaSelectorComponent implements Component {
       }
     }
 
+    lines.push("");
     lines.push(theme.fg("dim", IDEA_SELECTOR_HINT));
+    lines.push("");
+    lines.push(...border.render(width));
 
     return lines;
   }
