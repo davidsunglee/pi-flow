@@ -512,7 +512,7 @@ export class IdeaSelectorComponent implements Component {
         const rawId = `IDEA-${item.id}`;
         const idPart = isSelected
           ? theme.fg("accent", theme.bold(rawId))
-          : theme.fg("border", rawId);
+          : theme.fg("text", rawId);
         const titleColor = item.status === "closed" ? "dim" : "text";
         const titlePart = theme.fg(titleColor, item.title);
         const tagPart = item.tags.length > 0
@@ -568,13 +568,13 @@ export class IdeaActionMenuComponent implements Component {
     this.idea = idea;
     this.host = host;
     const items = [
-      { value: "view", label: "view" },
-      { value: "refine", label: "refine" },
-      { value: "work", label: "work ▶" },
+      { value: "view", label: "view", description: "View idea" },
+      { value: "refine", label: "refine", description: "Refine idea into a light spec" },
+      { value: "work", label: "work ▶", description: "Browse workflow actions" },
       idea.status === "open"
-        ? { value: "close", label: "close" }
-        : { value: "reopen", label: "reopen" },
-      { value: "other", label: "other ▶" },
+        ? { value: "close", label: "close", description: "Close idea" }
+        : { value: "reopen", label: "reopen", description: "Reopen idea" },
+      { value: "other", label: "other ▶", description: "Browse other actions" },
     ];
     this.list = new SelectList(items, items.length, inlineSelectListTheme(host.theme));
     this.list.onSelect = (item) =>
@@ -592,14 +592,20 @@ export class IdeaActionMenuComponent implements Component {
 
   render(width: number): string[] {
     const theme = this.host.theme;
-    const border = new DynamicBorder((s) => theme.fg("muted", s));
-    const titleText = `IDEA-${this.idea.id} "${this.idea.title}"`;
-    const styled = theme.fg("accent", theme.bold(titleText));
+    const border = new DynamicBorder((s) => theme.fg("border", s));
+    const titleText = `Actions for IDEA-${this.idea.id} "${this.idea.title}"`;
+    const styledTitle = theme.fg("border", theme.bold(titleText));
+    const hintText = "Enter to confirm • Esc back";
 
     const lines: string[] = [];
     lines.push(...border.render(width));
-    lines.push(renderCenteredTitle(titleText, width, styled));
+    lines.push("");
+    lines.push(...wrapTextWithAnsi(styledTitle, width));
+    lines.push("");
     lines.push(...this.list.render(width));
+    lines.push("");
+    lines.push(...wrapTextWithAnsi(theme.fg("dim", hintText), width));
+    lines.push("");
     lines.push(...border.render(width));
     return lines;
   }
@@ -622,10 +628,10 @@ export class IdeaWorkSubmenuComponent implements Component {
     this.idea = idea;
     this.host = host;
     const items = [
-      { value: "fastlane", label: "fastlane" },
-      { value: "scout", label: "scout" },
-      { value: "spec", label: "spec" },
-      { value: "plan", label: "plan" },
+      { value: "fastlane", label: "fastlane", description: "Run lightweight workflow for small changes" },
+      { value: "scout", label: "scout", description: "Explore codebase and create a brief for spec and plan" },
+      { value: "spec", label: "spec", description: "Perform reqs and arch Q&A to produce a detailed spec" },
+      { value: "plan", label: "plan", description: "Generate parallelizable tasks for execution" },
     ];
     this.list = new SelectList(items, items.length, inlineSelectListTheme(host.theme));
     this.list.setSelectedIndex(0);
@@ -674,9 +680,9 @@ export class IdeaOtherSubmenuComponent implements Component {
     this.idea = idea;
     this.host = host;
     const items = [
-      { value: "copy-path", label: "copy path" },
-      { value: "copy-text", label: "copy text" },
-      { value: "delete", label: "delete" },
+      { value: "copy-path", label: "copy path", description: "Copy absolute path to clipboard" },
+      { value: "copy-text", label: "copy text", description: "Copy title and body to clipboard" },
+      { value: "delete", label: "delete", description: "Delete idea" },
     ];
     this.list = new SelectList(items, items.length, inlineSelectListTheme(host.theme));
     this.list.setSelectedIndex(0);

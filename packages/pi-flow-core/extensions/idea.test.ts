@@ -744,11 +744,11 @@ test("IdeaSelectorComponent render: selected row IDEA id is accent + bold, unsel
     /<fg:accent><b>IDEA-11111111<\/b><\/fg:accent>/,
     `selected IDEA id should be accent + bold, got: ${out}`,
   );
-  // Unselected row should be border (not accent) around its IDEA id.
+  // Unselected row should use `text` (not border, not accent) around its IDEA id.
   assert.match(
     out,
-    /<fg:border>IDEA-22222222<\/fg:border>/,
-    `unselected IDEA id should be border-only, got: ${out}`,
+    /<fg:text>IDEA-22222222<\/fg:text>/,
+    `unselected IDEA id should use text token, got: ${out}`,
   );
   assert.doesNotMatch(
     out,
@@ -757,7 +757,12 @@ test("IdeaSelectorComponent render: selected row IDEA id is accent + bold, unsel
   );
   assert.doesNotMatch(
     out,
-    /<fg:border><b>IDEA-22222222<\/b><\/fg:border>/,
+    /<fg:border>IDEA-22222222<\/fg:border>/,
+    `unselected IDEA id should not use border token, got: ${out}`,
+  );
+  assert.doesNotMatch(
+    out,
+    /<fg:text><b>IDEA-22222222<\/b><\/fg:text>/,
     `unselected IDEA id should not be bold, got: ${out}`,
   );
 });
@@ -1044,6 +1049,90 @@ test("IdeaActionMenuComponent shows close (not reopen) for open ideas in correct
   assert.ok(viewIdx < refineIdx && refineIdx < workIdx && workIdx < closeIdx && closeIdx < otherIdx, "menu items out of order");
 });
 
+function taggingMenuHost() {
+  const dispatched: any[] = [];
+  let backCalls = 0;
+  const theme: any = {
+    fg: (color: string, s: string) => `<fg:${color}>${s}</fg:${color}>`,
+    bold: (s: string) => `<b>${s}</b>`,
+  };
+  const keybindings: any = { matches: () => false };
+  const host: any = {
+    dispatchAction(name: string) { dispatched.push(name); },
+    dispatch(name: string) { dispatched.push(name); },
+    confirm() { dispatched.push("confirm"); },
+    cancel() { dispatched.push("cancel"); },
+    back() { backCalls += 1; },
+    theme,
+    keybindings,
+    requestRender() {},
+  };
+  return { host, dispatched, get backCalls() { return backCalls; } };
+}
+
+test("IdeaActionMenuComponent renders left-aligned title 'Actions for IDEA-...' using border token + bold", async () => {
+  const { IdeaActionMenuComponent } = await import("./idea.ts");
+  const { host } = taggingMenuHost();
+  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open", "My idea title"), host);
+  const lines = c.render(120);
+
+  // line 0 = top border, line 1 = blank, line 2 = title
+  const titleLine = lines[2];
+  assert.match(titleLine, /^<fg:border><b>Actions for IDEA-aaaabbbb "My idea title"<\/b><\/fg:border>$/, `expected left-aligned border+bold title, got: ${JSON.stringify(titleLine)}`);
+});
+
+test("IdeaActionMenuComponent uses border token for top and bottom borders", async () => {
+  const { IdeaActionMenuComponent } = await import("./idea.ts");
+  const { host } = taggingMenuHost();
+  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open"), host);
+  const lines = c.render(80);
+
+  assert.match(lines[0], /^<fg:border>─+<\/fg:border>$/, `top border should use border token, got: ${lines[0]}`);
+  assert.match(lines[lines.length - 1], /^<fg:border>─+<\/fg:border>$/, `bottom border should use border token, got: ${lines[lines.length - 1]}`);
+});
+
+test("IdeaActionMenuComponent has blank-line spacing between border/title/list/hint/border", async () => {
+  const { IdeaActionMenuComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open"), host);
+  const lines = c.render(120);
+
+  assert.equal(lines[1], "", "blank line after top border");
+  assert.equal(lines[3], "", "blank line after title");
+  assert.equal(lines[lines.length - 2], "", "blank line before bottom border");
+  // The line preceding the bottom-border blank is the quick reference; the one before that is a blank between list and hint.
+  const hintIdx = lines.length - 3;
+  assert.match(lines[hintIdx], /Enter to confirm/, `expected quick reference 'Enter to confirm' on line before final blank, got: ${lines[hintIdx]}`);
+  assert.match(lines[hintIdx], /Esc back/, `expected 'Esc back' in quick reference, got: ${lines[hintIdx]}`);
+  assert.equal(lines[hintIdx - 1], "", "blank line between list and quick reference");
+});
+
+test("IdeaActionMenuComponent renders descriptions for each action", async () => {
+  const { IdeaActionMenuComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open"), host);
+  const out = c.render(120).join("\n");
+
+  assert.ok(out.includes("View idea"), `expected 'View idea' description, got:\n${out}`);
+  assert.ok(out.includes("Refine idea into a light spec"), `expected refine description, got:\n${out}`);
+  assert.ok(out.includes("Browse workflow actions"), `expected work description, got:\n${out}`);
+  assert.ok(out.includes("Close idea"), `expected close description, got:\n${out}`);
+  assert.ok(out.includes("Browse other actions"), `expected other description, got:\n${out}`);
+});
+
+test("IdeaActionMenuComponent: selected row description is accent, unselected descriptions are dim", async () => {
+  const { IdeaActionMenuComponent } = await import("./idea.ts");
+  const { host } = taggingMenuHost();
+  // Selected row defaults to index 0 = "view"; "refine" is unselected.
+  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open"), host);
+  const out = c.render(140).join("\n");
+
+  // Selected row's description should be wrapped (with rest of row) in accent.
+  assert.match(out, /<fg:accent>[^<]*View idea[^<]*<\/fg:accent>/, `selected row 'View idea' should be inside accent, got:\n${out}`);
+  // Unselected row's description should be wrapped in dim.
+  assert.match(out, /<fg:dim>[^<]*Refine idea into a light spec[^<]*<\/fg:dim>/, `unselected 'Refine ...' should be inside dim, got:\n${out}`);
+});
+
 test("IdeaActionMenuComponent shows reopen (not close) for closed ideas", async () => {
   const { IdeaActionMenuComponent } = await import("./idea.ts");
   const { host } = stubMenuHost();
@@ -1068,6 +1157,18 @@ test("IdeaWorkSubmenuComponent lists fastlane, scout, spec, plan in order", asyn
   assert.ok(fIdx < sIdx && sIdx < spIdx && spIdx < pIdx, "work submenu items out of order");
 });
 
+test("IdeaWorkSubmenuComponent renders descriptions for each skill", async () => {
+  const { IdeaWorkSubmenuComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open"), host);
+  const out = c.render(140).join("\n");
+
+  assert.ok(out.includes("Run lightweight workflow for small changes"), `expected fastlane description, got:\n${out}`);
+  assert.ok(out.includes("Explore codebase and create a brief for spec and plan"), `expected scout description, got:\n${out}`);
+  assert.ok(out.includes("Perform reqs and arch Q&A to produce a detailed spec"), `expected spec description, got:\n${out}`);
+  assert.ok(out.includes("Generate parallelizable tasks for execution"), `expected plan description, got:\n${out}`);
+});
+
 test("IdeaOtherSubmenuComponent lists copy path, copy text, delete in order", async () => {
   const { IdeaOtherSubmenuComponent } = await import("./idea.ts");
   const { host } = stubMenuHost();
@@ -1079,6 +1180,17 @@ test("IdeaOtherSubmenuComponent lists copy path, copy text, delete in order", as
   const del = out.indexOf("delete");
   assert.ok(cp >= 0 && ct >= 0 && del >= 0, "missing one of copy path/copy text/delete");
   assert.ok(cp < ct && ct < del, "other submenu items out of order");
+});
+
+test("IdeaOtherSubmenuComponent renders descriptions for each action", async () => {
+  const { IdeaOtherSubmenuComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const c = new IdeaOtherSubmenuComponent(entry("aaaabbbb", "open"), host);
+  const out = c.render(140).join("\n");
+
+  assert.ok(out.includes("Copy absolute path to clipboard"), `expected copy path description, got:\n${out}`);
+  assert.ok(out.includes("Copy title and body to clipboard"), `expected copy text description, got:\n${out}`);
+  assert.ok(out.includes("Delete idea"), `expected delete description, got:\n${out}`);
 });
 
 test("IdeaDeleteConfirmComponent renders exact prompt text", async () => {
