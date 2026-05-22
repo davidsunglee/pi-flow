@@ -712,7 +712,7 @@ test("IdeaSelectorComponent render emits bordered layout with spacing between he
   assert.match(ideaRowText, /IDEA-22222222/);
 });
 
-test("IdeaSelectorComponent render: selected row IDEA id is accent + bold, unselected is accent only", async () => {
+test("IdeaSelectorComponent render: selected row IDEA id is accent + bold, unselected is border only", async () => {
   const { IdeaSelectorComponent } = await import("./idea.ts");
 
   const entries = [
@@ -744,20 +744,25 @@ test("IdeaSelectorComponent render: selected row IDEA id is accent + bold, unsel
     /<fg:accent><b>IDEA-11111111<\/b><\/fg:accent>/,
     `selected IDEA id should be accent + bold, got: ${out}`,
   );
-  // Unselected row should be accent but NOT bold around its IDEA id.
+  // Unselected row should be border (not accent) around its IDEA id.
   assert.match(
     out,
-    /<fg:accent>IDEA-22222222<\/fg:accent>/,
-    `unselected IDEA id should be accent only, got: ${out}`,
+    /<fg:border>IDEA-22222222<\/fg:border>/,
+    `unselected IDEA id should be border-only, got: ${out}`,
   );
   assert.doesNotMatch(
     out,
-    /<fg:accent><b>IDEA-22222222<\/b><\/fg:accent>/,
+    /<fg:accent>IDEA-22222222<\/fg:accent>/,
+    `unselected IDEA id should not be accent, got: ${out}`,
+  );
+  assert.doesNotMatch(
+    out,
+    /<fg:border><b>IDEA-22222222<\/b><\/fg:border>/,
     `unselected IDEA id should not be bold, got: ${out}`,
   );
 });
 
-test("IdeaSelectorComponent render: top and bottom border use accent color", async () => {
+test("IdeaSelectorComponent render: top and bottom border use border color", async () => {
   const { IdeaSelectorComponent } = await import("./idea.ts");
 
   const entries = [
@@ -784,8 +789,76 @@ test("IdeaSelectorComponent render: top and bottom border use accent color", asy
 
   const firstBorder = lines[0];
   const lastBorder = lines[lines.length - 1];
-  assert.match(firstBorder, /^<accent>─+<\/accent>$/, `top border should use accent, got: ${firstBorder}`);
-  assert.match(lastBorder, /^<accent>─+<\/accent>$/, `bottom border should use accent, got: ${lastBorder}`);
+  assert.match(firstBorder, /^<border>─+<\/border>$/, `top border should use border, got: ${firstBorder}`);
+  assert.match(lastBorder, /^<border>─+<\/border>$/, `bottom border should use border, got: ${lastBorder}`);
+});
+
+test("IdeaSelectorComponent render: header 'Ideas (...)' uses border color and stays bold", async () => {
+  const { IdeaSelectorComponent } = await import("./idea.ts");
+
+  const entries = [
+    { id: "11111111", title: "Alpha", tags: [], status: "open" as const, createdAt: "2026-01-01T00:00:00.000Z" },
+    { id: "22222222", title: "Beta", tags: [], status: "closed" as const, createdAt: "2026-01-02T00:00:00.000Z" },
+  ];
+
+  const taggingTheme: any = {
+    fg: (color: string, s: string) => `<fg:${color}>${s}</fg:${color}>`,
+    bold: (s: string) => `<b>${s}</b>`,
+  };
+  const stubKeybindings: any = { matches: () => false };
+  const host: any = {
+    setActive() {},
+    requestRender() {},
+    notify() {},
+    close() {},
+    dispatch() {},
+    theme: taggingTheme,
+    keybindings: stubKeybindings,
+  };
+
+  const selector = new IdeaSelectorComponent(entries, "", host);
+  const lines = selector.render(120);
+  const headerLine = lines[2];
+
+  assert.match(
+    headerLine,
+    /<fg:border><b>Ideas \(1 open, 1 closed\)<\/b><\/fg:border>/,
+    `header line should be border + bold, got: ${headerLine}`,
+  );
+});
+
+test("IdeaSelectorComponent render: selected row arrow '→ ' is accent-colored", async () => {
+  const { IdeaSelectorComponent } = await import("./idea.ts");
+
+  const entries = [
+    { id: "11111111", title: "Alpha", tags: [], status: "open" as const, createdAt: "2026-01-01T00:00:00.000Z" },
+    { id: "22222222", title: "Beta", tags: [], status: "open" as const, createdAt: "2026-01-02T00:00:00.000Z" },
+  ];
+
+  const taggingTheme: any = {
+    fg: (color: string, s: string) => `<fg:${color}>${s}</fg:${color}>`,
+    bold: (s: string) => `<b>${s}</b>`,
+  };
+  const stubKeybindings: any = { matches: () => false };
+  const host: any = {
+    setActive() {},
+    requestRender() {},
+    notify() {},
+    close() {},
+    dispatch() {},
+    theme: taggingTheme,
+    keybindings: stubKeybindings,
+  };
+
+  const selector = new IdeaSelectorComponent(entries, "", host);
+  const out = selector.render(120).join("\n");
+
+  // Selected row should have an accent-colored arrow prefix.
+  assert.match(
+    out,
+    /<fg:accent>→ <\/fg:accent>/,
+    `selected row arrow '→ ' should be accent-colored, got: ${out}`,
+  );
 });
 
 test("IdeaSelectorComponent render: every line respects the supplied width", async () => {

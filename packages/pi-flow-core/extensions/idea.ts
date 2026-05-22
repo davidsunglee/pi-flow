@@ -481,7 +481,7 @@ export class IdeaSelectorComponent implements Component {
     const theme = this.host.theme;
     const openCount = this.entries.filter((e) => e.status === "open").length;
     const closedCount = this.entries.filter((e) => e.status === "closed").length;
-    const border = new DynamicBorder((s) => theme.fg("accent", s));
+    const border = new DynamicBorder((s) => theme.fg("border", s));
 
     const lines: string[] = [];
 
@@ -489,7 +489,7 @@ export class IdeaSelectorComponent implements Component {
     lines.push("");
 
     const headerText = `Ideas (${openCount} open, ${closedCount} closed)`;
-    lines.push(theme.fg("accent", theme.bold(headerText)));
+    lines.push(theme.fg("border", theme.bold(headerText)));
     lines.push("");
 
     const searchPrefix = theme.fg("muted", "Search: ");
@@ -508,11 +508,11 @@ export class IdeaSelectorComponent implements Component {
       for (let i = 0; i < rowCount; i++) {
         const item = this.filtered[i];
         const isSelected = i === this.selectedIndex;
-        const prefix = isSelected ? "→ " : "  ";
+        const prefix = isSelected ? theme.fg("accent", "→ ") : "  ";
         const rawId = `IDEA-${item.id}`;
         const idPart = isSelected
           ? theme.fg("accent", theme.bold(rawId))
-          : theme.fg("accent", rawId);
+          : theme.fg("border", rawId);
         const titleColor = item.status === "closed" ? "dim" : "text";
         const titlePart = theme.fg(titleColor, item.title);
         const tagPart = item.tags.length > 0
