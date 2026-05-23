@@ -51,7 +51,9 @@ def main():
     default_tdd_block_template = os.path.join(
         os.path.dirname(__file__),
         "..",
-        "tdd-block.md",
+        "..",
+        "_shared",
+        "coder-tdd-block.md",
     )
 
     parser = argparse.ArgumentParser(
@@ -90,7 +92,7 @@ def main():
     parser.add_argument(
         "--tdd-block-template",
         default=default_tdd_block_template,
-        help="Path to the TDD block template (default: tdd-block.md)",
+        help="Path to the TDD block template (default: _shared/coder-tdd-block.md)",
     )
     parser.add_argument(
         "--output",

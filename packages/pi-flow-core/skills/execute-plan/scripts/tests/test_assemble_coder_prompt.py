@@ -21,7 +21,9 @@ REAL_TDD_BLOCK = os.path.join(
     os.path.dirname(__file__),
     "..",
     "..",
-    "tdd-block.md",
+    "..",
+    "_shared",
+    "coder-tdd-block.md",
 )
 
 

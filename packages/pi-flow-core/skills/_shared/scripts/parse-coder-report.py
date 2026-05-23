@@ -38,7 +38,7 @@ import sys
 
 sys.path.insert(
     0,
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "_shared", "scripts"),
+    os.path.dirname(os.path.abspath(__file__)),
 )
 from fence_aware import compute_in_fence_lines, split_h2_sections
 
