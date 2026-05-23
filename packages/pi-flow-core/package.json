@@ -1,12 +1,11 @@
 {
-  "name": "pi-flow-core",
-  "version": "0.4.0",
-  "private": true,
+  "name": "@aphotic/pi-flow-core",
+  "version": "0.5.0",
   "type": "module",
   "description": "Workflow skills, bundled agent definitions, and helper runner for pi-flow.",
   "keywords": ["pi-package"],
   "bin": { "pi-flow": "./bin/pi-flow.mjs" },
-  "files": ["bin", "skills", "agents", "docs", "extensions", "model-tiers.example.json"],
+  "files": ["bin", "skills", "agents", "docs", "extensions", "model-tiers.example.json", "LICENSE", "!**/tests", "!**/fixtures", "!**/__pycache__", "!**/.gitkeep"],
   "scripts": {
     "test:helpers": "node --experimental-strip-types scripts/run-helper-tests.ts",
     "test:node": "find bin __tests__ extensions \\( -name '*.test.mjs' -o -name '*.test.ts' \\) -print0 | xargs -0 node --experimental-strip-types --test",
@@ -15,22 +14,39 @@
     "check": "pnpm run typecheck && pnpm run test"
   },
   "dependencies": {
-    "typebox": "*"
+    "typebox": "^1.0.0"
   },
   "peerDependencies": {
     "@aphotic/pi-mux-subagents": "^0.1.0",
-    "@earendil-works/pi-coding-agent": "*",
-    "@earendil-works/pi-tui": "*",
-    "typebox": "*"
+    "@earendil-works/pi-coding-agent": "^0.75.0",
+    "@earendil-works/pi-tui": "^0.75.0",
+    "typebox": "^1.0.0"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
-    "@earendil-works/pi-tui": "*",
+    "@earendil-works/pi-coding-agent": "^0.75.0",
+    "@earendil-works/pi-tui": "^0.75.0",
     "@aphotic/pi-mux-subagents": "^0.1.0",
-    "typebox": "*"
+    "typebox": "^1.0.0"
   },
   "pi": {
     "skills": ["skills/*/SKILL.md"],
     "extensions": ["extensions/commands.ts"]
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davidsunglee/pi-flow.git",
+    "directory": "packages/pi-flow-core"
+  },
+  "bugs": {
+    "url": "https://github.com/davidsunglee/pi-flow/issues"
+  },
+  "homepage": "https://github.com/davidsunglee/pi-flow/tree/main/packages/pi-flow-core#readme",
+  "author": "David Lee",
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

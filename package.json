@@ -14,7 +14,7 @@
   "scripts": {
     "test": "pnpm run test:root && pnpm -r --workspace-concurrency=1 run test",
     "test:root": "node --test __tests__/*.test.mjs",
-    "test:helpers": "pnpm --filter pi-flow-core run test:helpers",
+    "test:helpers": "pnpm --filter @aphotic/pi-flow-core run test:helpers",
     "test:node": "pnpm run test:root && pnpm -r --workspace-concurrency=1 run test:node",
     "check": "pnpm run test:root && pnpm -r --workspace-concurrency=1 run check"
   },
@@ -31,5 +31,5 @@
       "packages/pi-flow-ux/themes/nord.json"
     ]
   },
-  "version": "0.4.0"
+  "version": "0.5.0"
 }

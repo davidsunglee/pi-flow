@@ -1,26 +1,42 @@
 {
-  "name": "pi-flow-ux",
-  "version": "0.4.0",
-  "private": true,
+  "name": "@aphotic/pi-flow-ux",
+  "version": "0.5.0",
   "type": "module",
   "description": "Optional UX layer for pi-flow: footer extension, working indicator/message, Nord theme, and packaged working defaults.",
   "keywords": ["pi-package"],
-  "files": ["extensions", "themes", "working.json"],
+  "files": ["extensions", "themes", "working.json", "LICENSE", "!**/.gitkeep"],
   "scripts": {
     "test:node": "find __tests__ extensions \\( -name '*.test.mjs' -o -name '*.test.ts' \\) -print0 | xargs -0 node --experimental-strip-types --test",
     "test": "pnpm run test:node",
     "check": "pnpm run test"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
-    "@earendil-works/pi-tui": "*"
+    "@earendil-works/pi-coding-agent": "^0.75.0",
+    "@earendil-works/pi-tui": "^0.75.0"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
-    "@earendil-works/pi-tui": "*"
+    "@earendil-works/pi-coding-agent": "^0.75.0",
+    "@earendil-works/pi-tui": "^0.75.0"
   },
   "pi": {
     "extensions": ["extensions/footer.ts", "extensions/working/index.ts"],
     "themes": ["themes"]
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davidsunglee/pi-flow.git",
+    "directory": "packages/pi-flow-ux"
+  },
+  "bugs": {
+    "url": "https://github.com/davidsunglee/pi-flow/issues"
+  },
+  "homepage": "https://github.com/davidsunglee/pi-flow/tree/main/packages/pi-flow-ux#readme",
+  "author": "David Lee",
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

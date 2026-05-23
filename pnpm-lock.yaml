@@ -10,36 +10,36 @@ importers:
 
   packages/pi-flow:
     dependencies:
-      pi-flow-core:
+      '@aphotic/pi-flow-core':
         specifier: workspace:*
         version: link:../pi-flow-core
-      pi-flow-ux:
+      '@aphotic/pi-flow-ux':
         specifier: workspace:*
         version: link:../pi-flow-ux
 
   packages/pi-flow-core:
     dependencies:
       typebox:
-        specifier: '*'
+        specifier: ^1.0.0
         version: 1.1.38
     devDependencies:
       '@aphotic/pi-mux-subagents':
         specifier: ^0.1.0
         version: 0.1.0(@earendil-works/pi-coding-agent@0.75.3(@modelcontextprotocol/sdk@1.29.0)(ws@8.20.1)(zod@4.4.3))(@earendil-works/pi-tui@0.75.3)(typebox@1.1.38)
       '@earendil-works/pi-coding-agent':
-        specifier: '*'
+        specifier: ^0.75.0
         version: 0.75.3(@modelcontextprotocol/sdk@1.29.0)(ws@8.20.1)(zod@4.4.3)
       '@earendil-works/pi-tui':
-        specifier: '*'
+        specifier: ^0.75.0
         version: 0.75.3
 
   packages/pi-flow-ux:
     devDependencies:
       '@earendil-works/pi-coding-agent':
-        specifier: '*'
+        specifier: ^0.75.0
         version: 0.75.3(@modelcontextprotocol/sdk@1.29.0)(ws@8.20.1)(zod@4.4.3)
       '@earendil-works/pi-tui':
-        specifier: '*'
+        specifier: ^0.75.0
         version: 0.75.3
 
 packages:

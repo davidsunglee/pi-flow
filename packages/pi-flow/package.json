@@ -1,13 +1,12 @@
 {
-  "name": "pi-flow",
-  "version": "0.4.0",
-  "private": true,
+  "name": "@aphotic/pi-flow",
+  "version": "0.5.0",
   "type": "module",
   "description": "Aggregate install package for pi-flow workflow resources.",
   "keywords": ["pi-package"],
   "bin": { "pi-flow": "./bin/pi-flow.mjs" },
   "files": ["bin"],
-  "dependencies": { "pi-flow-core": "workspace:*", "pi-flow-ux": "workspace:*" },
+  "dependencies": { "@aphotic/pi-flow-core": "workspace:*", "@aphotic/pi-flow-ux": "workspace:*" },
   "peerDependencies": { "@aphotic/pi-mux-subagents": "^0.1.0" },
   "scripts": {
     "test:node": "find __tests__ -name '*.test.mjs' -print0 | xargs -0 node --test",
@@ -15,8 +14,25 @@
     "check": "pnpm run test"
   },
   "pi": {
-    "skills": ["node_modules/pi-flow-core/skills/*/SKILL.md"],
-    "extensions": ["node_modules/pi-flow-core/extensions/commands.ts", "node_modules/pi-flow-ux/extensions/footer.ts", "node_modules/pi-flow-ux/extensions/working/index.ts"],
-    "themes": ["node_modules/pi-flow-ux/themes/nord.json"]
+    "skills": ["node_modules/@aphotic/pi-flow-core/skills/*/SKILL.md"],
+    "extensions": ["node_modules/@aphotic/pi-flow-core/extensions/commands.ts", "node_modules/@aphotic/pi-flow-ux/extensions/footer.ts", "node_modules/@aphotic/pi-flow-ux/extensions/working/index.ts"],
+    "themes": ["node_modules/@aphotic/pi-flow-ux/themes/nord.json"]
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davidsunglee/pi-flow.git",
+    "directory": "packages/pi-flow"
+  },
+  "bugs": {
+    "url": "https://github.com/davidsunglee/pi-flow/issues"
+  },
+  "homepage": "https://github.com/davidsunglee/pi-flow/tree/main/packages/pi-flow#readme",
+  "author": "David Lee",
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
