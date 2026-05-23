@@ -192,3 +192,77 @@ else
   node node_modules/pi-flow-core/bin/pi-flow.mjs helper _shared/detect-test-command "$@"
 fi
 ```
+
+---
+
+## Bootstrapping the `pi-flow` shim via `/flow:setup`
+
+Pi package installs (especially `pi install git:...`) often do not expose a
+package's npm `bin` entry on the shell `PATH` used by Pi tools and subagents.
+This shows up as:
+
+```text
+/bin/bash: pi-flow: command not found
+```
+
+Pi prepends `~/.pi/agent/bin` to PATH, so `/flow:setup` uses that directory as a
+stable bootstrap point for a `pi-flow` command shim alongside the bundled-agent
+symlinks it already manages.
+
+### Where the shim lives
+
+```text
+~/.pi/agent/bin/pi-flow -> <installed pi-flow-core>/bin/pi-flow.mjs
+```
+
+The shim target is derived at runtime from the installed package root; nothing is
+hard-coded to a particular install path.
+
+### When to run which target
+
+| Command | Behavior |
+|---|---|
+| `/flow:setup --target user` | Creates or verifies `~/.pi/agent/bin/pi-flow`. This is the command that makes `pi-flow` resolve on PATH. |
+| `/flow:setup --target project` | Manages only the per-project `.pi/agents/` agent symlinks. Does **not** create or replace the global shim; if it is missing, the command prints guidance to run `/flow:setup --target user`. If the shim already exists and points elsewhere (another install), it is preserved as-is. |
+| `/flow:setup` (no `--target`) | Picks `user` or `project` automatically based on the active package install scope. A `pi -e` (temporary) load refuses durable setup and asks you to pass `--target` explicitly. |
+
+### Shim outcomes
+
+`/flow:setup` reports the shim outcome in a dedicated notify block with the same
+`created` / `skipped` / `conflict` vocabulary used for agent symlinks:
+
+| Outcome | Effective target | Meaning |
+|---|---|---|
+| `created` | user | Symlink created at `~/.pi/agent/bin/pi-flow`. Reload Pi to pick it up. |
+| `skipped` | user / project | A symlink already points at this package's `bin/pi-flow.mjs`. Nothing to do. |
+| `conflict` | user | A real file, directory, or divergent symlink lives at the target. Setup refuses to overwrite — investigate and remove the entry, then re-run. |
+| `absent-project` (info) | project | No global shim exists. Run `/flow:setup --target user` to install it. |
+| `preserved-other` (info) | project | The global shim exists but points at a different install. The existing entry is preserved; remove it first, or run `/flow:setup --target user` from the install you want as the source of truth. |
+
+### Resolving a `conflict`
+
+The shim is never overwritten silently. To resolve a reported conflict:
+
+1. Inspect what is currently at `~/.pi/agent/bin/pi-flow`:
+   ```sh
+   ls -l ~/.pi/agent/bin/pi-flow
+   readlink ~/.pi/agent/bin/pi-flow 2>/dev/null
+   ```
+2. If you no longer need it, delete it: `rm ~/.pi/agent/bin/pi-flow`.
+3. Re-run `/flow:setup --target user`.
+
+### Relationship between npm `bin`, the shim, and the `node ...` fallback
+
+- **npm `bin`** — works when the package is installed in a Node environment that
+  exposes its `bin` entries (e.g. a local `node_modules/.bin` on PATH or a global
+  npm install). Pi package installs do not always do this.
+- **`~/.pi/agent/bin/pi-flow` shim** — the durable, install-method-independent way
+  to make `pi-flow` resolve on PATH inside Pi tool/subagent contexts. Created on
+  demand by `/flow:setup --target user`.
+- **`node <package>/bin/pi-flow.mjs`** — the always-available fallback. Use it
+  from a skill script that cannot assume the shim has been installed yet (see
+  the `command -v pi-flow` example above).
+
+There are no `preinstall`, `install`, `postinstall`, or `setup` npm scripts that
+create the shim — installing `pi-flow-core` has no side effects. The shim is only
+ever created or updated as the explicit result of running `/flow:setup`.

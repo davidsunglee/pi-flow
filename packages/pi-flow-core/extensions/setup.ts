@@ -1,6 +1,8 @@
 /**
  * /flow:setup — symlink bundled pi-flow agent definitions into the
- * @aphotic/pi-mux-subagents discovery directory matching the install scope.
+ * @aphotic/pi-mux-subagents discovery directory matching the install scope,
+ * and (for user-scope setup) create the ~/.pi/agent/bin/pi-flow helper-runner
+ * shim so `pi-flow` resolves on PATH inside Pi tool/subagent contexts.
  */
 
 import fs from "node:fs/promises";
@@ -192,6 +194,104 @@ export async function runSetup(opts: RunSetupOptions): Promise<SetupResult> {
   return { created, skipped, conflicts };
 }
 
+export type HelperShimStatus =
+  | "created"
+  | "skipped"
+  | "conflict"
+  | "absent-project"
+  | "preserved-other";
+
+export interface HelperShimResult {
+  status: HelperShimStatus;
+  shimPath: string;
+  conflict?: SetupConflict;
+}
+
+export interface RunHelperShimOptions {
+  shimPath: string;
+  shimTarget: string;
+  effectiveTarget: DurableTarget;
+  ui: SetupNotifier;
+}
+
+export async function runHelperShimSetup(
+  opts: RunHelperShimOptions,
+): Promise<HelperShimResult> {
+  const { shimPath, shimTarget, effectiveTarget, ui } = opts;
+
+  let stat: Awaited<ReturnType<typeof fs.lstat>> | undefined;
+  try {
+    stat = await fs.lstat(shimPath);
+  } catch (err: any) {
+    if (!err || err.code !== "ENOENT") throw err;
+  }
+
+  if (stat === undefined) {
+    if (effectiveTarget === "project") {
+      ui.notify(
+        `/flow:setup helper-runner shim (project): no shim at ${shimPath}. Run /flow:setup --target user to install the global helper-runner shim.`,
+        "info",
+      );
+      return { status: "absent-project", shimPath };
+    }
+    await fs.mkdir(path.dirname(shimPath), { recursive: true });
+    await fs.symlink(shimTarget, shimPath);
+    ui.notify(
+      `/flow:setup helper-runner shim (user):\n  created: ${shimPath} -> ${shimTarget}\nReload Pi or run /reload to make pi-flow available on PATH.`,
+      "info",
+    );
+    return { status: "created", shimPath };
+  }
+
+  if (stat.isSymbolicLink()) {
+    const linkTarget = await fs.readlink(shimPath);
+    const resolvedActual = path.resolve(path.dirname(shimPath), linkTarget);
+    if (resolvedActual === shimTarget) {
+      ui.notify(
+        `/flow:setup helper-runner shim (${effectiveTarget}):\n  skipped: ${shimPath} (already points to this package)`,
+        "info",
+      );
+      return { status: "skipped", shimPath };
+    }
+    const conflict: SetupConflict = {
+      path: shimPath,
+      reason: "divergent symlink",
+      expected: shimTarget,
+      actual: resolvedActual,
+    };
+    if (effectiveTarget === "project") {
+      ui.notify(
+        `/flow:setup helper-runner shim (project):\n  preserved: ${shimPath} (points to ${resolvedActual}; this package's bin is ${shimTarget}). Run /flow:setup --target user to install this package's shim, or remove the existing one first.`,
+        "info",
+      );
+      return { status: "preserved-other", shimPath, conflict };
+    }
+    ui.notify(
+      `/flow:setup helper-runner shim (user):\n  conflict: ${shimPath} — divergent symlink (expected ${shimTarget}, actual ${resolvedActual})`,
+      "error",
+    );
+    return { status: "conflict", shimPath, conflict };
+  }
+
+  const reason = stat.isDirectory()
+    ? "directory at target — refusing to overwrite"
+    : "real file at target — refusing to overwrite";
+  const conflict: SetupConflict = { path: shimPath, reason };
+
+  if (effectiveTarget === "project") {
+    ui.notify(
+      `/flow:setup helper-runner shim (project):\n  preserved: ${shimPath} (${reason}). Run /flow:setup --target user to install this package's shim, or remove the existing entry first.`,
+      "info",
+    );
+    return { status: "preserved-other", shimPath, conflict };
+  }
+  ui.notify(
+    `/flow:setup helper-runner shim (user):\n  conflict: ${shimPath} — ${reason}`,
+    "error",
+  );
+  return { status: "conflict", shimPath, conflict };
+}
+
 function parseExplicitTarget(args: string): DurableTarget | undefined {
   const tokens = args.split(/\s+/).filter((t) => t.length > 0);
   for (let i = 0; i < tokens.length - 1; i++) {
@@ -233,15 +333,34 @@ export function registerSetup(pi: ExtensionAPI): void {
             ? path.join(os.homedir(), ".pi", "agent", "agents")
             : path.join(ctx.cwd, ".pi", "agents");
 
+        const notifier: SetupNotifier = {
+          notify: (message, level) => ctx.ui.notify(message, level),
+        };
+
         await runSetup({
           agentsDir,
           targetDir,
           scope,
           explicitTarget,
-          ui: {
-            notify: (message, level) => ctx.ui.notify(message, level),
-          },
+          ui: notifier,
         });
+
+        if (scope !== "temporary" || explicitTarget !== undefined) {
+          const shimPath = path.join(
+            os.homedir(),
+            ".pi",
+            "agent",
+            "bin",
+            "pi-flow",
+          );
+          const shimTarget = path.join(ownPackageRoot, "bin", "pi-flow.mjs");
+          await runHelperShimSetup({
+            shimPath,
+            shimTarget,
+            effectiveTarget,
+            ui: notifier,
+          });
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         ctx.ui.notify(`/flow:setup failed: ${message}`, "error");
