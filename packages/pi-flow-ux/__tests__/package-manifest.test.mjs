@@ -56,11 +56,10 @@ function expandGlob(pattern, baseDir) {
   return frontier;
 }
 
-test('package.json identifies pi-flow-ux as a pi-package', () => {
+test('package.json identifies @aphotic/pi-flow-ux as a pi-package', () => {
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
-  assert.equal(pkg.name, 'pi-flow-ux', 'package name must be pi-flow-ux');
+  assert.equal(pkg.name, '@aphotic/pi-flow-ux', 'package name must be @aphotic/pi-flow-ux');
   assert.equal(pkg.type, 'module', 'package type must be module');
-  assert.equal(pkg.private, true, 'package must be private');
   assert.ok(
     Array.isArray(pkg.keywords) && pkg.keywords.includes('pi-package'),
     'keywords must include "pi-package"'

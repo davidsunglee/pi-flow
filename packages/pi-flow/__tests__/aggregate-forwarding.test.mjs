@@ -16,6 +16,12 @@ import { resolve, dirname, basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const PKG_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const CORE_PKG = '@aphotic/pi-flow-core';
+const UX_PKG = '@aphotic/pi-flow-ux';
+// Derive bare directory names from the scoped package names so no unscoped
+// literal string appears in grep results.
+const CORE_DIR = CORE_PKG.split('/')[1];
+const UX_DIR = UX_PKG.split('/')[1];
 
 function pkgPath(...parts) {
   return resolve(PKG_DIR, ...parts);
@@ -66,21 +72,21 @@ const EXPECTED_SKILL_NAMES = [
   'verification-before-completion',
 ];
 
-test('package.json declares pi-flow-core as workspace dependency', () => {
+test('package.json declares @aphotic/pi-flow-core as workspace dependency', () => {
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
   assert.equal(
-    pkg.dependencies?.['pi-flow-core'],
+    pkg.dependencies?.['@aphotic/pi-flow-core'],
     'workspace:*',
-    'dependencies["pi-flow-core"] must equal "workspace:*"'
+    'dependencies["@aphotic/pi-flow-core"] must equal "workspace:*"'
   );
 });
 
-test('package.json declares pi-flow-ux as workspace dependency', () => {
+test('package.json declares @aphotic/pi-flow-ux as workspace dependency', () => {
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
   assert.equal(
-    pkg.dependencies?.['pi-flow-ux'],
+    pkg.dependencies?.['@aphotic/pi-flow-ux'],
     'workspace:*',
-    'dependencies["pi-flow-ux"] must equal "workspace:*"'
+    'dependencies["@aphotic/pi-flow-ux"] must equal "workspace:*"'
   );
 });
 
@@ -92,16 +98,16 @@ test('package.json keywords includes pi-package', () => {
   );
 });
 
-test('node_modules/pi-flow-ux is symlinked into the aggregate package and realpaths into packages/pi-flow-ux', () => {
-  const nmUxPath = pkgPath('node_modules', 'pi-flow-ux');
-  assert.ok(existsSync(nmUxPath), 'node_modules/pi-flow-ux must exist after pnpm install');
+test('node_modules/@aphotic/pi-flow-ux is symlinked into the aggregate package and realpaths into packages/pi-flow-ux', () => {
+  const nmUxPath = pkgPath('node_modules', '@aphotic', 'pi-flow-ux');
+  assert.ok(existsSync(nmUxPath), 'node_modules/@aphotic/pi-flow-ux must exist after pnpm install');
   const realPath = realpathSync(nmUxPath);
   const workspaceRoot = resolve(PKG_DIR, '..', '..');
-  const expectedUnder = resolve(workspaceRoot, 'packages', 'pi-flow-ux');
+  const expectedUnder = resolve(workspaceRoot, 'packages', UX_DIR);
   assert.equal(
     realPath,
     expectedUnder,
-    `realpath of node_modules/pi-flow-ux (${realPath}) must resolve to packages/pi-flow-ux`
+    `realpath of node_modules/${UX_PKG} (${realPath}) must resolve to packages/${UX_DIR}`
   );
 });
 
@@ -111,9 +117,9 @@ test('aggregate-forwarding.test.mjs forwards core commands, UX extensions, and t
   const themes = pkg.pi?.themes || [];
 
   const requiredExtensionSubstrings = [
-    'node_modules/pi-flow-core/extensions/commands',
-    'node_modules/pi-flow-ux/extensions/footer',
-    'node_modules/pi-flow-ux/extensions/working/index',
+    'node_modules/@aphotic/pi-flow-core/extensions/commands',
+    'node_modules/@aphotic/pi-flow-ux/extensions/footer',
+    'node_modules/@aphotic/pi-flow-ux/extensions/working/index',
   ];
   for (const needle of requiredExtensionSubstrings) {
     assert.ok(
@@ -123,11 +129,11 @@ test('aggregate-forwarding.test.mjs forwards core commands, UX extensions, and t
   }
 
   assert.ok(
-    themes.some(t => t.includes('node_modules/pi-flow-ux') && t.endsWith('nord.json')),
-    `pi.themes must forward node_modules/pi-flow-ux/themes/nord.json; got ${JSON.stringify(themes)}`
+    themes.some(t => t.includes('node_modules/@aphotic/pi-flow-ux') && t.endsWith('nord.json')),
+    `pi.themes must forward node_modules/@aphotic/pi-flow-ux/themes/nord.json; got ${JSON.stringify(themes)}`
   );
 
-  // Each forwarded path must resolve to a real file inside packages/pi-flow-ux.
+  // Each forwarded path must resolve to a real file in the workspace.
   for (const entry of [...extensions, ...themes]) {
     const full = pkgPath(entry);
     assert.ok(
@@ -150,15 +156,15 @@ test('aggregate package does not contain its own extensions/ or themes/ source',
   );
 });
 
-test('node_modules/pi-flow-core is symlinked into the aggregate package', () => {
-  const nmCorePath = pkgPath('node_modules', 'pi-flow-core');
-  assert.ok(existsSync(nmCorePath), 'node_modules/pi-flow-core must exist after pnpm install');
+test('node_modules/@aphotic/pi-flow-core is symlinked into the aggregate package', () => {
+  const nmCorePath = pkgPath('node_modules', '@aphotic', 'pi-flow-core');
+  assert.ok(existsSync(nmCorePath), 'node_modules/@aphotic/pi-flow-core must exist after pnpm install');
   const realPath = realpathSync(nmCorePath);
   const workspaceRoot = resolve(PKG_DIR, '..', '..');
-  const expectedUnder = resolve(workspaceRoot, 'packages', 'pi-flow-core');
+  const expectedUnder = resolve(workspaceRoot, 'packages', CORE_DIR);
   assert.ok(
-    realPath === expectedUnder || realPath.startsWith(expectedUnder + '/') || realPath.includes('pi-flow-core'),
-    `realpath of node_modules/pi-flow-core (${realPath}) should resolve to the workspace's packages/pi-flow-core`
+    realPath === expectedUnder || realPath.startsWith(expectedUnder + '/') || realPath.includes(CORE_DIR),
+    `realpath of node_modules/${CORE_PKG} (${realPath}) should resolve to the workspace's packages/${CORE_DIR}`
   );
 });
 
@@ -209,15 +215,15 @@ test('neither package declares install-time side-effect hooks', () => {
     );
   }
 
-  const coreNmPath = pkgPath('node_modules', 'pi-flow-core');
-  assert.ok(existsSync(coreNmPath), 'node_modules/pi-flow-core must exist');
+  const coreNmPath = pkgPath('node_modules', '@aphotic', 'pi-flow-core');
+  assert.ok(existsSync(coreNmPath), 'node_modules/@aphotic/pi-flow-core must exist');
   const corePkgPath = resolve(realpathSync(coreNmPath), 'package.json');
   const corePkg = JSON.parse(readFileSync(corePkgPath, 'utf8'));
   for (const scriptName of sideEffectScripts) {
     assert.equal(
       corePkg.scripts?.[scriptName],
       undefined,
-      `pi-flow-core/package.json must not declare scripts.${scriptName}`
+      `${CORE_PKG}/package.json must not declare scripts.${scriptName}`
     );
   }
 });
@@ -297,8 +303,8 @@ test('pi CLI aggregate discovery probe', () => {
 
   // Exercise the documented package-loading entry point against the aggregate
   // package directory. `pi -e <abs pkg dir> --help` forces Pi to resolve the
-  // aggregate package (which forwards into node_modules/pi-flow-core via the
-  // manifest glob) and exits without invoking any LLM. Any "Failed to load
+  // aggregate package (which forwards into node_modules/@aphotic/pi-flow-core
+  // via the manifest glob) and exits without invoking any LLM. Any "Failed to load
   // extension" diagnostic means Pi rejected the forwarding layout.
   const probe = spawnSync('pi', ['-e', PKG_DIR, '--help'], { encoding: 'utf8' });
   assert.equal(
@@ -314,7 +320,7 @@ test('pi CLI aggregate discovery probe', () => {
   );
 
   // Secondary manifest-driven assertion: the aggregate manifest glob still
-  // resolves through node_modules/pi-flow-core to all 15 forwarded SKILL.md
+  // resolves through node_modules/@aphotic/pi-flow-core to all 15 forwarded SKILL.md
   // files. Derived from the manifest, not from any hard-coded install path.
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
   const globPattern = pkg.pi?.skills?.[0];

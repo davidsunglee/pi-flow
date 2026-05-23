@@ -113,7 +113,7 @@ function walkMdFiles(dir) {
 
 test('package.json identifies pi-flow-core as a pi-package', () => {
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
-  assert.equal(pkg.name, 'pi-flow-core', 'package name must be pi-flow-core');
+  assert.equal(pkg.name, '@aphotic/pi-flow-core', 'package name must be @aphotic/pi-flow-core');
   assert.ok(
     Array.isArray(pkg.keywords) && pkg.keywords.includes('pi-package'),
     'keywords must include pi-package'
@@ -387,13 +387,13 @@ test('typebox is declared in peerDependencies and devDependencies as the manifes
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
   assert.equal(
     pkg.peerDependencies?.typebox,
-    '*',
-    'peerDependencies.typebox must be "*"'
+    '^1.0.0',
+    'peerDependencies.typebox must be "^1.0.0"'
   );
   assert.equal(
     pkg.devDependencies?.typebox,
-    '*',
-    'devDependencies.typebox must be "*"'
+    '^1.0.0',
+    'devDependencies.typebox must be "^1.0.0"'
   );
 });
 
