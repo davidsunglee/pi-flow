@@ -174,8 +174,8 @@ class TestParseArtifactHandoff(unittest.TestCase):
             os.unlink(artifact_path)
             os.unlink(msg_path)
 
-    # (h) Trailing whitespace must cause path mismatch (no normalization)
-    def test_expected_path_trailing_whitespace_mismatch(self):
+    # (h) Trailing whitespace after the path is harmless and normalized away
+    def test_expected_path_trailing_whitespace_normalized(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("REVIEW_ARTIFACT: /expected/path \n")
             tmp_path = f.name
@@ -185,17 +185,14 @@ class TestParseArtifactHandoff(unittest.TestCase):
                 "--final-message", tmp_path,
                 "--expected-path", "/expected/path",
             )
-            self.assertNotEqual(result.returncode, 0)
-            data = json.loads(result.stderr)
-            self.assertTrue(
-                data["failure"].startswith("path mismatch: expected /expected/path got"),
-                msg=f"Unexpected failure: {data['failure']}",
-            )
+            self.assertEqual(result.returncode, 0, msg=f"stderr: {result.stderr}")
+            data = json.loads(result.stdout)
+            self.assertEqual(data["path"], "/expected/path")
         finally:
             os.unlink(tmp_path)
 
-    # (i) Leading whitespace must cause path mismatch (no normalization)
-    def test_expected_path_leading_whitespace_mismatch(self):
+    # (i) Extra whitespace after the colon is harmless and normalized away
+    def test_expected_path_extra_whitespace_after_colon_normalized(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("REVIEW_ARTIFACT:  /expected/path\n")
             tmp_path = f.name
@@ -205,14 +202,108 @@ class TestParseArtifactHandoff(unittest.TestCase):
                 "--final-message", tmp_path,
                 "--expected-path", "/expected/path",
             )
+            self.assertEqual(result.returncode, 0, msg=f"stderr: {result.stderr}")
+            data = json.loads(result.stdout)
+            self.assertEqual(data["path"], "/expected/path")
+        finally:
+            os.unlink(tmp_path)
+
+    # (j) Backticked path value is normalized to bare path
+    def test_marker_backticked_path_value_accepted(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("PLAN_ARTIFACT: `/tmp/sample-plan.md`\n")
+            tmp_path = f.name
+        try:
+            result = run_script(
+                "--marker", "PLAN_ARTIFACT",
+                "--final-message", tmp_path,
+                "--expected-path", "/tmp/sample-plan.md",
+            )
+            self.assertEqual(result.returncode, 0, msg=f"stderr: {result.stderr}")
+            data = json.loads(result.stdout)
+            self.assertEqual(data["path"], "/tmp/sample-plan.md")
+        finally:
+            os.unlink(tmp_path)
+
+    # (k) Single-quoted path value is normalized to bare path
+    def test_marker_single_quoted_path_value_accepted(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("PLAN_ARTIFACT: '/tmp/sample-plan.md'\n")
+            tmp_path = f.name
+        try:
+            result = run_script(
+                "--marker", "PLAN_ARTIFACT",
+                "--final-message", tmp_path,
+                "--expected-path", "/tmp/sample-plan.md",
+            )
+            self.assertEqual(result.returncode, 0, msg=f"stderr: {result.stderr}")
+            data = json.loads(result.stdout)
+            self.assertEqual(data["path"], "/tmp/sample-plan.md")
+        finally:
+            os.unlink(tmp_path)
+
+    # (l) Double-quoted path value is normalized to bare path
+    def test_marker_double_quoted_path_value_accepted(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write('PLAN_ARTIFACT: "/tmp/sample-plan.md"\n')
+            tmp_path = f.name
+        try:
+            result = run_script(
+                "--marker", "PLAN_ARTIFACT",
+                "--final-message", tmp_path,
+                "--expected-path", "/tmp/sample-plan.md",
+            )
+            self.assertEqual(result.returncode, 0, msg=f"stderr: {result.stderr}")
+            data = json.loads(result.stdout)
+            self.assertEqual(data["path"], "/tmp/sample-plan.md")
+        finally:
+            os.unlink(tmp_path)
+
+    # (m) Backticked WRONG path still fails expected-path comparison
+    def test_marker_backticked_wrong_path_mismatch(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("PLAN_ARTIFACT: `/tmp/wrong-path.md`\n")
+            tmp_path = f.name
+        try:
+            result = run_script(
+                "--marker", "PLAN_ARTIFACT",
+                "--final-message", tmp_path,
+                "--expected-path", "/tmp/sample-plan.md",
+            )
             self.assertNotEqual(result.returncode, 0)
             data = json.loads(result.stderr)
-            self.assertTrue(
-                data["failure"].startswith("path mismatch: expected /expected/path got"),
-                msg=f"Unexpected failure: {data['failure']}",
+            self.assertEqual(
+                data["failure"],
+                "path mismatch: expected /tmp/sample-plan.md got /tmp/wrong-path.md",
             )
         finally:
             os.unlink(tmp_path)
+
+    # (n) Backticked path value participates in suffix/prefix checks after normalization
+    def test_marker_backticked_path_suffix_check_uses_normalized(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            specs_dir = os.path.join(tmpdir, "docs", "plans")
+            os.makedirs(specs_dir)
+            plan_file = os.path.join(specs_dir, "p.md")
+            with open(plan_file, "w") as f:
+                f.write("# Plan\nBody.\n")
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as msg:
+                msg.write(f"PLAN_ARTIFACT: `{plan_file}`\n")
+                msg_path = msg.name
+            try:
+                result = run_script(
+                    "--marker", "PLAN_ARTIFACT",
+                    "--final-message", msg_path,
+                    "--require-path-suffix", ".md",
+                    "--require-path-prefix", specs_dir + "/",
+                    "--check-existence",
+                    "--check-non-empty",
+                )
+                self.assertEqual(result.returncode, 0, msg=f"stderr: {result.stderr}")
+                data = json.loads(result.stdout)
+                self.assertEqual(data["path"], plan_file)
+            finally:
+                os.unlink(msg_path)
 
     # (g) Multiple markers → last one wins
     def test_multiple_markers_last_wins(self):

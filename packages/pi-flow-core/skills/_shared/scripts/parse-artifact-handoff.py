@@ -6,6 +6,13 @@ Extracts the marker only when it appears as the exact last non-empty line of the
 final message, in column 1, with no leading whitespace, quote (`>`), or backtick
 characters. Earlier marker-shaped lines anywhere else in the message are ignored.
 
+Harmless presentation formatting around the path value is tolerated and normalized
+before any downstream comparison: extra whitespace after the colon or before the
+end of the line, and a single matching pair of wrappers (`` ` ``, `'`, or `"`)
+surrounding the path are stripped. The path itself must still match
+`--expected-path` and any suffix/prefix/existence/non-empty checks exactly after
+normalization.
+
 Supported markers: BRIEF_ARTIFACT, SPEC_ARTIFACT, PLAN_ARTIFACT, REVIEW_ARTIFACT, TEST_RESULT_ARTIFACT
 
 Options:
@@ -64,6 +71,17 @@ def fail(message: str) -> None:
     json.dump({"failure": message}, sys.stderr)
     sys.stderr.write("\n")
     sys.exit(1)
+
+
+def normalize_marker_path(raw: str) -> str:
+    """Strip surrounding whitespace and a single matching pair of harmless
+    presentation wrappers (backticks, single quotes, or double quotes) from
+    the captured marker value. Semantics of the path itself are preserved.
+    """
+    s = raw.strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in ("`", "'", '"'):
+        s = s[1:-1].strip()
+    return s
 
 
 def main() -> None:
@@ -159,7 +177,7 @@ def main() -> None:
             _in_fence_scan = not _in_fence_scan
     fence_open_at_terminal = _in_fence_scan
 
-    pattern = re.compile(r"^" + re.escape(args.marker) + r": (.+)$")
+    pattern = re.compile(r"^" + re.escape(args.marker) + r":\s+(.+?)\s*$")
     match = None if fence_open_at_terminal else pattern.match(terminal_line)
     marker_match = match
 
@@ -189,7 +207,7 @@ def main() -> None:
                 # Non-terminal column-1 marker-shaped line outside a fence
                 m = pattern.match(line)
                 if m and args.expected_path is not None:
-                    extracted_path = m.group(1)
+                    extracted_path = normalize_marker_path(m.group(1))
                     if extracted_path != args.expected_path:
                         fail(f"path mismatch: expected {args.expected_path} got {extracted_path}")
 
@@ -216,7 +234,7 @@ def main() -> None:
         path = args.expected_path
         used_fallback = True
     else:
-        path = marker_match.group(1)
+        path = normalize_marker_path(marker_match.group(1))
 
         if args.expected_path is not None and path != args.expected_path:
             fail(f"path mismatch: expected {args.expected_path} got {path}")
