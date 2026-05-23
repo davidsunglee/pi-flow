@@ -27,7 +27,6 @@ test("default extension entry point registers exactly the flow commands and idea
 
   assert.deepEqual([...commands.keys()], [
     "flow:setup",
-    "flow:idea",
     "flow:ideas",
     "flow:scout",
     "flow:spec",
@@ -38,6 +37,6 @@ test("default extension entry point registers exactly the flow commands and idea
     "flow:fastlane",
   ]);
   assert.deepEqual([...tools.keys()], ["idea"]);
-  assert.equal(commands.size, 10);
+  assert.equal(commands.size, 9);
   assert.equal(tools.size, 1);
 });

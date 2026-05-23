@@ -99,12 +99,6 @@ function textResult(text: string, opts: { isError?: boolean; details?: unknown }
   };
 }
 
-function splitSeed(seed: string): { title: string; body: string } {
-  const newline = seed.indexOf("\n");
-  if (newline === -1) return { title: seed, body: "" };
-  return { title: seed.slice(0, newline), body: seed.slice(newline + 1) };
-}
-
 function newArtifact(fields: {
   title: string;
   body?: string;
@@ -1063,35 +1057,6 @@ export const _internalsForTest = {
 };
 
 export function registerIdea(pi: ExtensionAPI): void {
-  pi.registerCommand("flow:idea", {
-    description: "Capture a durable Flow idea in docs/ideas/<8-hex>.md. First line of arguments → title; remaining lines → body.",
-    handler: async (args: string, ctx: ExtensionCommandContext) => {
-      let seed = args.trim();
-      if (seed.length === 0) {
-        if (ctx.hasUI) {
-          const prompted = await ctx.ui.input("Capture idea", "Title (or first line of body)");
-          if (prompted === undefined || prompted.trim().length === 0) {
-            ctx.ui.notify("/flow:idea cancelled — no idea captured.", "info");
-            return;
-          }
-          seed = prompted.trim();
-        } else {
-          ctx.ui.notify(
-            "/flow:idea requires a title or body. Usage: /flow:idea <title or prose>",
-            "error",
-          );
-          return;
-        }
-      }
-
-      const { title, body } = splitSeed(seed);
-      const artifact = newArtifact({ title, body });
-      const dir = await getIdeaDir(ctx.cwd);
-      const finalPath = await writeIdea(dir, artifact);
-      ctx.ui.notify(`Idea captured. IDEA-${artifact.id}: ${artifact.title}\n  → ${finalPath}`, "info");
-    },
-  });
-
   pi.registerCommand("flow:ideas", {
     description:
       "Browse and manage ideas in docs/ideas/. Opens a TUI when interactive; prints a grouped text list otherwise. Accepts an initial query; --open / --closed / --all scope the listing in non-interactive mode.",

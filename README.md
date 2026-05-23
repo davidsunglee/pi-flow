@@ -7,7 +7,7 @@
 | Package | Purpose | Install when... |
 | --- | --- | --- |
 | `pi-flow` | Aggregate package that forwards `pi-flow-core` and `pi-flow-ux` resources. | You want the default full Flow experience. |
-| `pi-flow-core` | Headless workflow package: skills, agents, helper runner, `/flow:*` commands, `/flow:idea`, `idea` tool, and `/flow:setup`. | You want workflow automation without the UI extras. |
+| `pi-flow-core` | Headless workflow package: skills, agents, helper runner, `/flow:*` commands, `idea` tool, `/flow:ideas` browser, and `/flow:setup`. | You want workflow automation without the UI extras. |
 | `pi-flow-ux` | Optional UX package: footer extension, working indicator/message, Nord theme, and packaged defaults. | You only want the UI layer or want to combine it manually. |
 
 The repository root is the development workspace. The distributable package entry points live under `packages/`.

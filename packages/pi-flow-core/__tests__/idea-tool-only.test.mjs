@@ -46,10 +46,10 @@ test("packaged extensions register only the built-in `idea` tool — no external
     );
     assert.ok(commandsExtension, "expected commands extension to load");
 
-    await t.test("registers `flow:idea` command and `idea` tool — no `todo` or `flow:todo` registrations", () => {
+    await t.test("registers `flow:ideas` command and `idea` tool — no `todo` or `flow:todo` registrations", () => {
       const commandNames = [...commandsExtension.commands.keys()];
       const toolNames = [...commandsExtension.tools.keys()];
-      assert.ok(commandNames.includes("flow:idea"));
+      assert.ok(commandNames.includes("flow:ideas"));
       assert.ok(toolNames.includes("idea"));
       assert.equal(commandNames.some((n) => n === "todo" || n === "flow:todo"), false,
         `no \`todo\`/\`flow:todo\` command should be registered; got ${JSON.stringify(commandNames)}`);

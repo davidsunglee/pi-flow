@@ -11,7 +11,6 @@ const PKG_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const COMMANDS_PATH = resolve(PKG_DIR, 'extensions', 'commands.ts');
 const EXPECTED_COMMANDS = [
   'flow:setup',
-  'flow:idea',
   'flow:ideas',
   'flow:scout',
   'flow:spec',
@@ -22,7 +21,7 @@ const EXPECTED_COMMANDS = [
   'flow:fastlane',
 ];
 
-test('pi loader discovers the commands extension with 10 flow commands and the idea tool', async () => {
+test('pi loader discovers the commands extension with 9 flow commands and the idea tool', async () => {
   const sandbox = mkdtempSync(join(tmpdir(), 'pi-flow-core-loader-'));
   const loader = new DefaultResourceLoader({
     cwd: sandbox,

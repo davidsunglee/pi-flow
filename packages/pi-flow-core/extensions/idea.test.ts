@@ -40,12 +40,10 @@ function bootExtension() {
 
   registerIdea(pi as any);
 
-  const command = commands.find((c) => c.name === "flow:idea");
-  assert.ok(command, "flow:idea command should be registered");
   const tool = tools.find((t) => t.name === "idea");
   assert.ok(tool, "idea tool should be registered");
 
-  return { commands, tools, command, tool };
+  return { commands, tools, tool };
 }
 
 function makeCtx(
@@ -120,81 +118,6 @@ function artifact(id: string, title: string, status: "open" | "closed" = "open")
     body: `Body for ${title}`,
   };
 }
-
-test("command happy path writes an idea artifact and reports IDEA id", async () => {
-  const sandbox = mkSandbox("pi-flow-idea-command-");
-  const { command } = bootExtension();
-  const ctx = makeCtx(sandbox);
-
-  await command.options.handler("Add scout dispatch retry\nBackground prose...", ctx);
-
-  const files = await listIdeaFiles(sandbox);
-  assert.equal(files.length, 1);
-  assert.match(files[0], /^[0-9a-f]{8}\.md$/);
-
-  const raw = await fs.readFile(path.join(sandbox, "docs", "ideas", files[0]), "utf8");
-  const parsed = parseIdeaArtifact(raw);
-  assert.ok(parsed);
-  assert.equal(parsed.title, "Add scout dispatch retry");
-  assert.deepEqual(parsed.tags, []);
-  assert.equal(parsed.status, "open");
-  assert.doesNotThrow(() => new Date(parsed.createdAt).toISOString());
-  assert.equal(parsed.body, "Background prose...");
-
-  const notify = ctx.notifyCalls.find((c) => c.level === "info");
-  assert.ok(notify, "expected info notification");
-  assert.match(notify.message, /IDEA-[0-9a-f]{8}/);
-  assert.match(notify.message, /Add scout dispatch retry/);
-});
-
-test("empty-args interactive prompt captures prompted title", async () => {
-  const sandbox = mkSandbox("pi-flow-idea-prompt-");
-  const { command } = bootExtension();
-  const ctx = makeCtx(sandbox, { hasUI: true, inputResult: "Title from prompt" });
-
-  await command.options.handler("   ", ctx);
-
-  assert.deepEqual(ctx.inputCalls, [
-    { title: "Capture idea", placeholder: "Title (or first line of body)" },
-  ]);
-  const parsed = await readOnlyArtifact(sandbox);
-  assert.equal(parsed.title, "Title from prompt");
-});
-
-test("cancelled interactive prompt (undefined result) writes nothing and notifies user", async () => {
-  const sandbox = mkSandbox("pi-flow-idea-cancel-");
-  const { command } = bootExtension();
-  const ctx = makeCtx(sandbox, { hasUI: true, inputReturnsUndefined: true });
-
-  await command.options.handler("", ctx);
-
-  assert.deepEqual(await listIdeaFiles(sandbox), []);
-  assert.equal(ctx.inputCalls.length, 1);
-});
-
-test("empty interactive prompt result (user cleared field) writes nothing", async () => {
-  const sandbox = mkSandbox("pi-flow-idea-empty-prompt-");
-  const { command } = bootExtension();
-  const ctx = makeCtx(sandbox, { hasUI: true, inputResult: "   " });
-
-  await command.options.handler("", ctx);
-
-  assert.deepEqual(await listIdeaFiles(sandbox), []);
-});
-
-test("empty-args without UI rejects with usage message and writes nothing", async () => {
-  const sandbox = mkSandbox("pi-flow-idea-no-ui-");
-  const { command } = bootExtension();
-  const ctx = makeCtx(sandbox, { hasUI: false });
-
-  await command.options.handler("", ctx);
-
-  assert.deepEqual(await listIdeaFiles(sandbox), []);
-  const error = ctx.notifyCalls.find((c) => c.level === "error");
-  assert.ok(error, "expected error notification");
-  assert.match(error.message, /\/flow:idea requires a title or body/);
-  assert.match(error.message, /Usage: \/flow:idea <title or prose>/);
-});
 
 test("tool list returns seeded ideas", async () => {
   const sandbox = mkSandbox("pi-flow-idea-tool-list-");
@@ -393,10 +316,10 @@ test("tool delete returns error on missing id", async () => {
 
 test("registerIdea does not leak todo command or tool names", () => {
   const { commands, tools } = bootExtension();
-  assert.ok(commands.some((c) => c.name === "flow:idea"));
+  assert.ok(commands.some((c) => c.name === "flow:ideas"));
   assert.equal(commands.some((c) => c.name === "todo" || c.name === "flow:todo"), false);
   assert.equal(tools.some((t) => t.name === "todo" || t.name === "flow:todo"), false);
-  assert.deepEqual(commands.map((c) => c.name), ["flow:idea", "flow:ideas"]);
+  assert.deepEqual(commands.map((c) => c.name), ["flow:ideas"]);
   assert.deepEqual(tools.map((t) => t.name), ["idea"]);
 });
 
