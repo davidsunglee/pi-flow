@@ -12,7 +12,8 @@ Evaluation order:
      when `pi-mux-detect` is missing or broken.
   2. Otherwise invoke `pi-mux-detect` (resolved on `PATH` first, then via
      `node_modules/.bin/pi-mux-detect` discovered by walking upward from
-     this script's directory) and map its JSON payload:
+     the current working directory and this script's directory) and map its
+     JSON payload:
        - `backend == "pane"`     → `branch="mux"`,    `backend=<mux>`
                                    (e.g. "herdr", "cmux", "tmux",
                                    "zellij", "wezterm")
@@ -72,19 +73,33 @@ def _find_override(user_input: str):
     return None
 
 
+def _ancestor_dirs(start: str):
+    current = os.path.abspath(start)
+    while True:
+        yield current
+        parent = os.path.dirname(current)
+        if parent == current:
+            return
+        current = parent
+
+
 def _resolve_detector():
     on_path = shutil.which("pi-mux-detect")
     if on_path:
         return on_path
-    current = os.path.abspath(os.path.dirname(__file__))
-    while True:
-        candidate = os.path.join(current, "node_modules", ".bin", "pi-mux-detect")
-        if os.path.exists(candidate) and os.access(candidate, os.X_OK):
-            return candidate
-        parent = os.path.dirname(current)
-        if parent == current:
-            return None
-        current = parent
+
+    search_roots = [os.getcwd(), os.path.dirname(__file__)]
+    seen = set()
+    for root in search_roots:
+        for current in _ancestor_dirs(root):
+            if current in seen:
+                continue
+            seen.add(current)
+            candidate = os.path.join(current, "node_modules", ".bin", "pi-mux-detect")
+            if os.path.exists(candidate) and os.access(candidate, os.X_OK):
+                return candidate
+
+    return None
 
 
 def _fail(failure: str, **extra) -> None:
@@ -98,7 +113,7 @@ def _invoke_detector() -> dict:
     detector = _resolve_detector()
     if detector is None:
         _fail(
-            "pi-mux-detect not found on PATH or in any node_modules/.bin",
+            "pi-mux-detect not found on PATH or in any node_modules/.bin searched from cwd/script ancestors",
             hint="Install @aphotic/pi-mux-subagents (peer dependency of pi-flow-core).",
         )
 

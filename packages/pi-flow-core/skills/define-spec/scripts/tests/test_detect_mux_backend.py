@@ -27,16 +27,14 @@ MSG_INLINE_NO_MUX = "Running spec design in this session (no multiplexer detecte
 MSG_INLINE_OVERRIDE = "Running spec design in this session (per user override: --no-subagent or equivalent)."
 
 
-def make_pi_mux_detect_stub(*, stdout: str = "", stderr: str = "", exit_code: int = 0) -> str:
-    """Create a temp dir containing a `pi-mux-detect` stub. Returns the dir.
-
-    The stub is a Python script (no PATH dependencies — uses an absolute
-    shebang to the current interpreter) that writes `stdout` to stdout,
-    `stderr` to stderr, and exits with `exit_code`. PATH-prepend the
-    returned dir to make the wrapper's detector resolution pick up the stub.
-    """
-    stub_dir = tempfile.mkdtemp(prefix="pi-mux-detect-stub-")
-    stub_path = os.path.join(stub_dir, "pi-mux-detect")
+def write_pi_mux_detect_stub(
+    stub_path: str,
+    *,
+    stdout: str = "",
+    stderr: str = "",
+    exit_code: int = 0,
+) -> None:
+    """Write an executable `pi-mux-detect` stub at `stub_path`."""
     script = (
         f"#!{sys.executable}\n"
         "import sys\n"
@@ -49,16 +47,38 @@ def make_pi_mux_detect_stub(*, stdout: str = "", stderr: str = "", exit_code: in
     with open(stub_path, "w") as f:
         f.write(script)
     os.chmod(stub_path, 0o755)
+
+
+def make_pi_mux_detect_stub(*, stdout: str = "", stderr: str = "", exit_code: int = 0) -> str:
+    """Create a temp dir containing a `pi-mux-detect` stub. Returns the dir.
+
+    The stub is a Python script (no PATH dependencies — uses an absolute
+    shebang to the current interpreter) that writes `stdout` to stdout,
+    `stderr` to stderr, and exits with `exit_code`. PATH-prepend the
+    returned dir to make the wrapper's detector resolution pick up the stub.
+    """
+    stub_dir = tempfile.mkdtemp(prefix="pi-mux-detect-stub-")
+    write_pi_mux_detect_stub(
+        os.path.join(stub_dir, "pi-mux-detect"),
+        stdout=stdout,
+        stderr=stderr,
+        exit_code=exit_code,
+    )
     return stub_dir
 
 
-def run_script(*args, env=None):
+def run_script_file(script_path, *args, env=None, cwd=None):
     return subprocess.run(
-        [sys.executable, SCRIPT, *args],
+        [sys.executable, script_path, *args],
         env=env,
+        cwd=cwd,
         capture_output=True,
         text=True,
     )
+
+
+def run_script(*args, env=None):
+    return run_script_file(SCRIPT, *args, env=env)
 
 
 def detector_payload(**overrides) -> str:
@@ -120,6 +140,42 @@ class TestDetectorHeadlessBranch(unittest.TestCase):
         self.assertEqual(data["branch"], "inline")
         self.assertIsNone(data["backend"])
         self.assertEqual(data["status_message"], MSG_INLINE_NO_MUX)
+
+
+class TestDetectorResolution(unittest.TestCase):
+    def test_resolves_detector_from_current_working_directory_node_modules(self):
+        with (
+            tempfile.TemporaryDirectory() as installed_pkg,
+            tempfile.TemporaryDirectory() as project,
+        ):
+            installed_script = os.path.join(
+                installed_pkg,
+                "skills",
+                "define-spec",
+                "scripts",
+                "detect-mux-backend.py",
+            )
+            os.makedirs(os.path.dirname(installed_script))
+            with open(SCRIPT) as f:
+                script_content = f.read()
+            with open(installed_script, "w") as f:
+                f.write(script_content)
+
+            project_bin = os.path.join(project, "node_modules", ".bin")
+            os.makedirs(project_bin)
+            write_pi_mux_detect_stub(
+                os.path.join(project_bin, "pi-mux-detect"),
+                stdout=detector_payload(backend="pane", mux="herdr"),
+            )
+
+            result = run_script_file(installed_script, env={"PATH": ""}, cwd=project)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, "")
+        data = json.loads(result.stdout)
+        self.assertEqual(data["branch"], "mux")
+        self.assertEqual(data["backend"], "herdr")
+        self.assertEqual(data["status_message"], MSG_MUX)
 
 
 class TestUserInputOverrides(unittest.TestCase):
