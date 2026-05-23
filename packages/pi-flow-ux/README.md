@@ -1,4 +1,4 @@
-# pi-flow-ux
+# @aphotic/pi-flow-ux
 
 Optional UX enhancements for pi-flow: footer extension, working indicator/message, Nord theme, and packaged working defaults.
 
@@ -14,12 +14,12 @@ This package contains optional UX polish that extends the core pi-flow experienc
 
 ## Standalone install and use
 
-You can install `pi-flow-ux` as a standalone Pi package without the aggregate. Pi package sources must be one of: `npm:<pkg>`, a git URL (with `git:` prefix or a protocol URL), or a local/absolute path — bare names like `"pi-flow-ux"` are not valid sources.
+You can install `@aphotic/pi-flow-ux` as a standalone Pi package without the aggregate. Pi package sources must be one of: `npm:<pkg>`, a git URL (with `git:` prefix or a protocol URL), or a local/absolute path — bare names like `"@aphotic/pi-flow-ux"` are not valid sources.
 
 Once the package is published to npm:
 
 ```sh
-pi install npm:pi-flow-ux
+pi install npm:@aphotic/pi-flow-ux
 ```
 
 While the package is private or unpublished, install it directly from git or a local checkout:
@@ -32,7 +32,7 @@ pi install /absolute/path/to/pi-flow-ux
 To trial it for a single Pi run without writing to settings, use `-e` with a valid source form:
 
 ```sh
-pi -e npm:pi-flow-ux
+pi -e npm:@aphotic/pi-flow-ux
 pi -e git:github.com/your-org/pi-flow-ux@main
 ```
 
@@ -41,7 +41,7 @@ Or reference the package in your Pi `settings.json` using one of the supported s
 ```jsonc
 {
   // pick one source form
-  "packages": ["npm:pi-flow-ux"]
+  "packages": ["npm:@aphotic/pi-flow-ux"]
   // "packages": ["git:github.com/your-org/pi-flow-ux@main"]
   // "packages": ["/absolute/path/to/pi-flow-ux"]
 }
@@ -55,10 +55,10 @@ After Pi loads the package, the following resources become available:
 
 ## Aggregate install and use
 
-`pi-flow` is the recommended aggregate package that includes `pi-flow-ux` resources forwarded through `node_modules/pi-flow-ux/`. Install the aggregate via Pi to get UX resources alongside workflow skills:
+`@aphotic/pi-flow` is the recommended aggregate package that includes `@aphotic/pi-flow-ux` resources forwarded through `node_modules/@aphotic/pi-flow-ux/`. Install the aggregate via Pi to get UX resources alongside workflow skills:
 
 ```sh
-pi install npm:pi-flow
+pi install npm:@aphotic/pi-flow
 # or, while private/unpublished:
 pi install git:github.com/your-org/pi-flow@main
 pi install /absolute/path/to/pi-flow
@@ -68,8 +68,8 @@ The aggregate forwards UX resources automatically through its `pi` manifest:
 
 ```json
 {
-  "extensions": ["node_modules/pi-flow-ux/extensions/footer.ts", "node_modules/pi-flow-ux/extensions/working/index.ts"],
-  "themes": ["node_modules/pi-flow-ux/themes/nord.json"]
+  "extensions": ["node_modules/@aphotic/pi-flow-ux/extensions/footer.ts", "node_modules/@aphotic/pi-flow-ux/extensions/working/index.ts"],
+  "themes": ["node_modules/@aphotic/pi-flow-ux/themes/nord.json"]
 }
 ```
 
@@ -85,7 +85,7 @@ The Nord theme is discoverable by Pi after the package is loaded. To activate it
 
 Pi has no `pi theme` subcommand — theme selection is always via the `theme` setting (interactively through `/settings`, or by editing `settings.json` directly). See the Pi themes docs for details.
 
-Pi discovers the theme by scanning the `node_modules/pi-flow-ux/themes/` directory for theme definitions named `nord.json`.
+Pi discovers the theme by scanning the `node_modules/@aphotic/pi-flow-ux/themes/` directory for theme definitions named `nord.json`.
 
 ## Working indicator and message configuration
 
@@ -94,7 +94,7 @@ The working indicator and message are configured through a three-tier system wit
 ### Configuration tiers (precedence, highest to lowest)
 
 1. **User override:** `~/.pi/agent/working.json` — user-level configuration that takes precedence over all other tiers
-2. **Packaged default:** `node_modules/pi-flow-ux/working.json` (or equivalent from your installed pi-flow-ux version) — curated Nord-tuned defaults, applied when user settings are absent or fields are missing
+2. **Packaged default:** `node_modules/@aphotic/pi-flow-ux/working.json` (or equivalent from your installed @aphotic/pi-flow-ux version) — curated Nord-tuned defaults, applied when user settings are absent or fields are missing
 3. **Code default:** hardcoded defaults in the extension, used when both the user and packaged files are missing
 
 ### Failure semantics
@@ -150,13 +150,13 @@ Saved to `~/.pi/agent/working.json`, this overrides the active color while all o
 
 ## Minimal/headless use
 
-If you prefer the workflow skills without UX enhancements, install `pi-flow-core` directly instead, using one of Pi's supported source forms:
+If you prefer the workflow skills without UX enhancements, install `@aphotic/pi-flow-core` directly instead, using one of Pi's supported source forms:
 
 ```sh
-pi install npm:pi-flow-core
+pi install npm:@aphotic/pi-flow-core
 # or, while private/unpublished:
 pi install git:github.com/your-org/pi-flow-core@main
 pi install /absolute/path/to/pi-flow-core
 ```
 
-`pi-flow-core` is the independent skill package with no theme, footer, working indicator, or packaged defaults—suitable for headless, script-driven, or minimal CLI environments.
+`@aphotic/pi-flow-core` is the independent skill package with no theme, footer, working indicator, or packaged defaults—suitable for headless, script-driven, or minimal CLI environments.

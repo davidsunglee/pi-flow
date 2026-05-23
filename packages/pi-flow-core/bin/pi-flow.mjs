@@ -39,7 +39,7 @@ Examples:
   pi-flow template fastlane/fastlane-coder-prompt
 
 Fallback invocation (when bin entry is not on PATH):
-  node node_modules/pi-flow-core/bin/pi-flow.mjs <args>
+  node node_modules/@aphotic/pi-flow-core/bin/pi-flow.mjs <args>
 `;
 }
 

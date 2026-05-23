@@ -9,7 +9,7 @@
 Copy the example file to the expected runtime location:
 
 ```sh
-cp node_modules/pi-flow-core/model-tiers.example.json ~/.pi/agent/model-tiers.json
+cp node_modules/@aphotic/pi-flow-core/model-tiers.example.json ~/.pi/agent/model-tiers.json
 ```
 
 If you have the package root handy (e.g. from `pi-flow template`), you can also resolve the path dynamically:

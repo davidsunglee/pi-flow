@@ -178,7 +178,7 @@ script that sources the package from `node_modules` without a global install —
 use the fallback form:
 
 ```sh
-node node_modules/pi-flow-core/bin/pi-flow.mjs <args>
+node node_modules/@aphotic/pi-flow-core/bin/pi-flow.mjs <args>
 ```
 
 **How skill consumers can detect this:** check whether `command -v pi-flow` resolves
@@ -189,7 +189,7 @@ form. Example:
 if command -v pi-flow >/dev/null 2>&1; then
   pi-flow helper _shared/detect-test-command "$@"
 else
-  node node_modules/pi-flow-core/bin/pi-flow.mjs helper _shared/detect-test-command "$@"
+  node node_modules/@aphotic/pi-flow-core/bin/pi-flow.mjs helper _shared/detect-test-command "$@"
 fi
 ```
 

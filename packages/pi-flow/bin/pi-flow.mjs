@@ -10,11 +10,11 @@ const require = createRequire(import.meta.url);
 
 let coreBinUrl;
 try {
-  coreBinUrl = require.resolve('pi-flow-core/bin/pi-flow.mjs');
+  coreBinUrl = require.resolve('@aphotic/pi-flow-core/bin/pi-flow.mjs');
 } catch (err) {
   process.stderr.write(
     JSON.stringify({
-      failure: 'pi-flow-core not resolvable from aggregate package',
+      failure: '@aphotic/pi-flow-core not resolvable from aggregate package',
       detail: err?.message ?? String(err),
     }) + '\n',
   );

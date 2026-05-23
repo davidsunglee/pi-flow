@@ -1,4 +1,4 @@
-# pi-flow-core
+# @aphotic/pi-flow-core
 
 Workflow skills, bundled agent definitions, slash commands, and helper runner for pi-flow.
 
@@ -50,7 +50,7 @@ Workflow commands accept either an exact artifact-shaped argument or freeform pr
 
 ### /flow:setup
 
-`/flow:setup` detects whether `pi-flow-core` was loaded from `user`, `project`, or `temporary` scope by consulting `pi.getCommands()` metadata first and falling back to an `import.meta.url`/filesystem heuristic when registry metadata is missing. Temporary loads (`pi -e ...`) must be made durable with `--target user` or `--target project`; that flag lets a temporary session choose the destination scope explicitly.
+`/flow:setup` detects whether `@aphotic/pi-flow-core` was loaded from `user`, `project`, or `temporary` scope by consulting `pi.getCommands()` metadata first and falling back to an `import.meta.url`/filesystem heuristic when registry metadata is missing. Temporary loads (`pi -e ...`) must be made durable with `--target user` or `--target project`; that flag lets a temporary session choose the destination scope explicitly.
 
 The command walks every bundled `agents/*.md` file and attempts to create the matching symlink in the chosen discovery directory. Each entry is reported as `created`, `skipped`, or `conflict`. Conflicts distinguish between a real file already occupying the destination path and a divergent symlink that points somewhere other than the bundled agent source. When any new symlink is created, `/flow:setup` recommends reloading Pi (or running `/reload`) so newly linked agents are discoverable immediately.
 
@@ -60,7 +60,7 @@ In addition to the bundled-agent symlinks, `/flow:setup --target user` creates o
 
 Idea capture is driven by natural-language conversation: ask the agent to "capture an idea" (or any informal phrasing) and it invokes the `idea` LLM tool, which writes `docs/ideas/<8hex>.md` artifacts consisting of a JSON metadata block followed by the markdown body, then reports the artifact as `IDEA-<id>`. The tool supports `action: list | read | create | update | append | delete` and accepts either `IDEA-<id>` or bare `<id>` identifiers. `/flow:ideas` opens the browser/manager UI over the same storage. Identifiers using the legacy-prefix form are no longer recognized — see the migration section below for the one-time user migration step.
 
-`/flow:setup` is required after installation so `@aphotic/pi-mux-subagents` can discover the bundled `pi-flow-core/agents/*.md` definitions. Subagent-backed workflows — `scout`, `define-spec`, `generate-plan`, `execute-plan`, `refine-plan`, `refine-code`, and `fastlane` — also depend on `@aphotic/pi-mux-subagents` being installed alongside this package, which is why it is already declared as a peer dependency.
+`/flow:setup` is required after installation so `@aphotic/pi-mux-subagents` can discover the bundled `@aphotic/pi-flow-core/agents/*.md` definitions. Subagent-backed workflows — `scout`, `define-spec`, `generate-plan`, `execute-plan`, `refine-plan`, `refine-code`, and `fastlane` — also depend on `@aphotic/pi-mux-subagents` being installed alongside this package, which is why it is already declared as a peer dependency.
 
 ### Migration from docs/todos/
 
@@ -82,7 +82,7 @@ Copy `model-tiers.example.json` to configure which Claude model tier is used for
 
 ## Required Companion Package
 
-`pi-flow-core` requires **`@aphotic/pi-mux-subagents`** as a peer dependency.
+`@aphotic/pi-flow-core` requires **`@aphotic/pi-mux-subagents`** as a peer dependency.
 
 Install it alongside this package:
 
