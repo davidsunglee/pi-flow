@@ -541,12 +541,6 @@ function inlineSelectListTheme(theme: Theme): SelectListTheme {
   };
 }
 
-function renderCenteredTitle(text: string, width: number, styled: string): string {
-  const visible = visibleWidth(text);
-  const pad = Math.max(0, Math.floor((Math.max(width, visible) - visible) / 2));
-  return " ".repeat(pad) + styled;
-}
-
 export interface IdeaActionMenuHost {
   dispatchAction(name: "view" | "refine" | "work" | "close" | "reopen" | "other"): void;
   back(): void;
@@ -761,14 +755,20 @@ export class IdeaDeleteConfirmComponent implements Component {
 
   render(width: number): string[] {
     const theme = this.host.theme;
-    const border = new DynamicBorder((s) => theme.fg("muted", s));
-    const titleText = `Delete idea IDEA-${this.idea.id}? This cannot be undone.`;
-    const styled = theme.fg("warning", theme.bold(titleText));
+    const border = new DynamicBorder((s) => theme.fg("border", s));
+    const titleText = `⚠ Delete idea IDEA-${this.idea.id}? This cannot be undone.`;
+    const styledTitle = theme.fg("border", theme.bold(titleText));
+    const hintText = "Enter to confirm • Esc back";
 
     const lines: string[] = [];
     lines.push(...border.render(width));
-    lines.push(renderCenteredTitle(titleText, width, styled));
+    lines.push("");
+    lines.push(...wrapTextWithAnsi(` ${styledTitle}`, width));
+    lines.push("");
     lines.push(...this.list.render(width));
+    lines.push("");
+    lines.push(...wrapTextWithAnsi(` ${theme.fg("dim", hintText)}`, width));
+    lines.push("");
     lines.push(...border.render(width));
     return lines;
   }

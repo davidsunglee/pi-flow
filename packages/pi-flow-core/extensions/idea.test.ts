@@ -1300,6 +1300,70 @@ test("IdeaDeleteConfirmComponent renders exact prompt text", async () => {
   );
 });
 
+test("IdeaDeleteConfirmComponent uses border token (not muted) for top and bottom borders", async () => {
+  const { IdeaDeleteConfirmComponent } = await import("./idea.ts");
+  const { host } = taggingMenuHost();
+  const c = new IdeaDeleteConfirmComponent(entry("aaaabbbb", "open"), host);
+  const lines = c.render(80);
+
+  assert.match(lines[0], /^<fg:border>─+<\/fg:border>$/, `top border should use border token, got: ${lines[0]}`);
+  assert.match(lines[lines.length - 1], /^<fg:border>─+<\/fg:border>$/, `bottom border should use border token, got: ${lines[lines.length - 1]}`);
+});
+
+test("IdeaDeleteConfirmComponent renders left-aligned title with warning icon, border token + bold", async () => {
+  const { IdeaDeleteConfirmComponent } = await import("./idea.ts");
+  const { host } = taggingMenuHost();
+  const c = new IdeaDeleteConfirmComponent(entry("aaaabbbb", "open"), host);
+  const lines = c.render(120);
+
+  const titleLine = lines[2];
+  assert.match(
+    titleLine,
+    /^ <fg:border><b>⚠ Delete idea IDEA-aaaabbbb\? This cannot be undone\.<\/b><\/fg:border>$/,
+    `expected left-aligned warning-icon border+bold delete title with one leading space, got: ${JSON.stringify(titleLine)}`,
+  );
+});
+
+test("IdeaDeleteConfirmComponent has blank-line spacing matching IdeaActionMenuComponent", async () => {
+  const { IdeaDeleteConfirmComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const c = new IdeaDeleteConfirmComponent(entry("aaaabbbb", "open"), host);
+  const lines = c.render(120);
+
+  assert.equal(lines[1], "", "blank line after top border");
+  assert.equal(lines[3], "", "blank line after title");
+  assert.equal(lines[lines.length - 2], "", "blank line before bottom border");
+  const hintIdx = lines.length - 3;
+  assert.match(lines[hintIdx], /Enter to confirm/, `expected 'Enter to confirm' quick reference on line before final blank, got: ${lines[hintIdx]}`);
+  assert.match(lines[hintIdx], /Esc back/, `expected 'Esc back' in quick reference, got: ${lines[hintIdx]}`);
+  assert.equal(lines[hintIdx - 1], "", "blank line between list and quick reference");
+});
+
+test("IdeaDeleteConfirmComponent hint line is dim-styled with one leading space", async () => {
+  const { IdeaDeleteConfirmComponent } = await import("./idea.ts");
+  const { host } = taggingMenuHost();
+  const c = new IdeaDeleteConfirmComponent(entry("aaaabbbb", "open"), host);
+  const lines = c.render(120);
+  const hintIdx = lines.length - 3;
+  assert.match(
+    lines[hintIdx],
+    /^ <fg:dim>Enter to confirm • Esc back<\/fg:dim>$/,
+    `expected dim hint with one leading space, got: ${JSON.stringify(lines[hintIdx])}`,
+  );
+});
+
+test("IdeaDeleteConfirmComponent: every line respects the supplied width", async () => {
+  const { IdeaDeleteConfirmComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const c = new IdeaDeleteConfirmComponent(entry("aaaabbbb", "open"), host);
+  const width = 40;
+  const lines = c.render(width);
+  for (const [i, line] of lines.entries()) {
+    const w = visibleWidth(line);
+    assert.ok(w <= width, `line ${i} visible width ${w} exceeds ${width}: ${JSON.stringify(line)}`);
+  }
+});
+
 test("idea tool description contains all five canonical section headers and promptSnippet references IDEA-", () => {
   const { tools } = bootExtension();
   const definition = tools.find((t) => t.name === "idea") as any;
