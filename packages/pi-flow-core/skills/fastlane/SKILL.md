@@ -157,7 +157,7 @@ Build the prompt:
 | `{SPEC_OR_IDEA_CONTENT}` | Full spec body, or full idea body for idea-ID inputs. |
 | `{CHECKLIST}` | Confirmed numbered checklist from Step 1 / Step 2 `(e)`. |
 | `{WORKING_DIR}` | Absolute working directory. |
-| `{TDD_BLOCK}` | Contents of `skills/execute-plan/tdd-block.md` read from disk. |
+| `{TDD_BLOCK}` | Contents of `skills/_shared/coder-tdd-block.md` read from disk. |
 
 Write placeholders to a temporary JSON file, then fill the coder-prompt template:
 
@@ -196,10 +196,10 @@ The `thinking: "high"` field is a per-call override at the task site. Do not mod
 Parse `results[0].finalMessage` with:
 
 ~~~
-pi-flow helper execute-plan/parse-coder-report --report <path-to-finalMessage>
+pi-flow helper _shared/parse-coder-report --report <path-to-finalMessage>
 ~~~
 
-Route on `.status`, mirroring `skills/execute-plan/SKILL.md` Step 9:
+Route on `.status` per the contract in [`../_shared/coder-report-contract.md`](../_shared/coder-report-contract.md):
 
 | Status | Route |
 | --- | --- |
@@ -405,7 +405,7 @@ On refine-code stop, fastlane exits without idea closure or branch completion; `
 
 ## Step 10: Idea closure
 
-Mirror `skills/execute-plan/SKILL.md` Step 16.2:
+Apply the linked-idea-closure procedure in [`../_shared/idea-closure.md`](../_shared/idea-closure.md). Fastlane resolves `idea_id` and `completion_note` per its own rules:
 
 1. Determine the idea ID:
    - If the original input was an idea ID, use it directly.

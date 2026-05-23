@@ -206,14 +206,16 @@ If executing directly in the current workspace (not a worktree), emit once befor
 ```
 
 For each wave/subwave:
-1. Fill `$(pi-flow template execute-plan/execute-task-prompt)` via `pi-flow helper execute-plan/assemble-coder-prompt --task-spec <path-or-dash> --context <path-or-dash> --working-dir <abs-dir> --tdd-block <enabled|disabled> --output <filled-prompt-path>`; use a path or `-` for each path-or-dash input. `enabled` inlines `tdd-block.md`; `disabled` substitutes empty. The helper performs single-pass literal substitution and fails closed on unreplaced placeholders.
+1. Fill `$(pi-flow template execute-plan/execute-task-prompt)` via `pi-flow helper execute-plan/assemble-coder-prompt --task-spec <path-or-dash> --context <path-or-dash> --working-dir <abs-dir> --tdd-block <enabled|disabled> --output <filled-prompt-path>`; use a path or `-` for each path-or-dash input. `enabled` inlines `_shared/coder-tdd-block.md`; `disabled` substitutes empty. The helper performs single-pass literal substitution and fails closed on unreplaced placeholders.
 2. Dispatch all tasks in parallel via `subagent_run_parallel`; in sequential mode, dispatch one at a time via `subagent_run_serial`.
 3. Use task entries shaped like `{ name: '<task-N>: <task-title>', agent: 'coder', task: '<filled prompt>', model: '<resolved>', cli: '<resolved>' }`.
-4. Parse each `finalMessage` with `pi-flow helper execute-plan/parse-coder-report --report <results[i].finalMessage path>`. `subagent_run_parallel` preserves input-task order.
+4. Parse each `finalMessage` with `pi-flow helper _shared/parse-coder-report --report <results[i].finalMessage path>`. `subagent_run_parallel` preserves input-task order.
 
 The filled `execute-task-prompt.md` already includes TDD, self-review, escalation, code-organization, and report-format guidance; do not add those separately.
 
 ## Step 9: Handle worker status codes
+
+See [`../_shared/coder-report-contract.md`](../_shared/coder-report-contract.md) for the parser invocation and status semantics; the local routing below is execute-plan-specific.
 
 Route parsed `.status` values mechanically:
 
@@ -493,6 +495,8 @@ pi-flow helper _shared/cleanup-test-runs docs/test-runs/<plan-name>
 ```
 
 ### 2. Close linked idea
+
+Apply the linked-idea-closure procedure in [`../_shared/idea-closure.md`](../_shared/idea-closure.md). Execute-plan resolves `idea_id` and `completion_note` per its own rules:
 
 Scan the plan for `**Source:** IDEA-<id>`. If found:
 1. Extract the idea ID, for example `IDEA-5735f43b`.
