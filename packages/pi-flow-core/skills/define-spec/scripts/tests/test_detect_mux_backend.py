@@ -178,6 +178,325 @@ class TestDetectorResolution(unittest.TestCase):
         self.assertEqual(data["status_message"], MSG_MUX)
 
 
+class TestDetectorResolutionPnpmWorkspace(unittest.TestCase):
+    """Regression: pnpm workspace layouts where the bin lives under
+    packages/<pkg>/node_modules/.bin or node_modules/.pnpm/node_modules/.bin
+    but NOT at the root node_modules/.bin ancestor."""
+
+    def _make_isolated_script(self, installed_pkg):
+        """Copy the production script into an isolated temp tree so that
+        __file__-based ancestor walking cannot accidentally find the real
+        workspace node_modules."""
+        installed_script = os.path.join(
+            installed_pkg,
+            "skills",
+            "define-spec",
+            "scripts",
+            "detect-mux-backend.py",
+        )
+        os.makedirs(os.path.dirname(installed_script))
+        with open(SCRIPT) as f:
+            script_content = f.read()
+        with open(installed_script, "w") as f:
+            f.write(script_content)
+        return installed_script
+
+    def test_resolves_from_packages_subdir_node_modules(self):
+        """<cwd>/packages/pi-flow-core/node_modules/.bin/pi-mux-detect"""
+        with (
+            tempfile.TemporaryDirectory() as installed_pkg,
+            tempfile.TemporaryDirectory() as project,
+        ):
+            installed_script = self._make_isolated_script(installed_pkg)
+
+            pkg_bin = os.path.join(
+                project, "packages", "pi-flow-core", "node_modules", ".bin"
+            )
+            os.makedirs(pkg_bin)
+            write_pi_mux_detect_stub(
+                os.path.join(pkg_bin, "pi-mux-detect"),
+                stdout=detector_payload(backend="pane", mux="herdr"),
+            )
+
+            result = run_script_file(installed_script, env={"PATH": ""}, cwd=project)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["branch"], "mux")
+        self.assertEqual(data["backend"], "herdr")
+
+    def test_resolves_from_pnpm_virtual_store(self):
+        """<cwd>/node_modules/.pnpm/node_modules/.bin/pi-mux-detect"""
+        with (
+            tempfile.TemporaryDirectory() as installed_pkg,
+            tempfile.TemporaryDirectory() as project,
+        ):
+            installed_script = self._make_isolated_script(installed_pkg)
+
+            pnpm_bin = os.path.join(
+                project, "node_modules", ".pnpm", "node_modules", ".bin"
+            )
+            os.makedirs(pnpm_bin)
+            write_pi_mux_detect_stub(
+                os.path.join(pnpm_bin, "pi-mux-detect"),
+                stdout=detector_payload(backend="pane", mux="tmux"),
+            )
+
+            result = run_script_file(installed_script, env={"PATH": ""}, cwd=project)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["branch"], "mux")
+        self.assertEqual(data["backend"], "tmux")
+
+    def test_ancestor_node_modules_takes_precedence_over_pnpm_fallbacks(self):
+        """Existing ancestor node_modules/.bin must win over pnpm fallbacks."""
+        with (
+            tempfile.TemporaryDirectory() as installed_pkg,
+            tempfile.TemporaryDirectory() as project,
+        ):
+            installed_script = self._make_isolated_script(installed_pkg)
+
+            # Root ancestor node_modules/.bin (existing precedence)
+            root_bin = os.path.join(project, "node_modules", ".bin")
+            os.makedirs(root_bin)
+            write_pi_mux_detect_stub(
+                os.path.join(root_bin, "pi-mux-detect"),
+                stdout=detector_payload(backend="pane", mux="ancestor-wins"),
+            )
+
+            # Also place one in packages subdir
+            pkg_bin = os.path.join(
+                project, "packages", "pi-flow-core", "node_modules", ".bin"
+            )
+            os.makedirs(pkg_bin)
+            write_pi_mux_detect_stub(
+                os.path.join(pkg_bin, "pi-mux-detect"),
+                stdout=detector_payload(backend="pane", mux="should-lose"),
+            )
+
+            result = run_script_file(installed_script, env={"PATH": ""}, cwd=project)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["backend"], "ancestor-wins")
+
+
+class TestDetectorResolutionPublishedNpm(unittest.TestCase):
+    """Regression: published NPM layout where pi-flow and pi-mux-subagents
+    are both installed under ~/.pi/agent/npm/node_modules/. The ancestor
+    search from __file__ should walk up and find the detector."""
+
+    def test_resolves_from_published_npm_via_ancestor_search(self):
+        """Script at <npm-root>/node_modules/@aphotic/pi-flow-core/skills/...,
+        detector at <npm-root>/node_modules/.bin/pi-mux-detect.
+        Ancestor search from __file__ walks up to <npm-root> and finds it."""
+        with tempfile.TemporaryDirectory() as fake_home:
+            npm_root = os.path.join(fake_home, ".pi", "agent", "npm")
+
+            script_path = os.path.join(
+                npm_root, "node_modules", "@aphotic", "pi-flow-core",
+                "skills", "define-spec", "scripts", "detect-mux-backend.py",
+            )
+            os.makedirs(os.path.dirname(script_path))
+            with open(SCRIPT) as f:
+                script_content = f.read()
+            with open(script_path, "w") as f:
+                f.write(script_content)
+
+            npm_bin = os.path.join(npm_root, "node_modules", ".bin")
+            os.makedirs(npm_bin)
+            write_pi_mux_detect_stub(
+                os.path.join(npm_bin, "pi-mux-detect"),
+                stdout=detector_payload(backend="pane", mux="herdr"),
+            )
+
+            result = run_script_file(
+                script_path,
+                env={"PATH": "", "HOME": fake_home},
+                cwd=fake_home,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["branch"], "mux")
+        self.assertEqual(data["backend"], "herdr")
+        self.assertEqual(data["status_message"], MSG_MUX)
+
+    def test_ancestor_search_wins_over_pnpm_and_pi_global_fallbacks(self):
+        """Competing stubs in ancestor .bin, pnpm, and Pi global; ancestor wins."""
+        with (
+            tempfile.TemporaryDirectory() as fake_home,
+            tempfile.TemporaryDirectory() as project,
+        ):
+            installed_script = os.path.join(
+                project, "node_modules", "@aphotic", "pi-flow-core",
+                "skills", "define-spec", "scripts", "detect-mux-backend.py",
+            )
+            os.makedirs(os.path.dirname(installed_script))
+            with open(SCRIPT) as f:
+                script_content = f.read()
+            with open(installed_script, "w") as f:
+                f.write(script_content)
+
+            ancestor_bin = os.path.join(project, "node_modules", ".bin")
+            os.makedirs(ancestor_bin)
+            write_pi_mux_detect_stub(
+                os.path.join(ancestor_bin, "pi-mux-detect"),
+                stdout=detector_payload(backend="pane", mux="ancestor-wins"),
+            )
+
+            pnpm_bin = os.path.join(
+                project, "node_modules", ".pnpm", "node_modules", ".bin",
+            )
+            os.makedirs(pnpm_bin)
+            write_pi_mux_detect_stub(
+                os.path.join(pnpm_bin, "pi-mux-detect"),
+                stdout=detector_payload(backend="pane", mux="pnpm-should-lose"),
+            )
+
+            pi_bin = os.path.join(
+                fake_home, ".pi", "agent", "npm", "node_modules", ".bin",
+            )
+            os.makedirs(pi_bin)
+            write_pi_mux_detect_stub(
+                os.path.join(pi_bin, "pi-mux-detect"),
+                stdout=detector_payload(backend="pane", mux="pi-global-should-lose"),
+            )
+
+            result = run_script_file(
+                installed_script,
+                env={"PATH": "", "HOME": fake_home},
+                cwd=project,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["backend"], "ancestor-wins")
+
+
+class TestDetectorResolutionPiGlobalFallback(unittest.TestCase):
+    """Pi global package-bin fallback: ~/.pi/agent/npm/node_modules/.bin/pi-mux-detect
+    is the last-resort fallback for mixed installs (e.g. pi-flow from git,
+    pi-mux-subagents from npm)."""
+
+    def test_resolves_from_pi_global_when_no_other_option(self):
+        """Isolated script (not under any npm root); HOME has Pi global bin.
+        No PATH, no ancestor node_modules, no pnpm/workspace fallback."""
+        with (
+            tempfile.TemporaryDirectory() as isolated_dir,
+            tempfile.TemporaryDirectory() as fake_home,
+        ):
+            script_path = os.path.join(
+                isolated_dir, "skills", "define-spec", "scripts",
+                "detect-mux-backend.py",
+            )
+            os.makedirs(os.path.dirname(script_path))
+            with open(SCRIPT) as f:
+                script_content = f.read()
+            with open(script_path, "w") as f:
+                f.write(script_content)
+
+            pi_bin = os.path.join(
+                fake_home, ".pi", "agent", "npm", "node_modules", ".bin",
+            )
+            os.makedirs(pi_bin)
+            write_pi_mux_detect_stub(
+                os.path.join(pi_bin, "pi-mux-detect"),
+                stdout=detector_payload(backend="pane", mux="pi-global"),
+            )
+
+            result = run_script_file(
+                script_path,
+                env={"PATH": "", "HOME": fake_home},
+                cwd=isolated_dir,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["branch"], "mux")
+        self.assertEqual(data["backend"], "pi-global")
+
+    def test_failure_diagnostics_include_pi_global_path(self):
+        """When detector is not found anywhere, searched list includes the
+        Pi global fallback path."""
+        with (
+            tempfile.TemporaryDirectory() as isolated_dir,
+            tempfile.TemporaryDirectory() as fake_home,
+        ):
+            script_path = os.path.join(
+                isolated_dir, "skills", "define-spec", "scripts",
+                "detect-mux-backend.py",
+            )
+            os.makedirs(os.path.dirname(script_path))
+            with open(SCRIPT) as f:
+                script_content = f.read()
+            with open(script_path, "w") as f:
+                f.write(script_content)
+
+            result = run_script_file(
+                script_path,
+                env={"PATH": "", "HOME": fake_home},
+                cwd=isolated_dir,
+            )
+
+        self.assertNotEqual(result.returncode, 0)
+        payload = json.loads(result.stderr.strip())
+        self.assertIn("failure", payload)
+        self.assertIn("searched", payload)
+        pi_global_suffix = os.path.join(
+            ".pi", "agent", "npm", "node_modules", ".bin", "pi-mux-detect",
+        )
+        matched = [p for p in payload["searched"] if p.endswith(pi_global_suffix)]
+        self.assertTrue(
+            matched,
+            f"No searched path ends with {pi_global_suffix!r}; searched: {payload['searched']}",
+        )
+
+
+class TestDetectorFailureDiagnostics(unittest.TestCase):
+    """Failure payload must include searched locations for diagnostics."""
+
+    def test_failure_includes_searched_locations(self):
+        """When detector is not found, stderr JSON should include a 'searched'
+        list so users can see exactly which paths were probed."""
+        with (
+            tempfile.TemporaryDirectory() as installed_pkg,
+            tempfile.TemporaryDirectory() as empty_project,
+            tempfile.TemporaryDirectory() as fake_home,
+        ):
+            installed_script = os.path.join(
+                installed_pkg,
+                "skills",
+                "define-spec",
+                "scripts",
+                "detect-mux-backend.py",
+            )
+            os.makedirs(os.path.dirname(installed_script))
+            with open(SCRIPT) as f:
+                script_content = f.read()
+            with open(installed_script, "w") as f:
+                f.write(script_content)
+
+            result = run_script_file(
+                installed_script,
+                env={"PATH": "", "HOME": fake_home},
+                cwd=empty_project,
+            )
+
+        self.assertNotEqual(result.returncode, 0)
+        payload = json.loads(result.stderr.strip())
+        self.assertIn("failure", payload)
+        self.assertEqual(
+            payload["failure"],
+            "pi-mux-detect not found on PATH, ancestor node_modules/.bin, "
+            "pnpm workspace bins, or Pi global package bin",
+        )
+        self.assertIn("searched", payload)
+        self.assertIsInstance(payload["searched"], list)
+        self.assertGreater(len(payload["searched"]), 0)
+
+
 class TestUserInputOverrides(unittest.TestCase):
     """Overrides take precedence; detector is NOT invoked when an override matches."""
 

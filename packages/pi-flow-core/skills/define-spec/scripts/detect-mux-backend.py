@@ -12,7 +12,11 @@ Evaluation order:
      when `pi-mux-detect` is missing or broken.
   2. Otherwise invoke `pi-mux-detect` (resolved on `PATH` first, then via
      `node_modules/.bin/pi-mux-detect` discovered by walking upward from
-     the current working directory and this script's directory) and map its
+     the current working directory and this script's directory, then via
+     pnpm workspace fallbacks: `node_modules/.pnpm/node_modules/.bin` and
+     `packages/*/node_modules/.bin` under ancestor directories, then via
+     Pi global package-bin fallback at
+     `~/.pi/agent/npm/node_modules/.bin/pi-mux-detect`) and map its
      JSON payload:
        - `backend == "pane"`     → `branch="mux"`,    `backend=<mux>`
                                    (e.g. "herdr", "cmux", "tmux",
@@ -83,23 +87,65 @@ def _ancestor_dirs(start: str):
         current = parent
 
 
+def _is_executable(path: str) -> bool:
+    return os.path.exists(path) and os.access(path, os.X_OK)
+
+
 def _resolve_detector():
     on_path = shutil.which("pi-mux-detect")
     if on_path:
-        return on_path
+        return on_path, []
 
     search_roots = [os.getcwd(), os.path.dirname(__file__)]
     seen = set()
+    searched = []
+
     for root in search_roots:
         for current in _ancestor_dirs(root):
             if current in seen:
                 continue
             seen.add(current)
             candidate = os.path.join(current, "node_modules", ".bin", "pi-mux-detect")
-            if os.path.exists(candidate) and os.access(candidate, os.X_OK):
-                return candidate
+            searched.append(candidate)
+            if _is_executable(candidate):
+                return candidate, searched
 
-    return None
+    seen_pnpm = set()
+    for root in search_roots:
+        for current in _ancestor_dirs(root):
+            if current in seen_pnpm:
+                continue
+            seen_pnpm.add(current)
+
+            pnpm_candidate = os.path.join(
+                current, "node_modules", ".pnpm", "node_modules", ".bin", "pi-mux-detect"
+            )
+            searched.append(pnpm_candidate)
+            if _is_executable(pnpm_candidate):
+                return pnpm_candidate, searched
+
+            packages_dir = os.path.join(current, "packages")
+            if os.path.isdir(packages_dir):
+                try:
+                    for pkg in sorted(os.listdir(packages_dir)):
+                        candidate = os.path.join(
+                            packages_dir, pkg, "node_modules", ".bin", "pi-mux-detect"
+                        )
+                        searched.append(candidate)
+                        if _is_executable(candidate):
+                            return candidate, searched
+                except OSError:
+                    continue
+
+    pi_global = os.path.join(
+        os.path.expanduser("~"), ".pi", "agent", "npm",
+        "node_modules", ".bin", "pi-mux-detect",
+    )
+    searched.append(pi_global)
+    if _is_executable(pi_global):
+        return pi_global, searched
+
+    return None, searched
 
 
 def _fail(failure: str, **extra) -> None:
@@ -110,11 +156,13 @@ def _fail(failure: str, **extra) -> None:
 
 
 def _invoke_detector() -> dict:
-    detector = _resolve_detector()
+    detector, searched = _resolve_detector()
     if detector is None:
         _fail(
-            "pi-mux-detect not found on PATH or in any node_modules/.bin searched from cwd/script ancestors",
+            "pi-mux-detect not found on PATH, ancestor node_modules/.bin, "
+            "pnpm workspace bins, or Pi global package bin",
             hint="Install @aphotic/pi-mux-subagents (peer dependency of pi-flow-core).",
+            searched=searched,
         )
 
     try:
