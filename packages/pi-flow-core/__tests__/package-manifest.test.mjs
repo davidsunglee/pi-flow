@@ -323,6 +323,50 @@ test('package.json declares no install-time side-effect scripts', () => {
   }
 });
 
+test('package scripts do not contain shell cleanup forms that can consume forwarded args', () => {
+  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  const unsafe = [];
+  for (const [name, script] of Object.entries(pkg.scripts ?? {})) {
+    if (/\bxargs\b[\s\S]*\brm\b/.test(script)) {
+      unsafe.push(`${name}: xargs ... rm`);
+    }
+    if (/\brm\s+-[^&|;]*\brf\b|\brm\s+-[^&|;]*\bfr\b|\brm\s+-r/.test(script)) {
+      unsafe.push(`${name}: raw recursive rm`);
+    }
+    if (/\bfind\b[\s\S]*\s-delete\b/.test(script)) {
+      unsafe.push(`${name}: find -delete`);
+    }
+  }
+  assert.deepEqual(unsafe, [], `Unsafe cleanup in package scripts:\n${unsafe.join('\n')}`);
+});
+
+test('test:helpers uses the dedicated TypeScript helper-test runner', () => {
+  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  assert.equal(
+    pkg.scripts?.['test:helpers'],
+    'node --experimental-strip-types scripts/run-helper-tests.ts',
+  );
+  assert.ok(
+    existsSync(pkgPath('scripts', 'run-helper-tests.ts')),
+    'scripts/run-helper-tests.ts must exist',
+  );
+});
+
+test('helper-test runner rejects forwarded positional args before cleanup can run', () => {
+  const runner = pkgPath('scripts', 'run-helper-tests.ts');
+  const result = spawnSync(
+    process.execPath,
+    ['--experimental-strip-types', runner, 'extensions/setup.test.ts'],
+    { cwd: PKG_DIR, encoding: 'utf8' },
+  );
+  assert.equal(result.status, 2, `expected exit 2, got ${result.status}; stderr=${result.stderr}`);
+  assert.match(
+    result.stderr,
+    /test:helpers does not accept file arguments/,
+    `expected forwarded-argument guidance; stderr=${result.stderr}`,
+  );
+});
+
 test('peerDependencies declares @earendil-works/pi-coding-agent', () => {
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
   assert.ok(
