@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Optional UX layer for pi-flow: footer extension, working indicator/message, Nord theme, and packaged working defaults.",
   "keywords": ["pi-package"],
-  "files": ["extensions", "themes", "working.json", "LICENSE", "!**/.gitkeep"],
+  "files": ["extensions", "themes", "working.json", "LICENSE", "!**/.gitkeep", "!**/__tests__", "!**/*.test.mjs", "!**/*.test.ts", "!**/*.test.js"],
   "scripts": {
     "test:node": "find __tests__ extensions \\( -name '*.test.mjs' -o -name '*.test.ts' \\) -print0 | xargs -0 node --experimental-strip-types --test",
     "test": "pnpm run test:node",

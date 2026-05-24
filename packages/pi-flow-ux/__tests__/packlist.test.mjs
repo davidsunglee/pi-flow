@@ -37,5 +37,7 @@ test('packlist excludes test and build artifacts', () => {
     assert.ok(!f.endsWith('.gitkeep'), `packlist must not include .gitkeep files; found: ${f}`);
     assert.ok(!f.includes('/tests/'), `packlist must not include paths containing "/tests/"; found: ${f}`);
     assert.ok(!f.includes('/fixtures/'), `packlist must not include paths containing "/fixtures/"; found: ${f}`);
+    assert.ok(!f.includes('/__tests__/'), `packlist must not include paths containing "/__tests__/"; found: ${f}`);
+    assert.ok(!/\.test\.(mjs|ts|js)$/.test(f), `packlist must not include test files; found: ${f}`);
   }
 });

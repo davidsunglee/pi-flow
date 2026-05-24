@@ -37,5 +37,7 @@ test('packlist excludes test and build artifacts', () => {
     assert.ok(!f.includes('/__pycache__/'), `packlist must not include paths containing "/__pycache__/"; found: ${f}`);
     assert.ok(!f.endsWith('.gitkeep'), `packlist must not include .gitkeep files; found: ${f}`);
     assert.ok(!f.endsWith('__init__.py'), `packlist must not include __init__.py files; found: ${f}`);
+    assert.ok(!f.includes('/__tests__/'), `packlist must not include paths containing "/__tests__/"; found: ${f}`);
+    assert.ok(!/\.test\.(mjs|ts|js)$/.test(f), `packlist must not include test files; found: ${f}`);
   }
 });
