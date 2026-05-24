@@ -84,8 +84,8 @@ Copy `model-tiers.example.json` to configure which Claude model tier is used for
 
 `@aphotic/pi-flow-core` requires **`@aphotic/pi-mux-subagents`** as a peer dependency.
 
-Install it alongside this package:
+Install it alongside this package if your Pi package source does not install peers automatically:
 
 ```sh
-pnpm add @aphotic/pi-mux-subagents
+pi install npm:@aphotic/pi-mux-subagents
 ```

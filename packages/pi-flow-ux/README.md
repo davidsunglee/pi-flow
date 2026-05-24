@@ -22,18 +22,17 @@ Once the package is published to npm:
 pi install npm:@aphotic/pi-flow-ux
 ```
 
-While the package is private or unpublished, install it directly from git or a local checkout:
+For local development, install it directly from this monorepo checkout:
 
 ```sh
-pi install git:github.com/your-org/pi-flow-ux@main
-pi install /absolute/path/to/pi-flow-ux
+pi install /absolute/path/to/pi-flow/packages/pi-flow-ux
 ```
 
 To trial it for a single Pi run without writing to settings, use `-e` with a valid source form:
 
 ```sh
 pi -e npm:@aphotic/pi-flow-ux
-pi -e git:github.com/your-org/pi-flow-ux@main
+pi -e /absolute/path/to/pi-flow/packages/pi-flow-ux
 ```
 
 Or reference the package in your Pi `settings.json` using one of the supported source forms:
@@ -42,8 +41,7 @@ Or reference the package in your Pi `settings.json` using one of the supported s
 {
   // pick one source form
   "packages": ["npm:@aphotic/pi-flow-ux"]
-  // "packages": ["git:github.com/your-org/pi-flow-ux@main"]
-  // "packages": ["/absolute/path/to/pi-flow-ux"]
+  // "packages": ["/absolute/path/to/pi-flow/packages/pi-flow-ux"]
 }
 ```
 
@@ -59,8 +57,8 @@ After Pi loads the package, the following resources become available:
 
 ```sh
 pi install npm:@aphotic/pi-flow
-# or, while private/unpublished:
-pi install git:github.com/your-org/pi-flow@main
+# or, for local development from this monorepo:
+pi install git:github.com/davidsunglee/pi-flow
 pi install /absolute/path/to/pi-flow
 ```
 
@@ -154,9 +152,8 @@ If you prefer the workflow skills without UX enhancements, install `@aphotic/pi-
 
 ```sh
 pi install npm:@aphotic/pi-flow-core
-# or, while private/unpublished:
-pi install git:github.com/your-org/pi-flow-core@main
-pi install /absolute/path/to/pi-flow-core
+# or, for local development from this monorepo checkout:
+pi install /absolute/path/to/pi-flow/packages/pi-flow-core
 ```
 
 `@aphotic/pi-flow-core` is the independent skill package with no theme, footer, working indicator, or packaged defaults—suitable for headless, script-driven, or minimal CLI environments.
