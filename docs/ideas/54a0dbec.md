@@ -7,7 +7,7 @@
     "publishing",
     "pi-flow"
   ],
-  "status": "open",
+  "status": "closed",
   "created_at": "2026-05-23T04:50:19.308Z"
 }
 
@@ -41,3 +41,5 @@ Prepare the repo to publish public npm packages as `@aphotic/pi-flow`, `@aphotic
 - What exact compatible ranges should be chosen for the Pi peer dependencies and `typebox` after checking the currently installed/tested versions?
 - Should the release docs include npm 2FA/OTP guidance and organization access checks, or keep the first pass focused only on repo-local commands?
 - Should packlist trimming be implemented with `files` negations, nested `.npmignore` files, or both, given npm/pnpm pack behavior for subdirectories?
+
+Completed via plan: docs/plans/2026-05-23-54a0dbec.md
