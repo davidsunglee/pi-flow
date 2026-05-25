@@ -367,7 +367,28 @@ Subject: `feat(plan): wave <N> - <plan_goal_summary>` (truncate Goal with `...` 
 2. **Run integration tests (compatibility: Step 12.2 post-wave reconcile).** Skip if integration testing is disabled or no test command is available. Dispatch `test-runner` with `artifact_path = <working-dir>/docs/test-runs/<plan-name>/wave-<N>-attempt-<K>.log` and `phase_label = wave-<N>-attempt-<K>`, where `<K>` is a 1-based wave attempt counter incremented on every Debugger-first re-test. Then run `pi-flow helper _shared/reconcile-test-run --artifact <wave-artifact-path> --mode reconcile --baseline-failures <baseline-json-path>` and consume `.current_failing_stable`, `.current_non_reconcilable`, `.current_non_baseline_stable`, and `.classification` (`pass` | `fail`). Render the [`integration-regression-gate.md`](integration-regression-gate.md) three-section summary.
 
    - `pass`: proceed to wave `<N+1>`, or Step 15/16 if final.
-   - `fail`: render the Step 12 fail-path header and present the appropriate menu.
+   - `fail`: render the Step 12 fail-path header. On intermediate waves only, run the expected-failure skip classification below before presenting the menu; on the final wave, go straight to the menu.
+
+**Expected-failure skip (intermediate waves only).**
+
+Some plans intentionally leave specific integration tests failing between waves because later wave work is what fixes them. Before presenting the intermediate-wave menu, evaluate each failing entry in `current_non_baseline_stable ∪ current_non_reconcilable` against the remaining waves and tasks. Skip the menu and continue to the next wave only when every failing entry is classifiable as **expected**. An entry is expected only when ALL of the following hold:
+
+1. The executor can cite a specific future wave or task whose description, acceptance criteria, `**Files:**` scope, or feature work plausibly covers the failing behavior.
+2. The connection is concrete: the future task's scope clearly relates to the failing test (matching file path, suite name, or feature area). Inferring "later code probably fixes it" without a concrete link is NOT sufficient.
+3. The entry has a stable suite-native identifier. Non-reconcilable failures (panics, build errors, collection errors) are always ambiguous and never expected.
+
+If — and only if — every failing entry meets all three criteria, skip the menu, render this notification, and proceed to wave `<N+1>`:
+
+```
+ℹ️ Integration tests failed after wave <N>, but every failure is expected to be fixed by later plan work. Continuing to wave <N+1>.
+
+- <failing identifier> — expected fix: <concrete reason from evaluation>; to be addressed by Wave <M> / Task <X>: <task title>
+- ...
+```
+
+`baseline_failures` is NOT mutated by this skip; the same failures will be re-evaluated after the next wave and at the Step 16 final gate, which has no skip path.
+
+Do not use this skip as a blanket excuse to defer regressions. If ANY single failing entry is unexpected, ambiguous, mixed with unlinked failures, non-reconcilable, or cannot be confidently tied to future work, fall through to the unchanged **Intermediate-wave menu** below so the user sees the full failure context and chooses.
 
 **Intermediate-wave menu** (`<N> < total_waves`):
 

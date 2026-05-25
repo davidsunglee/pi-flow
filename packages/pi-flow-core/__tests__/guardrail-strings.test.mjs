@@ -94,6 +94,51 @@ test('execute-plan verifier-dispatch boundary blockquote is preserved', () => {
   assert.ok(found, 'execute-plan SKILL.md must contain a blockquote line starting with "> " that includes "MUST NOT"');
 });
 
+test('execute-plan intermediate-wave failure menu choices are preserved byte-for-byte', () => {
+  const content = readFileSync(skillPath('execute-plan'), 'utf8');
+  for (const choice of [
+    '(d) Debug failures now        — dispatch the Debugger-first flow against current_non_baseline_stable ∪ current_non_reconcilable, then re-test',
+    '(c) Continue despite failures — proceed to wave <N+1> without modifying baseline_failures',
+    '(x) Stop execution            — halt the plan; prior wave commits remain in git history',
+  ]) {
+    assert.ok(content.includes(choice), `execute-plan SKILL.md must contain intermediate-wave menu choice: '${choice}'`);
+  }
+});
+
+test('execute-plan final-wave failure menu choices are preserved byte-for-byte', () => {
+  const content = readFileSync(skillPath('execute-plan'), 'utf8');
+  for (const choice of [
+    '(d) Debug failures now — dispatch the Debugger-first flow against current_non_baseline_stable ∪ current_non_reconcilable, then re-test',
+    '(x) Stop execution     — halt the plan; prior wave commits remain in git history',
+  ]) {
+    assert.ok(content.includes(choice), `execute-plan SKILL.md must contain final-wave menu choice: '${choice}'`);
+  }
+});
+
+test('execute-plan expected-failure skip path is conservative and intermediate-wave only', () => {
+  const content = readFileSync(skillPath('execute-plan'), 'utf8');
+  assert.ok(
+    content.includes('Expected-failure skip (intermediate waves only)'),
+    'execute-plan SKILL.md must contain the expected-failure skip subsection heading'
+  );
+  assert.ok(
+    /blanket excuse/i.test(content),
+    'execute-plan SKILL.md must caution against using the expected-failure skip path as a blanket excuse for regressions'
+  );
+  assert.ok(
+    content.includes('ℹ️ Integration tests failed after wave'),
+    'execute-plan SKILL.md must contain the expected-failure notification banner prefix'
+  );
+  assert.ok(
+    content.includes('evaluate each failing entry'),
+    'execute-plan SKILL.md must frame the skip path as executor evaluation against remaining plan work'
+  );
+  assert.ok(
+    !content.includes('The plan file explicitly names'),
+    'execute-plan SKILL.md must not require the plan to explicitly name future tasks responsible for failures'
+  );
+});
+
 test('refine-plan coverage-gate error is preserved', () => {
   const content = readFileSync(skillPath('refine-plan'), 'utf8');
   assert.ok(
