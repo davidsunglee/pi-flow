@@ -7,7 +7,7 @@
     "ui",
     "theme"
   ],
-  "status": "open",
+  "status": "closed",
   "created_at": "2026-05-28T18:31:19.480Z"
 }
 
@@ -75,3 +75,5 @@ Create a new `border-status.ts` Pi extension next to `packages/pi-flow-ux/extens
 ## Open Questions
 
 - Should a later idea remove or simplify duplicated footer metadata once `border-status.ts` has proven useful?
+
+Completed via fastlane: 70ff60328ec7fa61bf95ca1bee4d2fd5dc105638, spec: (input was idea)
