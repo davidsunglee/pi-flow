@@ -47,3 +47,25 @@ Or install it explicitly via `pi install`:
 ```sh
 pi install npm:@aphotic/pi-flow
 ```
+
+## Releasing (maintainers)
+
+`@aphotic/pi-flow` is a self-contained aggregate: it bundles `@aphotic/pi-flow-core`, `@aphotic/pi-flow-ux`, and `@aphotic/pi-ideas` (plus their runtime deps) under its own `node_modules/` so a single install exposes every resource the `pi` manifest forwards to.
+
+> **Do not run `pnpm pack` / `pnpm publish` directly on this package.** Under pnpm's isolated linker, `bundledDependencies` fail with `ERR_PNPM_BUNDLED_DEPENDENCIES_WITHOUT_HOISTED`. The aggregate has a dedicated release path instead.
+
+Produce the bundled tarball:
+
+```sh
+pnpm --filter @aphotic/pi-flow run pack:aggregate            # prints {"tarball": "...", ...}
+pnpm --filter @aphotic/pi-flow run pack:aggregate -- --out ./dist
+```
+
+Publish the (release-guarded) tarball:
+
+```sh
+pnpm --filter @aphotic/pi-flow run publish:aggregate                 # npm publish
+pnpm --filter @aphotic/pi-flow run publish:aggregate -- --dry-run    # rehearse
+```
+
+`scripts/pack-aggregate.mjs` builds a clean staging directory, materializes the real subpackage contents under `stage/node_modules/@aphotic/...`, rewrites `workspace:*` specs to exact versions, then runs `npm pack`/`npm publish` from the stage. It includes a **release guard** that fails before publishing if any required bundled resource (core commands/skills/`ideas.json`, the UX footer/working/theme/`working.json`, the `pi-ideas` `idea.ts`, or its bundled `typebox`) is missing from the produced tarball.
