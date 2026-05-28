@@ -347,6 +347,34 @@ test("composeBorderLines drops token window, then branch, then thinking as width
 	assert.ok(noBranch[2].includes(" lo "), "thinking retained after branch drops");
 });
 
+test("composeBorderLines preserves autocomplete matches and removes the interior stock border", () => {
+	const stockBorder = "─".repeat(80);
+	const exactMatch = "→ status";
+	const out = composeBorderLines({
+		lines: [stockBorder, "/stat █", stockBorder, exactMatch],
+		width: 80,
+		modelId: "gpt-5.5",
+		thinkingLabel: "xhigh",
+		thinkingColor: idBorder,
+		contextPercent: 12.3,
+		contextTokens: 9300,
+		contextWindow: 200000,
+		cwd: "/repo",
+		branch: undefined,
+		colorize: idColorize,
+		borderColor: idBorder,
+	});
+
+	assert.equal(out.length, 4, "rewrapping should not add vertical height");
+	assert.equal(out[2], exactMatch, "single exact command match must remain visible");
+	assert.ok(out[3].includes("gpt-5.5"), "status border moves below autocomplete");
+	assert.equal(
+		out.slice(1, -1).some((line) => line === stockBorder),
+		false,
+		"the original editor bottom border should not remain as an extra interior line",
+	);
+});
+
 // ─── createBranchTracker (rerender-on-change) ──────────────────────────────────
 
 test("branch tracker only fires the change callback when the branch actually changes", async () => {

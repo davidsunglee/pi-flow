@@ -272,7 +272,10 @@ export function computeBorderVisibility(f: BorderFieldWidths): BorderVisibility 
 // ─── Border line composition ───────────────────────────────────────────────────
 
 export interface ComposeBorderLinesOptions {
-	/** Base editor lines from super.render(width); first is top border, last is bottom. */
+	/**
+	 * Base editor lines from super.render(width). The first line is the top
+	 * border; the editor bottom border may be followed by autocomplete rows.
+	 */
 	lines: string[];
 	width: number;
 	modelId: string;
@@ -289,10 +292,36 @@ export interface ComposeBorderLinesOptions {
 	borderColor: (text: string) => string;
 }
 
+const ANSI_ESCAPE_RE =
+	/\x1B(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\)|_[^\x1B]*(?:\x1B\\)|[@-Z\\-_])/g;
+
+function stripAnsiForBorderDetection(text: string): string {
+	return text.replace(ANSI_ESCAPE_RE, "");
+}
+
+function isEditorBorderLine(line: string, width: number): boolean {
+	const plain = stripAnsiForBorderDetection(line);
+	const dashCount = [...plain].filter((ch) => ch === "─").length;
+	return (
+		visibleWidth(line) === width &&
+		plain.startsWith("─") &&
+		dashCount >= Math.max(1, Math.floor(width / 2))
+	);
+}
+
+function findEditorBottomBorderIndex(lines: string[], width: number): number {
+	for (let i = lines.length - 1; i >= 1; i--) {
+		if (isEditorBorderLine(lines[i], width)) return i;
+	}
+	return lines.length - 1;
+}
+
 /**
- * Rewrite the top and bottom border lines with fitted status text. Pure: all
- * theme/context data is supplied by the caller so it is unit-testable without a
- * live editor.
+ * Rewrite the top and bottom border lines with fitted status text. If the base
+ * editor appended autocomplete rows after its stock bottom border, remove that
+ * interior border and draw the status border below the autocomplete rows so no
+ * match row is overwritten. Pure: all theme/context data is supplied by the
+ * caller so it is unit-testable without a live editor.
  */
 export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 	if (p.lines.length < 2) return p.lines;
@@ -354,14 +383,22 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 		colorize,
 	);
 
-	const out = [...p.lines];
-	out[0] = fitBorder("", ` ${topRight} `, width, p.borderColor);
-	out[out.length - 1] = fitBorder(
+	const bottomLine = fitBorder(
 		` ${bottomLeft} `,
 		` ${bottomRight} `,
 		width,
 		p.borderColor,
 	);
+	const bottomBorderIndex = findEditorBottomBorderIndex(p.lines, width);
+
+	const out = [...p.lines];
+	out[0] = fitBorder("", ` ${topRight} `, width, p.borderColor);
+	if (bottomBorderIndex < out.length - 1) {
+		out.splice(bottomBorderIndex, 1);
+		out.push(bottomLine);
+	} else {
+		out[bottomBorderIndex] = bottomLine;
+	}
 	return out;
 }
 
