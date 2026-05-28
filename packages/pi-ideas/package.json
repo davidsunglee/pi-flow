@@ -1,0 +1,47 @@
+{
+  "name": "@aphotic/pi-ideas",
+  "version": "0.5.0",
+  "type": "module",
+  "description": "Standalone, configurable idea-capture extension for Pi: an `idea` tool and `/ideas` browser backed by docs/ideas/<8hex>.md artifacts, with JSON-configurable work-menu actions, shortcuts, refine prompt, and command name.",
+  "keywords": ["pi-package"],
+  "files": ["extensions", "README.md", "LICENSE", "!**/__tests__", "!**/*.test.mjs", "!**/*.test.ts", "!**/*.test.js"],
+  "scripts": {
+    "test:node": "find __tests__ extensions \\( -name '*.test.mjs' -o -name '*.test.ts' \\) -print0 | xargs -0 node --experimental-strip-types --test",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm run test:node",
+    "check": "pnpm run typecheck && pnpm run test"
+  },
+  "dependencies": {
+    "typebox": "^1.0.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.75.0",
+    "@earendil-works/pi-tui": "^0.75.0",
+    "typebox": "^1.0.0"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.75.0",
+    "@earendil-works/pi-tui": "^0.75.0",
+    "typebox": "^1.0.0"
+  },
+  "pi": {
+    "extensions": ["extensions/index.ts"]
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davidsunglee/pi-flow.git",
+    "directory": "packages/pi-ideas"
+  },
+  "bugs": {
+    "url": "https://github.com/davidsunglee/pi-flow/issues"
+  },
+  "homepage": "https://github.com/davidsunglee/pi-flow/tree/main/packages/pi-ideas#readme",
+  "author": "David Lee",
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
