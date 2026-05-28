@@ -21,8 +21,16 @@ const EXPECTED_COMMANDS = [
   'flow:fastlane',
 ];
 
-test('pi loader discovers the commands extension with 9 flow commands and the idea tool', async () => {
+test('pi-loader-smoke: pi loader discovers the commands extension with 9 flow commands and the idea tool', async () => {
   const sandbox = mkdtempSync(join(tmpdir(), 'pi-flow-core-loader-'));
+  const home = mkdtempSync(join(tmpdir(), 'pi-flow-core-home-'));
+  const prevHome = process.env.HOME;
+  const prevUserProfile = process.env.USERPROFILE;
+  const prevCwd = process.cwd();
+  process.env.HOME = home;
+  process.env.USERPROFILE = home;
+  process.chdir(sandbox);
+
   const loader = new DefaultResourceLoader({
     cwd: sandbox,
     agentDir: join(sandbox, 'agent'),
@@ -50,6 +58,10 @@ test('pi loader discovers the commands extension with 9 flow commands and the id
     assert.deepEqual([...commandsExtension.commands.keys()], EXPECTED_COMMANDS);
     assert.deepEqual([...commandsExtension.tools.keys()], ['idea']);
   } finally {
+    process.chdir(prevCwd);
+    if (prevHome === undefined) delete process.env.HOME; else process.env.HOME = prevHome;
+    if (prevUserProfile === undefined) delete process.env.USERPROFILE; else process.env.USERPROFILE = prevUserProfile;
     rmSync(sandbox, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
   }
 });

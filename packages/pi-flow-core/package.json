@@ -5,28 +5,26 @@
   "description": "Workflow skills, bundled agent definitions, and helper runner for pi-flow.",
   "keywords": ["pi-package"],
   "bin": { "pi-flow": "./bin/pi-flow.mjs" },
-  "files": ["bin", "skills", "agents", "docs", "extensions", "model-tiers.example.json", "LICENSE", "!**/tests", "!**/fixtures", "!**/__pycache__", "!**/.gitkeep", "!**/__tests__", "!**/*.test.mjs", "!**/*.test.ts", "!**/*.test.js"],
+  "files": ["bin", "skills", "agents", "docs", "extensions", "ideas.json", "model-tiers.example.json", "LICENSE", "!**/tests", "!**/fixtures", "!**/__pycache__", "!**/.gitkeep", "!**/__tests__", "!**/*.test.mjs", "!**/*.test.ts", "!**/*.test.js"],
   "scripts": {
     "test:helpers": "node --experimental-strip-types scripts/run-helper-tests.ts",
-    "test:node": "find bin __tests__ extensions \\( -name '*.test.mjs' -o -name '*.test.ts' \\) -print0 | xargs -0 node --experimental-strip-types --test",
+    "test:node": "find bin __tests__ extensions \\( -name '*.test.mjs' -o -name '*.test.ts' \\) -print0 | xargs -0 node --experimental-strip-types --test --test-reporter tap",
     "typecheck": "tsc --noEmit",
     "test": "pnpm run test:node && pnpm run test:helpers",
     "check": "pnpm run typecheck && pnpm run test"
   },
   "dependencies": {
-    "typebox": "^1.0.0"
+    "@aphotic/pi-ideas": "workspace:*"
   },
   "peerDependencies": {
     "@aphotic/pi-mux-subagents": "^0.1.0",
     "@earendil-works/pi-coding-agent": "^0.75.0",
-    "@earendil-works/pi-tui": "^0.75.0",
-    "typebox": "^1.0.0"
+    "@earendil-works/pi-tui": "^0.75.0"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.75.0",
     "@earendil-works/pi-tui": "^0.75.0",
-    "@aphotic/pi-mux-subagents": "^0.1.0",
-    "typebox": "^1.0.0"
+    "@aphotic/pi-mux-subagents": "^0.1.0"
   },
   "pi": {
     "skills": ["skills/*/SKILL.md"],

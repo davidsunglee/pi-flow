@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname, basename } from 'node:path';
 
@@ -375,41 +374,35 @@ test('peerDependencies declares @earendil-works/pi-coding-agent', () => {
   );
 });
 
-test('typebox is declared as a runtime dependency (not peer-only) since extensions/idea.ts imports it at runtime', () => {
-  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
-  assert.ok(
-    pkg.dependencies?.typebox,
-    'typebox must be in dependencies; idea.ts imports it at runtime and a production install must resolve it without relying on devDependencies or peer hoisting'
+test('ideas.json packaged config ships and declares the flow:ideas command with the four workflow actions', () => {
+  const cfgPath = pkgPath('ideas.json');
+  assert.ok(existsSync(cfgPath), 'ideas.json packaged config must exist');
+  const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
+  assert.equal(cfg.command, 'flow:ideas', 'ideas.json command must be flow:ideas');
+  assert.deepEqual(
+    cfg.actions.map(a => a.name),
+    ['fastlane', 'scout', 'spec', 'plan'],
+    'ideas.json actions must be fastlane, scout, spec, plan'
   );
+  const fastlane = cfg.actions.find(a => a.name === 'fastlane');
+  const spec = cfg.actions.find(a => a.name === 'spec');
+  assert.ok(fastlane.shortcut, 'fastlane action must declare a shortcut');
+  assert.ok(spec.shortcut, 'spec action must declare a shortcut');
+  assert.ok(cfg.refinePrompt.includes('## Context'), 'refinePrompt must include the ## Context section header');
+  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  assert.ok(pkg.files?.includes('ideas.json'), 'files array must include "ideas.json"');
 });
 
-test('typebox is declared in peerDependencies and devDependencies as the manifest contract requires', () => {
+test('pi-flow-core depends on @aphotic/pi-ideas and no longer declares typebox', () => {
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
   assert.equal(
-    pkg.peerDependencies?.typebox,
-    '^1.0.0',
-    'peerDependencies.typebox must be "^1.0.0"'
+    pkg.dependencies['@aphotic/pi-ideas'],
+    'workspace:*',
+    'dependencies must declare @aphotic/pi-ideas as workspace:*'
   );
-  assert.equal(
-    pkg.devDependencies?.typebox,
-    '^1.0.0',
-    'devDependencies.typebox must be "^1.0.0"'
-  );
-});
-
-test('packaged-install smoke: extensions/idea.ts resolves typebox via pi-flow-core local node_modules', () => {
-  // pnpm only links a package into a workspace's local node_modules when it's
-  // declared as a direct (non-peer) dependency. If typebox were peer-only, this
-  // symlink would not exist and a production install would fail to load idea.ts.
-  const localTypebox = pkgPath('node_modules', 'typebox');
   assert.ok(
-    existsSync(localTypebox),
-    `typebox must be installed under pi-flow-core/node_modules for a production install; missing: ${localTypebox}`
-  );
-  const requireFromCore = createRequire(pkgPath('extensions', 'idea.ts'));
-  assert.doesNotThrow(
-    () => requireFromCore.resolve('typebox'),
-    `extensions/idea.ts must be able to resolve typebox from pi-flow-core's own node_modules`
+    pkg.dependencies.typebox === undefined && pkg.peerDependencies?.typebox === undefined,
+    'typebox must no longer be declared in dependencies or peerDependencies'
   );
 });
 

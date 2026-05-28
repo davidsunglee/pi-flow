@@ -1,0 +1,12 @@
+{
+  "command": "flow:ideas",
+  "refinePrompt": "Refine the idea ${idea}.\n\nBefore rewriting or updating the idea, ask the user clarifying questions whose answers would materially change the artifact. Provide a recommendation for each question. Do not rewrite the idea body before the user answers.\n\nOnce the user has answered enough to draft the structured description, write it into the idea body using exactly these section headers in this order:\n\n## Context\n## Goal\n## Scope\n## Acceptance Sketch\n## Open Questions\n\nThen update the idea via the `idea` tool's `update` action.",
+  "toolDescription": "Capture, read, list, update, append to, and delete Flow ideas backed by docs/ideas/<8-hex>.md artifacts. Identifiers use the format IDEA-<8-hex> (case-insensitive).\n\nUse this tool when the user asks naturally in conversation to capture, refine, or list ideas — even informally phrased requests.\n\nEach idea body should follow this canonical 5-section shape:\n\n## Context\n## Goal\n## Scope\n## Acceptance Sketch\n## Open Questions\n\nRule: ask at most one clarifying question, and only when missing information would materially change the artifact. Otherwise, create the idea immediately and report the resulting IDEA-<id>.",
+  "promptSnippet": "idea — six actions: list / read / create / update / append / delete. Identifies artifacts as IDEA-<8-hex>. Body follows the canonical 5-section shape: ## Context, ## Goal, ## Scope, ## Acceptance Sketch, ## Open Questions.",
+  "actions": [
+    { "name": "fastlane", "prompt": "/flow:fastlane ${idea}", "description": "Run lightweight workflow for small changes", "shortcut": "Ctrl+Shift+F" },
+    { "name": "scout", "prompt": "/flow:scout ${idea}", "description": "Explore codebase and create a brief for spec and plan" },
+    { "name": "spec", "prompt": "/flow:spec ${idea}", "description": "Perform reqs and arch Q&A to produce a detailed spec", "shortcut": "Ctrl+Shift+S" },
+    { "name": "plan", "prompt": "/flow:plan ${idea}", "description": "Generate parallelizable tasks for execution" }
+  ]
+}

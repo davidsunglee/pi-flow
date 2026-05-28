@@ -16,7 +16,7 @@ import { DefaultResourceLoader } from "@earendil-works/pi-coding-agent";
 const PKG_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const COMMANDS_PATH = resolve(PKG_DIR, "extensions", "commands.ts");
 
-test("packaged extensions register only the built-in `idea` tool — no external `todo` tool required for idea-artifact state", async (t) => {
+test("idea-tool-only: packaged extensions register only the built-in `idea` tool — no external `todo` tool required for idea-artifact state", async (t) => {
   const sandbox = realpathSync(mkdtempSync(join(tmpdir(), "pi-flow-idea-tool-only-")));
   const homeDir = join(sandbox, "home");
   mkdirSync(homeDir, { recursive: true });

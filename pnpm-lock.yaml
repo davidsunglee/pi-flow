@@ -19,9 +19,9 @@ importers:
 
   packages/pi-flow-core:
     dependencies:
-      typebox:
-        specifier: ^1.0.0
-        version: 1.1.38
+      '@aphotic/pi-ideas':
+        specifier: workspace:*
+        version: link:../pi-ideas
     devDependencies:
       '@aphotic/pi-mux-subagents':
         specifier: ^0.1.0

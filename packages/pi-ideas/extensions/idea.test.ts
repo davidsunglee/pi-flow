@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, realpathSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { buildRefineIdeaPrompt, registerIdea } from "./idea.ts";
+import { registerIdea, buildSelectorHint } from "./idea.ts";
 import { formatIdeaArtifact, parseIdeaArtifact, type IdeaArtifact } from "./storage.ts";
+import { DEFAULT_REFINE_PROMPT, substituteIdea } from "./config.ts";
 import { getKeybindings, visibleWidth } from "@earendil-works/pi-tui";
 
 type NotifyLevel = "info" | "warning" | "error";
@@ -44,6 +45,44 @@ function bootExtension() {
   assert.ok(tool, "idea tool should be registered");
 
   return { commands, tools, tool };
+}
+
+// Product-neutral sample config used by action/shortcut/command-driven tests.
+// Deliberately avoids any product-specific action names so the test file stays
+// decoupled from any consumer that ships a packaged ideas.json.
+const SAMPLE_CONFIG = {
+  command: "build:ideas",
+  actions: [
+    { name: "build", prompt: "/build ${idea}", description: "Build it", shortcut: "Ctrl+Shift+B" },
+    { name: "ship", prompt: "/ship ${idea}", description: "Ship it", shortcut: "Ctrl+Shift+P" },
+  ],
+};
+
+function bootExtensionWithConfig(config: object) {
+  const tmpProject = mkSandbox("pi-ideas-cfg-proj-");
+  const tmpHome = mkSandbox("pi-ideas-cfg-home-");
+  mkdirSync(path.join(tmpProject, ".pi"), { recursive: true });
+  writeFileSync(path.join(tmpProject, ".pi", "ideas.json"), JSON.stringify(config), "utf8");
+
+  const commands: RegisteredCommand[] = [];
+  const tools: RegisteredTool[] = [];
+  const pi = {
+    registerCommand(name: string, options: RegisteredCommand["options"]) {
+      commands.push({ name, options });
+    },
+    registerTool(tool: RegisteredTool) {
+      tools.push(tool);
+    },
+  };
+
+  registerIdea(pi as any, { cwd: tmpProject, homeDir: tmpHome });
+
+  const tool = tools.find((t) => t.name === "idea");
+  assert.ok(tool, "idea tool should be registered");
+  const command = commands[0];
+  assert.ok(command, "a command should be registered");
+
+  return { commands, tools, tool, command };
 }
 
 function makeCtx(
@@ -316,35 +355,28 @@ test("tool delete returns error on missing id", async () => {
 
 test("registerIdea does not leak todo command or tool names", () => {
   const { commands, tools } = bootExtension();
-  assert.ok(commands.some((c) => c.name === "flow:ideas"));
-  assert.equal(commands.some((c) => c.name === "todo" || c.name === "flow:todo"), false);
-  assert.equal(tools.some((t) => t.name === "todo" || t.name === "flow:todo"), false);
-  assert.deepEqual(commands.map((c) => c.name), ["flow:ideas"]);
+  assert.ok(commands.some((c) => c.name === "ideas"));
+  assert.equal(commands.some((c) => c.name === "todo"), false);
+  assert.equal(tools.some((t) => t.name === "todo"), false);
+  assert.deepEqual(commands.map((c) => c.name), ["ideas"]);
   assert.deepEqual(tools.map((t) => t.name), ["idea"]);
 });
 
-test("buildRefineIdeaPrompt generates correct template", async () => {
-  const { buildRefineIdeaPrompt } = await import("./idea.ts");
-  const result = buildRefineIdeaPrompt("abcd1234", "Test idea");
+test("buildSelectorHint shows at most three configured shortcuts", () => {
+  const actions = [
+    { name: "one", prompt: "/one ${idea}", shortcut: "Ctrl+Shift+1" },
+    { name: "two", prompt: "/two ${idea}", shortcut: "Ctrl+Shift+2" },
+    { name: "three", prompt: "/three ${idea}", shortcut: "Ctrl+Shift+3" },
+    { name: "four", prompt: "/four ${idea}", shortcut: "Ctrl+Shift+4" },
+    { name: "five", prompt: "/five ${idea}", shortcut: "Ctrl+Shift+5" },
+  ];
+  const hint = buildSelectorHint(actions);
 
-  assert.match(result, /idea IDEA-abcd1234/);
-  assert.match(result, /Test idea/);
-  assert.match(result, /provide a recommendation for each question/i);
-
-  const contextIdx = result.indexOf("## Context");
-  const goalIdx = result.indexOf("## Goal");
-  const scopeIdx = result.indexOf("## Scope");
-  const acceptanceIdx = result.indexOf("## Acceptance Sketch");
-  const questionsIdx = result.indexOf("## Open Questions");
-
-  assert.ok(contextIdx > -1);
-  assert.ok(goalIdx > -1);
-  assert.ok(scopeIdx > -1);
-  assert.ok(acceptanceIdx > -1);
-  assert.ok(questionsIdx > -1);
-  assert.ok(contextIdx < goalIdx && goalIdx < scopeIdx && scopeIdx < acceptanceIdx && acceptanceIdx < questionsIdx);
-
-  assert.match(result, /update the idea via the `idea` tool's `update` action\.$/m);
+  assert.match(hint, /\bone\b/);
+  assert.match(hint, /\btwo\b/);
+  assert.match(hint, /\bthree\b/);
+  assert.doesNotMatch(hint, /\bfour\b/);
+  assert.doesNotMatch(hint, /\bfive\b/);
 });
 
 test("filterAndRankIdeas with empty query returns open before closed, chronologically", async () => {
@@ -440,43 +472,43 @@ test("formatGroupedTextList shows tags when present", async () => {
   assert.match(result, /\[tag1, tag2\]/);
 });
 
-test("parseFlowIdeasArgs with empty string returns defaults", async () => {
-  const { parseFlowIdeasArgs } = await import("./idea.ts");
+test("parseIdeasArgs with empty string returns defaults", async () => {
+  const { parseIdeasArgs } = await import("./idea.ts");
 
-  const result = parseFlowIdeasArgs("");
+  const result = parseIdeasArgs("");
 
   assert.deepEqual(result, { query: "", status: "all" });
 });
 
-test("parseFlowIdeasArgs with query only", async () => {
-  const { parseFlowIdeasArgs } = await import("./idea.ts");
+test("parseIdeasArgs with query only", async () => {
+  const { parseIdeasArgs } = await import("./idea.ts");
 
-  const result = parseFlowIdeasArgs("regression");
+  const result = parseIdeasArgs("regression");
 
   assert.deepEqual(result, { query: "regression", status: "all" });
 });
 
-test("parseFlowIdeasArgs with --open flag and query", async () => {
-  const { parseFlowIdeasArgs } = await import("./idea.ts");
+test("parseIdeasArgs with --open flag and query", async () => {
+  const { parseIdeasArgs } = await import("./idea.ts");
 
-  const result = parseFlowIdeasArgs("--open regression auth");
+  const result = parseIdeasArgs("--open regression auth");
 
   assert.deepEqual(result, { query: "regression auth", status: "open" });
 });
 
-test("parseFlowIdeasArgs last flag wins", async () => {
-  const { parseFlowIdeasArgs } = await import("./idea.ts");
+test("parseIdeasArgs last flag wins", async () => {
+  const { parseIdeasArgs } = await import("./idea.ts");
 
-  const result = parseFlowIdeasArgs("--closed --all foo");
+  const result = parseIdeasArgs("--closed --all foo");
 
   assert.deepEqual(result, { query: "foo", status: "all" });
 });
 
-test("flow:ideas command in non-UI mode prints grouped list", async () => {
+test("ideas command in non-UI mode prints grouped list", async () => {
   const sandbox = mkSandbox("pi-flow-ideas-cmd-grouped-");
   const { commands } = bootExtension();
-  const cmd = commands.find((c) => c.name === "flow:ideas");
-  assert.ok(cmd, "flow:ideas command should be registered");
+  const cmd = commands.find((c) => c.name === "ideas");
+  assert.ok(cmd, "ideas command should be registered");
 
   await seedIdea(sandbox, artifact("11111111", "Open idea one", "open"));
   await seedIdea(sandbox, artifact("22222222", "Open idea two", "open"));
@@ -491,11 +523,11 @@ test("flow:ideas command in non-UI mode prints grouped list", async () => {
   assert.match(ctx.notifyCalls[0].message, /Closed ideas/);
 });
 
-test("flow:ideas command respects --open flag", async () => {
+test("ideas command respects --open flag", async () => {
   const sandbox = mkSandbox("pi-flow-ideas-cmd-open-");
   const { commands } = bootExtension();
-  const cmd = commands.find((c) => c.name === "flow:ideas");
-  assert.ok(cmd, "flow:ideas command should be registered");
+  const cmd = commands.find((c) => c.name === "ideas");
+  assert.ok(cmd, "ideas command should be registered");
 
   await seedIdea(sandbox, artifact("aaaa1111", "Open one", "open"));
   await seedIdea(sandbox, artifact("aaaa2222", "Open two", "open"));
@@ -510,11 +542,11 @@ test("flow:ideas command respects --open flag", async () => {
   assert.doesNotMatch(ctx.notifyCalls[0].message, /Closed ideas/);
 });
 
-test("flow:ideas command filters by positional query", async () => {
+test("ideas command filters by positional query", async () => {
   const sandbox = mkSandbox("pi-flow-ideas-cmd-query-");
   const { commands } = bootExtension();
-  const cmd = commands.find((c) => c.name === "flow:ideas");
-  assert.ok(cmd, "flow:ideas command should be registered");
+  const cmd = commands.find((c) => c.name === "ideas");
+  assert.ok(cmd, "ideas command should be registered");
 
   await seedIdea(sandbox, artifact("bbbb1111", "Alpha unique title", "open"));
   await seedIdea(sandbox, artifact("bbbb2222", "Beta something else", "open"));
@@ -529,11 +561,11 @@ test("flow:ideas command filters by positional query", async () => {
   assert.doesNotMatch(ctx.notifyCalls[0].message, /Gamma other/);
 });
 
-test("flow:ideas command emits No matching ideas when query has no hits", async () => {
+test("ideas command emits No matching ideas when query has no hits", async () => {
   const sandbox = mkSandbox("pi-flow-ideas-cmd-no-match-");
   const { commands } = bootExtension();
-  const cmd = commands.find((c) => c.name === "flow:ideas");
-  assert.ok(cmd, "flow:ideas command should be registered");
+  const cmd = commands.find((c) => c.name === "ideas");
+  assert.ok(cmd, "ideas command should be registered");
 
   await seedIdea(sandbox, artifact("cccc1111", "Some idea", "open"));
   await seedIdea(sandbox, artifact("cccc2222", "Another idea", "open"));
@@ -545,11 +577,11 @@ test("flow:ideas command emits No matching ideas when query has no hits", async 
   assert.equal(ctx.notifyCalls[0].message, "No matching ideas.");
 });
 
-test("flow:ideas interactive path invokes ctx.ui.custom", async () => {
+test("ideas interactive path invokes ctx.ui.custom", async () => {
   const sandbox = mkSandbox("pi-flow-ideas-interactive-smoke-");
   const { commands } = bootExtension();
-  const cmd = commands.find((c) => c.name === "flow:ideas");
-  assert.ok(cmd, "flow:ideas command should be registered");
+  const cmd = commands.find((c) => c.name === "ideas");
+  assert.ok(cmd, "ideas command should be registered");
 
   await seedIdea(sandbox, artifact("11112222", "Sample", "open"));
 
@@ -592,14 +624,14 @@ test("IdeaSelectorComponent render shows header, ids, and hint line", async () =
   ];
 
   const { host } = makeSelectorHost();
-  const selector = new IdeaSelectorComponent(entries, "", host);
+  const selector = new IdeaSelectorComponent(entries, "", host, []);
   const out = selector.render(80).join("\n");
 
   assert.match(out, /Ideas \(2 open, 1 closed\)/);
   assert.match(out, /IDEA-11111111/);
   assert.match(out, /IDEA-22222222/);
   assert.match(out, /IDEA-33333333/);
-  assert.match(out, /Ctrl\+Shift\+R refine/);
+  assert.match(out, /ctrl\+shift\+r refine/);
 });
 
 test("IdeaSelectorComponent render emits bordered layout with spacing between header, search, list, hint", async () => {
@@ -611,7 +643,7 @@ test("IdeaSelectorComponent render emits bordered layout with spacing between he
   ];
 
   const { host } = makeSelectorHost();
-  const selector = new IdeaSelectorComponent(entries, "", host);
+  const selector = new IdeaSelectorComponent(entries, "", host, []);
   const width = 120;
   const lines = selector.render(width);
 
@@ -625,7 +657,7 @@ test("IdeaSelectorComponent render emits bordered layout with spacing between he
 
   assert.equal(lines[lines.length - 1], border, "last line should be bottom border");
   assert.equal(lines[lines.length - 2], "", "blank line before bottom border");
-  assert.match(lines[lines.length - 3], /Ctrl\+Shift\+R refine/);
+  assert.match(lines[lines.length - 3], /ctrl\+shift\+r refine/);
   assert.equal(lines[lines.length - 4], "", "blank line before hint");
 
   // Idea rows are between line 6 and lines.length - 4, with a blank separator just before hint area.
@@ -658,7 +690,7 @@ test("IdeaSelectorComponent render: selected row IDEA id is accent and NOT bold,
     keybindings: stubKeybindings,
   };
 
-  const selector = new IdeaSelectorComponent(entries, "", host);
+  const selector = new IdeaSelectorComponent(entries, "", host, []);
   const out = selector.render(120).join("\n");
 
   // Selected row (index 0) IDEA id: accent color only, NO bold wrapper.
@@ -724,7 +756,7 @@ test("IdeaSelectorComponent render: selected title is accent; unselected open ti
     keybindings: stubKeybindings,
   };
 
-  const selector = new IdeaSelectorComponent(entries, "", host);
+  const selector = new IdeaSelectorComponent(entries, "", host, []);
   const out = selector.render(120).join("\n");
 
   // Selected row (index 0) — title should be accent so id+title color together.
@@ -779,7 +811,7 @@ test("IdeaSelectorComponent render: top and bottom border use border color", asy
     keybindings: stubKeybindings,
   };
 
-  const selector = new IdeaSelectorComponent(entries, "", host);
+  const selector = new IdeaSelectorComponent(entries, "", host, []);
   const lines = selector.render(80);
 
   const firstBorder = lines[0];
@@ -811,7 +843,7 @@ test("IdeaSelectorComponent render: header 'Ideas (...)' uses border color and s
     keybindings: stubKeybindings,
   };
 
-  const selector = new IdeaSelectorComponent(entries, "", host);
+  const selector = new IdeaSelectorComponent(entries, "", host, []);
   const lines = selector.render(120);
   const headerLine = lines[2];
 
@@ -845,7 +877,7 @@ test("IdeaSelectorComponent render: selected row arrow '→ ' is accent-colored"
     keybindings: stubKeybindings,
   };
 
-  const selector = new IdeaSelectorComponent(entries, "", host);
+  const selector = new IdeaSelectorComponent(entries, "", host, []);
   const out = selector.render(120).join("\n");
 
   // Selected row should have an accent-colored arrow prefix.
@@ -864,7 +896,7 @@ test("IdeaSelectorComponent render: every line respects the supplied width", asy
   ];
 
   const { host } = makeSelectorHost();
-  const selector = new IdeaSelectorComponent(entries, "", host);
+  const selector = new IdeaSelectorComponent(entries, "", host, []);
   const width = 110;
   const lines = selector.render(width);
   for (const [i, line] of lines.entries()) {
@@ -881,7 +913,7 @@ test("IdeaSelectorComponent render: quick reference does not contain 'Type to se
   ];
 
   const { host } = makeSelectorHost();
-  const selector = new IdeaSelectorComponent(entries, "", host);
+  const selector = new IdeaSelectorComponent(entries, "", host, []);
   const lines = selector.render(120);
 
   // Search bar (5th line, index 4) still shows the placeholder.
@@ -908,7 +940,7 @@ test("IdeaSelectorComponent render: narrow width wraps a long idea row without l
   ];
 
   const { host } = makeSelectorHost();
-  const selector = new IdeaSelectorComponent(entries, "", host);
+  const selector = new IdeaSelectorComponent(entries, "", host, []);
   const width = 40;
   const lines = selector.render(width);
   const joined = lines.join("\n");
@@ -933,13 +965,13 @@ test("IdeaSelectorComponent render: narrow width wraps the quick-reference hint 
   ];
 
   const { host } = makeSelectorHost();
-  const selector = new IdeaSelectorComponent(entries, "", host);
+  const selector = new IdeaSelectorComponent(entries, "", host, SAMPLE_CONFIG.actions);
   const width = 40;
   const lines = selector.render(width);
   const joined = lines.join("\n");
 
-  assert.ok(joined.includes("Ctrl+Shift+S spec"), `hint should still include 'Ctrl+Shift+S spec' after wrapping, got:\n${joined}`);
-  assert.ok(joined.includes("Esc close"), `hint should still include 'Esc close' after wrapping, got:\n${joined}`);
+  assert.ok(joined.includes("ctrl+shift+p ship"), `hint should still include 'ctrl+shift+p ship' after wrapping, got:\n${joined}`);
+  assert.ok(joined.includes("esc close"), `hint should still include 'esc close' after wrapping, got:\n${joined}`);
 
   for (const [i, line] of lines.entries()) {
     const w = visibleWidth(line);
@@ -957,7 +989,7 @@ test("IdeaSelectorComponent filters list as the user types, header counts unchan
   ];
 
   const { host } = makeSelectorHost();
-  const selector = new IdeaSelectorComponent(entries, "", host);
+  const selector = new IdeaSelectorComponent(entries, "", host, []);
 
   for (const ch of "unique") {
     selector.handleInput!(ch);
@@ -1012,16 +1044,16 @@ test("_internalsForTest exposes all component constructors and pure helpers", as
   assert.equal(typeof _internalsForTest.IdeaOtherSubmenuComponent, "function");
   assert.equal(typeof _internalsForTest.IdeaDeleteConfirmComponent, "function");
   assert.equal(typeof _internalsForTest.IdeaDetailOverlayComponent, "function");
-  assert.equal(typeof _internalsForTest.buildRefineIdeaPrompt, "function");
+  assert.equal(typeof _internalsForTest.buildSelectorHint, "function");
   assert.equal(typeof _internalsForTest.filterAndRankIdeas, "function");
   assert.equal(typeof _internalsForTest.formatGroupedTextList, "function");
-  assert.equal(typeof _internalsForTest.parseFlowIdeasArgs, "function");
+  assert.equal(typeof _internalsForTest.parseIdeasArgs, "function");
 });
 
 test("IdeaActionMenuComponent shows close (not reopen) for open ideas in correct order", async () => {
   const { IdeaActionMenuComponent } = await import("./idea.ts");
   const { host } = stubMenuHost();
-  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open"), host);
+  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open"), host, { hasWork: true });
   const out = c.render(80).join("\n");
 
   assert.match(out, /\bview\b/);
@@ -1034,9 +1066,21 @@ test("IdeaActionMenuComponent shows close (not reopen) for open ideas in correct
   const viewIdx = out.indexOf("view");
   const refineIdx = out.indexOf("refine");
   const workIdx = out.indexOf("work ▶");
-  const closeIdx = out.indexOf("close");
   const otherIdx = out.indexOf("other ▶");
-  assert.ok(viewIdx < refineIdx && refineIdx < workIdx && workIdx < closeIdx && closeIdx < otherIdx, "menu items out of order");
+  const closeIdx = out.indexOf("close");
+  assert.ok(viewIdx < refineIdx && refineIdx < workIdx && workIdx < otherIdx && otherIdx < closeIdx, "menu items out of order");
+});
+
+test("IdeaActionMenuComponent hides 'work ▶' when hasWork is false", async () => {
+  const { IdeaActionMenuComponent } = await import("./idea.ts");
+  const { host } = stubMenuHost();
+  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open"), host, { hasWork: false });
+  const out = c.render(80).join("\n");
+
+  assert.ok(!out.includes("work ▶"), `expected no 'work ▶' when hasWork is false, got:\n${out}`);
+  assert.match(out, /\bview\b/);
+  assert.match(out, /\brefine\b/);
+  assert.ok(out.includes("other ▶"), "missing 'other ▶'");
 });
 
 function taggingMenuHost() {
@@ -1063,7 +1107,7 @@ function taggingMenuHost() {
 test("IdeaActionMenuComponent renders left-aligned title 'Actions for IDEA-...' using border token + bold", async () => {
   const { IdeaActionMenuComponent } = await import("./idea.ts");
   const { host } = taggingMenuHost();
-  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open", "My idea title"), host);
+  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open", "My idea title"), host, { hasWork: true });
   const lines = c.render(120);
 
   // line 0 = top border, line 1 = blank, line 2 = title
@@ -1074,7 +1118,7 @@ test("IdeaActionMenuComponent renders left-aligned title 'Actions for IDEA-...' 
 test("IdeaActionMenuComponent uses border token for top and bottom borders", async () => {
   const { IdeaActionMenuComponent } = await import("./idea.ts");
   const { host } = taggingMenuHost();
-  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open"), host);
+  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open"), host, { hasWork: true });
   const lines = c.render(80);
 
   assert.match(lines[0], /^<fg:border>─+<\/fg:border>$/, `top border should use border token, got: ${lines[0]}`);
@@ -1084,7 +1128,7 @@ test("IdeaActionMenuComponent uses border token for top and bottom borders", asy
 test("IdeaActionMenuComponent has blank-line spacing between border/title/list/hint/border", async () => {
   const { IdeaActionMenuComponent } = await import("./idea.ts");
   const { host } = stubMenuHost();
-  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open"), host);
+  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open"), host, { hasWork: true });
   const lines = c.render(120);
 
   assert.equal(lines[1], "", "blank line after top border");
@@ -1092,15 +1136,15 @@ test("IdeaActionMenuComponent has blank-line spacing between border/title/list/h
   assert.equal(lines[lines.length - 2], "", "blank line before bottom border");
   // The line preceding the bottom-border blank is the quick reference; the one before that is a blank between list and hint.
   const hintIdx = lines.length - 3;
-  assert.match(lines[hintIdx], /Enter to confirm/, `expected quick reference 'Enter to confirm' on line before final blank, got: ${lines[hintIdx]}`);
-  assert.match(lines[hintIdx], /Esc back/, `expected 'Esc back' in quick reference, got: ${lines[hintIdx]}`);
+  assert.match(lines[hintIdx], /enter to confirm/, `expected quick reference 'enter to confirm' on line before final blank, got: ${lines[hintIdx]}`);
+  assert.match(lines[hintIdx], /esc back/, `expected 'esc back' in quick reference, got: ${lines[hintIdx]}`);
   assert.equal(lines[hintIdx - 1], "", "blank line between list and quick reference");
 });
 
 test("IdeaActionMenuComponent renders descriptions for each action", async () => {
   const { IdeaActionMenuComponent } = await import("./idea.ts");
   const { host } = stubMenuHost();
-  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open"), host);
+  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open"), host, { hasWork: true });
   const out = c.render(120).join("\n");
 
   assert.ok(out.includes("View idea"), `expected 'View idea' description, got:\n${out}`);
@@ -1114,7 +1158,7 @@ test("IdeaActionMenuComponent: selected row description is accent, unselected de
   const { IdeaActionMenuComponent } = await import("./idea.ts");
   const { host } = taggingMenuHost();
   // Selected row defaults to index 0 = "view"; "refine" is unselected.
-  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open"), host);
+  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open"), host, { hasWork: true });
   const out = c.render(140).join("\n");
 
   // Selected row's description should be wrapped (with rest of row) in accent.
@@ -1126,43 +1170,39 @@ test("IdeaActionMenuComponent: selected row description is accent, unselected de
 test("IdeaActionMenuComponent shows reopen (not close) for closed ideas", async () => {
   const { IdeaActionMenuComponent } = await import("./idea.ts");
   const { host } = stubMenuHost();
-  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "closed"), host);
+  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "closed"), host, { hasWork: true });
   const out = c.render(80).join("\n");
 
   assert.match(out, /\breopen\b/);
   assert.doesNotMatch(out, /\bclose\b/);
 });
 
-test("IdeaWorkSubmenuComponent lists fastlane, scout, spec, plan in order", async () => {
+test("IdeaWorkSubmenuComponent lists configured actions in order", async () => {
   const { IdeaWorkSubmenuComponent } = await import("./idea.ts");
   const { host } = stubMenuHost();
-  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open"), host);
+  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open"), SAMPLE_CONFIG.actions, host);
   const out = c.render(80).join("\n");
 
-  const fIdx = out.indexOf("fastlane");
-  const sIdx = out.indexOf("scout");
-  const spIdx = out.indexOf("spec");
-  const pIdx = out.indexOf("plan");
-  assert.ok(fIdx >= 0 && sIdx >= 0 && spIdx >= 0 && pIdx >= 0, "missing one of fastlane/scout/spec/plan");
-  assert.ok(fIdx < sIdx && sIdx < spIdx && spIdx < pIdx, "work submenu items out of order");
+  const buildIdx = out.indexOf("build");
+  const shipIdx = out.indexOf("ship");
+  assert.ok(buildIdx >= 0 && shipIdx >= 0, "missing one of build/ship");
+  assert.ok(buildIdx < shipIdx, "work submenu items out of order");
 });
 
-test("IdeaWorkSubmenuComponent renders descriptions for each skill", async () => {
+test("IdeaWorkSubmenuComponent renders descriptions for each action", async () => {
   const { IdeaWorkSubmenuComponent } = await import("./idea.ts");
   const { host } = stubMenuHost();
-  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open"), host);
+  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open"), SAMPLE_CONFIG.actions, host);
   const out = c.render(140).join("\n");
 
-  assert.ok(out.includes("Run lightweight workflow for small changes"), `expected fastlane description, got:\n${out}`);
-  assert.ok(out.includes("Explore codebase and create a brief for spec and plan"), `expected scout description, got:\n${out}`);
-  assert.ok(out.includes("Perform reqs and arch Q&A to produce a detailed spec"), `expected spec description, got:\n${out}`);
-  assert.ok(out.includes("Generate parallelizable tasks for execution"), `expected plan description, got:\n${out}`);
+  assert.ok(out.includes("Build it"), `expected build description, got:\n${out}`);
+  assert.ok(out.includes("Ship it"), `expected ship description, got:\n${out}`);
 });
 
 test("IdeaWorkSubmenuComponent uses border token for top and bottom borders", async () => {
   const { IdeaWorkSubmenuComponent } = await import("./idea.ts");
   const { host } = taggingMenuHost();
-  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open"), host);
+  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open"), SAMPLE_CONFIG.actions, host);
   const lines = c.render(80);
 
   assert.match(lines[0], /^<fg:border>─+<\/fg:border>$/, `top border should use border token, got: ${lines[0]}`);
@@ -1172,7 +1212,7 @@ test("IdeaWorkSubmenuComponent uses border token for top and bottom borders", as
 test("IdeaWorkSubmenuComponent renders left-aligned title 'Workflow actions for IDEA-...: \"<title>\"' with border token + bold", async () => {
   const { IdeaWorkSubmenuComponent } = await import("./idea.ts");
   const { host } = taggingMenuHost();
-  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open", "My idea title"), host);
+  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open", "My idea title"), SAMPLE_CONFIG.actions, host);
   const lines = c.render(120);
 
   // line 0 = top border, line 1 = blank, line 2 = title
@@ -1187,15 +1227,15 @@ test("IdeaWorkSubmenuComponent renders left-aligned title 'Workflow actions for 
 test("IdeaWorkSubmenuComponent has blank-line spacing matching IdeaActionMenuComponent (border/blank/title/blank/list/blank/hint/blank/border)", async () => {
   const { IdeaWorkSubmenuComponent } = await import("./idea.ts");
   const { host } = stubMenuHost();
-  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open"), host);
+  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open"), SAMPLE_CONFIG.actions, host);
   const lines = c.render(120);
 
   assert.equal(lines[1], "", "blank line after top border");
   assert.equal(lines[3], "", "blank line after title");
   assert.equal(lines[lines.length - 2], "", "blank line before bottom border");
   const hintIdx = lines.length - 3;
-  assert.match(lines[hintIdx], /Enter to confirm/, `expected 'Enter to confirm' quick reference on line before final blank, got: ${lines[hintIdx]}`);
-  assert.match(lines[hintIdx], /Esc back/, `expected 'Esc back' in quick reference, got: ${lines[hintIdx]}`);
+  assert.match(lines[hintIdx], /enter to confirm/, `expected 'enter to confirm' quick reference on line before final blank, got: ${lines[hintIdx]}`);
+  assert.match(lines[hintIdx], /esc back/, `expected 'esc back' in quick reference, got: ${lines[hintIdx]}`);
   assert.equal(lines[hintIdx - 1], "", "blank line between list and quick reference");
 });
 
@@ -1203,7 +1243,7 @@ test("IdeaWorkSubmenuComponent: every line respects the supplied width even for 
   const { IdeaWorkSubmenuComponent } = await import("./idea.ts");
   const { host } = stubMenuHost();
   const longTitle = "A very lengthy idea title that should definitely exceed the narrow terminal width";
-  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open", longTitle), host);
+  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open", longTitle), SAMPLE_CONFIG.actions, host);
   const width = 40;
   const lines = c.render(width);
   for (const [i, line] of lines.entries()) {
@@ -1270,8 +1310,8 @@ test("IdeaOtherSubmenuComponent has blank-line spacing matching IdeaActionMenuCo
   assert.equal(lines[3], "", "blank line after title");
   assert.equal(lines[lines.length - 2], "", "blank line before bottom border");
   const hintIdx = lines.length - 3;
-  assert.match(lines[hintIdx], /Enter to confirm/, `expected 'Enter to confirm' quick reference on line before final blank, got: ${lines[hintIdx]}`);
-  assert.match(lines[hintIdx], /Esc back/, `expected 'Esc back' in quick reference, got: ${lines[hintIdx]}`);
+  assert.match(lines[hintIdx], /enter to confirm/, `expected 'enter to confirm' quick reference on line before final blank, got: ${lines[hintIdx]}`);
+  assert.match(lines[hintIdx], /esc back/, `expected 'esc back' in quick reference, got: ${lines[hintIdx]}`);
   assert.equal(lines[hintIdx - 1], "", "blank line between list and quick reference");
 });
 
@@ -1334,8 +1374,8 @@ test("IdeaDeleteConfirmComponent has blank-line spacing matching IdeaActionMenuC
   assert.equal(lines[3], "", "blank line after title");
   assert.equal(lines[lines.length - 2], "", "blank line before bottom border");
   const hintIdx = lines.length - 3;
-  assert.match(lines[hintIdx], /Enter to confirm/, `expected 'Enter to confirm' quick reference on line before final blank, got: ${lines[hintIdx]}`);
-  assert.match(lines[hintIdx], /Esc back/, `expected 'Esc back' in quick reference, got: ${lines[hintIdx]}`);
+  assert.match(lines[hintIdx], /enter to confirm/, `expected 'enter to confirm' quick reference on line before final blank, got: ${lines[hintIdx]}`);
+  assert.match(lines[hintIdx], /esc back/, `expected 'esc back' in quick reference, got: ${lines[hintIdx]}`);
   assert.equal(lines[hintIdx - 1], "", "blank line between list and quick reference");
 });
 
@@ -1347,7 +1387,7 @@ test("IdeaDeleteConfirmComponent hint line is dim-styled with one leading space"
   const hintIdx = lines.length - 3;
   assert.match(
     lines[hintIdx],
-    /^ <fg:dim>Enter to confirm • Esc back<\/fg:dim>$/,
+    /^ <fg:dim>enter to confirm • esc back<\/fg:dim>$/,
     `expected dim hint with one leading space, got: ${JSON.stringify(lines[hintIdx])}`,
   );
 });
@@ -1364,22 +1404,32 @@ test("IdeaDeleteConfirmComponent: every line respects the supplied width", async
   }
 });
 
-test("idea tool description contains all five canonical section headers and promptSnippet references IDEA-", () => {
+test("idea tool default description and promptSnippet are structure-neutral", () => {
   const { tools } = bootExtension();
   const definition = tools.find((t) => t.name === "idea") as any;
   assert.ok(definition, "idea tool should be registered");
   const desc: string = definition.description;
   const snippet: string = definition.promptSnippet ?? "";
-  assert.ok(desc.includes("## Context"), "description missing ## Context");
-  assert.ok(desc.includes("## Goal"), "description missing ## Goal");
-  assert.ok(desc.includes("## Scope"), "description missing ## Scope");
-  assert.ok(desc.includes("## Acceptance Sketch"), "description missing ## Acceptance Sketch");
-  assert.ok(desc.includes("## Open Questions"), "description missing ## Open Questions");
+  for (const header of ["## Context", "## Goal", "## Scope", "## Acceptance Sketch", "## Open Questions"]) {
+    assert.ok(!desc.includes(header), `default description should not include ${header}`);
+  }
   assert.ok(snippet.includes("IDEA-"), "promptSnippet missing IDEA-");
   assert.ok(
     ["list", "read", "create", "update", "append", "delete"].some((a) => snippet.includes(a)),
     "promptSnippet missing action name",
   );
+  assert.ok(!snippet.includes("## Context"), "promptSnippet should not include ## Context");
+});
+
+test("idea tool picks up configured toolDescription and promptSnippet overrides", () => {
+  const { tool } = bootExtensionWithConfig({
+    toolDescription: "Custom ${idea} desc",
+    promptSnippet: "custom snippet",
+    actions: [],
+  });
+  const definition = tool as any;
+  assert.equal(definition.description, "Custom ${idea} desc");
+  assert.equal(definition.promptSnippet, "custom snippet");
 });
 
 function makeOverlayHost() {
@@ -1708,7 +1758,7 @@ test("IdeaDetailOverlayComponent title line: closed status uses dim color", asyn
   );
 });
 
-test("IdeaDetailOverlayComponent footer: includes Esc back, ↑↓, ←→ and line counter, omits Enter", async () => {
+test("IdeaDetailOverlayComponent footer: includes esc back, ↑↓, ←→ and line counter, omits Enter", async () => {
   const { _internalsForTest } = await import("./idea.ts");
   const { IdeaDetailOverlayComponent } = _internalsForTest;
   const stubTheme: any = {
@@ -1739,7 +1789,7 @@ test("IdeaDetailOverlayComponent footer: includes Esc back, ↑↓, ←→ and l
   // Actually: [..., body lines, blank, footer, blank, border]
   const footer = lines[lines.length - 3];
 
-  assert.match(footer, /Esc back/i, `footer should include 'Esc back', got: ${footer}`);
+  assert.match(footer, /esc back/i, `footer should include 'esc back', got: ${footer}`);
   assert.match(footer, /↑↓/, `footer should include ↑↓ arrows, got: ${footer}`);
   assert.match(footer, /←→/, `footer should include ←→ arrows, got: ${footer}`);
   assert.match(footer, /\b\d+\b.*\b\d+\b/, `footer should include a line counter, got: ${footer}`);
@@ -2093,9 +2143,9 @@ test("IdeaDetailOverlayComponent: short body production path is compact and does
     /─/,
     `last line should be a border, got: ${JSON.stringify(lines[lines.length - 1])}`,
   );
-  // Footer should still be present (search for "Esc back").
+  // Footer should still be present (search for "esc back").
   const joined = lines.join("\n");
-  assert.match(joined, /Esc back/, `footer should still be present, got:\n${joined}`);
+  assert.match(joined, /esc back/, `footer should still be present, got:\n${joined}`);
 });
 
 test("IdeaDetailOverlayComponent: tiny production height budgets never exceed floor(rows * 0.8)", async () => {
@@ -2225,7 +2275,7 @@ test("IdeaSelectorComponent render: header, search bar, and quick reference each
   ];
 
   const { host } = makeSelectorHost();
-  const selector = new IdeaSelectorComponent(entries, "", host);
+  const selector = new IdeaSelectorComponent(entries, "", host, []);
   const width = 120;
   const lines = selector.render(width);
 
@@ -2252,7 +2302,7 @@ test("IdeaSelectorComponent render: header, search bar, and quick reference each
 test("IdeaActionMenuComponent: title and quick reference each begin with exactly one leading space", async () => {
   const { IdeaActionMenuComponent } = await import("./idea.ts");
   const { host } = stubMenuHost();
-  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open", "My title"), host);
+  const c = new IdeaActionMenuComponent(entry("aaaabbbb", "open", "My title"), host, { hasWork: true });
   const lines = c.render(120);
 
   const titleLine = lines[2];
@@ -2261,13 +2311,13 @@ test("IdeaActionMenuComponent: title and quick reference each begin with exactly
 
   const hint = lines[lines.length - 3];
   assert.match(hint, /^ [^ ]/, `quick reference should start with exactly one leading space, got: ${JSON.stringify(hint)}`);
-  assert.match(hint, /^ Enter to confirm/, `quick reference should begin with ' Enter to confirm', got: ${JSON.stringify(hint)}`);
+  assert.match(hint, /^ enter to confirm/, `quick reference should begin with ' enter to confirm', got: ${JSON.stringify(hint)}`);
 });
 
 test("IdeaWorkSubmenuComponent: title and quick reference each begin with exactly one leading space", async () => {
   const { IdeaWorkSubmenuComponent } = await import("./idea.ts");
   const { host } = stubMenuHost();
-  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open", "My title"), host);
+  const c = new IdeaWorkSubmenuComponent(entry("aaaabbbb", "open", "My title"), SAMPLE_CONFIG.actions, host);
   const lines = c.render(120);
 
   const titleLine = lines[2];
@@ -2276,7 +2326,7 @@ test("IdeaWorkSubmenuComponent: title and quick reference each begin with exactl
 
   const hint = lines[lines.length - 3];
   assert.match(hint, /^ [^ ]/, `quick reference should start with exactly one leading space, got: ${JSON.stringify(hint)}`);
-  assert.match(hint, /^ Enter to confirm/, `quick reference should begin with ' Enter to confirm', got: ${JSON.stringify(hint)}`);
+  assert.match(hint, /^ enter to confirm/, `quick reference should begin with ' enter to confirm', got: ${JSON.stringify(hint)}`);
 });
 
 test("IdeaOtherSubmenuComponent: title and quick reference each begin with exactly one leading space", async () => {
@@ -2291,7 +2341,7 @@ test("IdeaOtherSubmenuComponent: title and quick reference each begin with exact
 
   const hint = lines[lines.length - 3];
   assert.match(hint, /^ [^ ]/, `quick reference should start with exactly one leading space, got: ${JSON.stringify(hint)}`);
-  assert.match(hint, /^ Enter to confirm/, `quick reference should begin with ' Enter to confirm', got: ${JSON.stringify(hint)}`);
+  assert.match(hint, /^ enter to confirm/, `quick reference should begin with ' enter to confirm', got: ${JSON.stringify(hint)}`);
 });
 
 test("IdeaDetailOverlayComponent: middle rows have left and right border-token vertical borders where width allows", async () => {
@@ -2409,11 +2459,11 @@ test("IdeaDetailOverlayComponent: footer interior content begins with one visibl
   const lines = overlay.render(160);
   const footerLine = lines[lines.length - 3];
 
-  // Expect: <fg:border>│</fg:border> <fg:dim>Esc back ...</fg:dim>... <fg:border>│</fg:border>
+  // Expect: <fg:border>│</fg:border> <fg:dim>esc back ...</fg:dim>... <fg:border>│</fg:border>
   assert.match(
     footerLine,
-    /^<fg:border>│<\/fg:border> <fg:dim>Esc back/,
-    `footer interior should begin with one leading space after the left border, then styled 'Esc back', got: ${JSON.stringify(footerLine)}`,
+    /^<fg:border>│<\/fg:border> <fg:dim>esc back/,
+    `footer interior should begin with one leading space after the left border, then styled 'esc back', got: ${JSON.stringify(footerLine)}`,
   );
 });
 
@@ -2450,8 +2500,8 @@ test("IdeaDetailOverlayComponent footer: commands on left, lowercase counter rig
   // Commands on the LEFT side.
   assert.match(
     footer,
-    /^│ Esc back • ↑↓ scroll • ←→ page/,
-    `footer should begin with '│ Esc back • ↑↓ scroll • ←→ page', got: ${JSON.stringify(footer)}`,
+    /^│ esc back • ↑↓ scroll • ←→ page/,
+    `footer should begin with '│ esc back • ↑↓ scroll • ←→ page', got: ${JSON.stringify(footer)}`,
   );
   // Lowercase line counter present.
   assert.match(
@@ -2524,8 +2574,8 @@ test("IdeaDetailOverlayComponent footer: lowercase line counter remains correct 
 // is caught here without an end-to-end pi run.
 
 const CTRL_SHIFT_R = "\x1b[27;6;114~"; // ctrl+shift+r (modifyOtherKeys form)
-const CTRL_SHIFT_F = "\x1b[27;6;102~"; // ctrl+shift+f
-const CTRL_SHIFT_S = "\x1b[27;6;115~"; // ctrl+shift+s
+const CTRL_SHIFT_B = "\x1b[27;6;98~"; // ctrl+shift+b
+const CTRL_SHIFT_P = "\x1b[27;6;112~"; // ctrl+shift+p
 const ENTER = "\r";
 const ESC = "\x1b";
 const ARROW_DOWN = "\x1b[B";
@@ -2618,10 +2668,10 @@ async function startInteractiveIdeas(ctx: any, cmd: RegisteredCommand): Promise<
   };
 }
 
-test("flow:ideas selector quick refine (Ctrl+Shift+R) prefills the editor with refine prompt after UI closes", async () => {
+test("ideas selector quick refine (Ctrl+Shift+R) prefills the editor with refine prompt after UI closes", async () => {
   const sandbox = mkSandbox("pi-flow-ideas-quick-refine-");
   const { commands } = bootExtension();
-  const cmd = commands.find((c) => c.name === "flow:ideas");
+  const cmd = commands.find((c) => c.name === "ideas");
   assert.ok(cmd);
   await seedIdea(sandbox, artifact("11112222", "Sample idea", "open"));
 
@@ -2630,7 +2680,7 @@ test("flow:ideas selector quick refine (Ctrl+Shift+R) prefills the editor with r
   await send(CTRL_SHIFT_R);
   await finished;
 
-  const expected = buildRefineIdeaPrompt("11112222", "Sample idea");
+  const expected = substituteIdea(DEFAULT_REFINE_PROMPT, "11112222");
   assert.equal(
     ctx.editorText,
     expected,
@@ -2638,40 +2688,36 @@ test("flow:ideas selector quick refine (Ctrl+Shift+R) prefills the editor with r
   );
 });
 
-test("flow:ideas selector quick fastlane (Ctrl+Shift+F) prefills the /flow:fastlane prompt after UI closes", async () => {
-  const sandbox = mkSandbox("pi-flow-ideas-quick-fastlane-");
-  const { commands } = bootExtension();
-  const cmd = commands.find((c) => c.name === "flow:ideas");
-  assert.ok(cmd);
-  await seedIdea(sandbox, artifact("22223333", "Fastlane idea", "open"));
+test("ideas selector quick build (Ctrl+Shift+B) prefills the configured build prompt after UI closes", async () => {
+  const sandbox = mkSandbox("pi-ideas-quick-build-");
+  const { command } = bootExtensionWithConfig(SAMPLE_CONFIG);
+  await seedIdea(sandbox, artifact("22223333", "Build idea", "open"));
 
   const ctx = setupInteractiveCtx(sandbox);
-  const { send, finished } = await startInteractiveIdeas(ctx, cmd!);
-  await send(CTRL_SHIFT_F);
+  const { send, finished } = await startInteractiveIdeas(ctx, command);
+  await send(CTRL_SHIFT_B);
   await finished;
 
-  assert.equal(ctx.editorText, "/flow:fastlane IDEA-22223333");
+  assert.equal(ctx.editorText, "/build IDEA-22223333");
 });
 
-test("flow:ideas selector quick spec (Ctrl+Shift+S) prefills the /flow:spec prompt after UI closes", async () => {
-  const sandbox = mkSandbox("pi-flow-ideas-quick-spec-");
-  const { commands } = bootExtension();
-  const cmd = commands.find((c) => c.name === "flow:ideas");
-  assert.ok(cmd);
-  await seedIdea(sandbox, artifact("33334444", "Spec idea", "open"));
+test("ideas selector quick ship (Ctrl+Shift+P) prefills the configured ship prompt after UI closes", async () => {
+  const sandbox = mkSandbox("pi-ideas-quick-ship-");
+  const { command } = bootExtensionWithConfig(SAMPLE_CONFIG);
+  await seedIdea(sandbox, artifact("33334444", "Ship idea", "open"));
 
   const ctx = setupInteractiveCtx(sandbox);
-  const { send, finished } = await startInteractiveIdeas(ctx, cmd!);
-  await send(CTRL_SHIFT_S);
+  const { send, finished } = await startInteractiveIdeas(ctx, command);
+  await send(CTRL_SHIFT_P);
   await finished;
 
-  assert.equal(ctx.editorText, "/flow:spec IDEA-33334444");
+  assert.equal(ctx.editorText, "/ship IDEA-33334444");
 });
 
-test("flow:ideas action menu refine prefills the refine prompt after UI closes", async () => {
-  const sandbox = mkSandbox("pi-flow-ideas-action-refine-");
+test("ideas action menu refine prefills the default refine prompt after UI closes", async () => {
+  const sandbox = mkSandbox("pi-ideas-action-refine-");
   const { commands } = bootExtension();
-  const cmd = commands.find((c) => c.name === "flow:ideas");
+  const cmd = commands.find((c) => c.name === "ideas");
   assert.ok(cmd);
   await seedIdea(sandbox, artifact("44445555", "Menu refine idea", "open"));
 
@@ -2683,42 +2729,54 @@ test("flow:ideas action menu refine prefills the refine prompt after UI closes",
   await send(ENTER); // confirm refine
   await finished;
 
-  const expected = buildRefineIdeaPrompt("44445555", "Menu refine idea");
-  assert.equal(ctx.editorText, expected);
+  assert.equal(ctx.editorText, substituteIdea(DEFAULT_REFINE_PROMPT, "44445555"));
+  assert.doesNotMatch(ctx.editorText, /## Context/, "default refine prompt should be structure-neutral");
 });
 
-for (const { skill, downs } of [
-  { skill: "fastlane", downs: 0 },
-  { skill: "scout", downs: 1 },
-  { skill: "spec", downs: 2 },
-  { skill: "plan", downs: 3 },
+test("ideas action menu refine honors a configured refinePrompt override", async () => {
+  const sandbox = mkSandbox("pi-ideas-action-refine-override-");
+  const { command } = bootExtensionWithConfig({ refinePrompt: "Refine ${idea} now.", actions: [] });
+  await seedIdea(sandbox, artifact("abcd1234", "Override idea", "open"));
+
+  const ctx = setupInteractiveCtx(sandbox);
+  const { send, finished } = await startInteractiveIdeas(ctx, command);
+
+  await send(ENTER); // open action menu
+  await send(ARROW_DOWN); // view → refine
+  await send(ENTER); // confirm refine
+  await finished;
+
+  assert.equal(ctx.editorText, "Refine IDEA-abcd1234 now.");
+});
+
+for (const { action, downs, prompt } of [
+  { action: "build", downs: 0, prompt: "/build" },
+  { action: "ship", downs: 1, prompt: "/ship" },
 ] as const) {
-  test(`flow:ideas work submenu ${skill} prefills /flow:${skill} prompt after UI closes`, async () => {
-    const sandbox = mkSandbox(`pi-flow-ideas-work-${skill}-`);
-    const { commands } = bootExtension();
-    const cmd = commands.find((c) => c.name === "flow:ideas");
-    assert.ok(cmd);
-    await seedIdea(sandbox, artifact("55556666", `Work ${skill} idea`, "open"));
+  test(`ideas work submenu ${action} prefills ${prompt} prompt after UI closes`, async () => {
+    const sandbox = mkSandbox(`pi-ideas-work-${action}-`);
+    const { command } = bootExtensionWithConfig(SAMPLE_CONFIG);
+    await seedIdea(sandbox, artifact("55556666", `Work ${action} idea`, "open"));
 
     const ctx = setupInteractiveCtx(sandbox);
-    const { send, finished } = await startInteractiveIdeas(ctx, cmd!);
+    const { send, finished } = await startInteractiveIdeas(ctx, command);
 
     await send(ENTER); // open action menu
     await send(ARROW_DOWN); // view → refine
     await send(ARROW_DOWN); // refine → work
     await send(ENTER); // open work submenu
     for (let i = 0; i < downs; i++) await send(ARROW_DOWN);
-    await send(ENTER); // confirm skill
+    await send(ENTER); // confirm action
     await finished;
 
-    assert.equal(ctx.editorText, `/flow:${skill} IDEA-55556666`);
+    assert.equal(ctx.editorText, `${prompt} IDEA-55556666`);
   });
 }
 
-test("flow:ideas selector cancel (Esc) leaves the editor text untouched", async () => {
+test("ideas selector cancel (Esc) leaves the editor text untouched", async () => {
   const sandbox = mkSandbox("pi-flow-ideas-cancel-");
   const { commands } = bootExtension();
-  const cmd = commands.find((c) => c.name === "flow:ideas");
+  const cmd = commands.find((c) => c.name === "ideas");
   assert.ok(cmd);
   await seedIdea(sandbox, artifact("66667777", "Cancel idea", "open"));
 
