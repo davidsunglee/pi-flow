@@ -16,6 +16,9 @@ importers:
       '@aphotic/pi-flow-ux':
         specifier: workspace:*
         version: link:../pi-flow-ux
+      '@aphotic/pi-ideas':
+        specifier: workspace:*
+        version: link:../pi-ideas
 
   packages/pi-flow-core:
     dependencies:

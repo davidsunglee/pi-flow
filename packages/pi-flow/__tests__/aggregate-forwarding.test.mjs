@@ -90,6 +90,15 @@ test('package.json declares @aphotic/pi-flow-ux as workspace dependency', () => 
   );
 });
 
+test('package.json declares @aphotic/pi-ideas as workspace dependency', () => {
+  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  assert.equal(
+    pkg.dependencies?.['@aphotic/pi-ideas'],
+    'workspace:*',
+    'dependencies["@aphotic/pi-ideas"] must equal "workspace:*"'
+  );
+});
+
 test('package.json keywords includes pi-package', () => {
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
   assert.ok(
@@ -108,6 +117,19 @@ test('node_modules/@aphotic/pi-flow-ux is symlinked into the aggregate package a
     realPath,
     expectedUnder,
     `realpath of node_modules/${UX_PKG} (${realPath}) must resolve to packages/${UX_DIR}`
+  );
+});
+
+test('node_modules/@aphotic/pi-ideas is symlinked into the aggregate and realpaths into packages/pi-ideas', () => {
+  const nmIdeasPath = pkgPath('node_modules', '@aphotic', 'pi-ideas');
+  assert.ok(existsSync(nmIdeasPath), 'node_modules/@aphotic/pi-ideas must exist after pnpm install');
+  const realPath = realpathSync(nmIdeasPath);
+  const workspaceRoot = resolve(PKG_DIR, '..', '..');
+  const expectedUnder = resolve(workspaceRoot, 'packages', 'pi-ideas');
+  assert.equal(
+    realPath,
+    expectedUnder,
+    `realpath of node_modules/@aphotic/pi-ideas (${realPath}) must resolve to packages/pi-ideas`
   );
 });
 
