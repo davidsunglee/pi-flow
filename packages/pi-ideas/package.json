@@ -6,7 +6,7 @@
   "keywords": ["pi-package"],
   "files": ["extensions", "README.md", "LICENSE", "!**/__tests__", "!**/*.test.mjs", "!**/*.test.ts", "!**/*.test.js"],
   "scripts": {
-    "test:node": "find __tests__ extensions \\( -name '*.test.mjs' -o -name '*.test.ts' \\) -print0 | xargs -0 node --experimental-strip-types --test",
+    "test:node": "find extensions \\( -name '*.test.mjs' -o -name '*.test.ts' \\) -print0 | xargs -0 node --experimental-strip-types --test",
     "typecheck": "tsc --noEmit",
     "test": "pnpm run test:node",
     "check": "pnpm run typecheck && pnpm run test"
