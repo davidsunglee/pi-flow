@@ -21,7 +21,31 @@ Before releasing, ensure you have:
 - An npm account with publish access to the `@aphotic` organization
 - npm authentication configured with `npm login` or `NPM_TOKEN`
 - Any required npm 2FA/OTP code ready for the publish commands
+- `gitleaks` or an equivalent git secret scanner available for the security audit
 - A clean release branch or a clearly intentional set of release-only changes
+
+## Security Audit
+
+Treat security checks as a release prerequisite. Run them before publishing, and re-run them if dependency, release-tooling, or other non-version-only changes are introduced after the audit.
+
+Capture the exact commands, exit codes, and redacted output in a release artifact, for example `/tmp/pi-flow-security-audit-$VERSION.md`.
+
+```bash
+git status --short --branch
+git rev-parse HEAD
+pnpm audit
+pnpm audit --prod
+gitleaks detect --source . --redact --no-banner
+```
+
+The release is blocked if:
+
+- any dependency audit reports a vulnerability that should be remediated before release
+- the secret scan reports any candidate leak
+- the git status reveals unexpected local changes
+- the security-audit commands cannot be run or their results cannot be reviewed
+
+If `gitleaks` is unavailable, use an equivalent dedicated git-history secret scanner and record the exact tool and command. A simple `grep`/`rg` pattern scan is only a fallback and should be called out as less complete than a dedicated scanner.
 
 ## Version Bump
 

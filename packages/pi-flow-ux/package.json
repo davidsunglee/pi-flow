@@ -1,6 +1,6 @@
 {
   "name": "@aphotic/pi-flow-ux",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "description": "Optional UX layer for pi-flow: footer extension, working indicator/message, Nord theme, and packaged working defaults.",
   "keywords": ["pi-package"],
