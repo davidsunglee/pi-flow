@@ -35,8 +35,6 @@ import {
 import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
-import { getThinkingLabel } from "./footer.ts";
-
 // ─── Colour routing ─────────────────────────────────────────────────────────
 
 /** Semantic border fields routed to theme tokens (thinking is handled separately). */
@@ -58,6 +56,17 @@ export const BORDER_TOKENS: Record<BorderColorField, ThemeColor> = {
 };
 
 // ─── Formatting helpers ────────────────────────────────────────────────────────
+
+/**
+ * Resolve the thinking-level label, hiding it entirely when reasoning is toggled
+ * off. Self-contained so border-status carries no dependency on the footer
+ * extension (which is slated for removal).
+ */
+export function getThinkingLabel(
+	thinkingLevel: string | null | undefined,
+): string {
+	return thinkingLevel && thinkingLevel !== "off" ? thinkingLevel : "";
+}
 
 /** Substitute the home-directory prefix with `~`, matching the footer's cwd display. */
 export function formatCwd(cwd: string): string {

@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import borderStatusFactory, {
 	BORDER_TOKENS,
@@ -11,6 +13,7 @@ import borderStatusFactory, {
 	formatContextPercent,
 	formatContextTokenWindow,
 	formatCwd,
+	getThinkingLabel,
 	type BorderFieldWidths,
 } from "./border-status.ts";
 import { visibleWidth } from "@earendil-works/pi-tui";
@@ -49,6 +52,32 @@ function bw(
 	};
 	return { ...base, ...overrides };
 }
+
+// ─── Footer independence ───────────────────────────────────────────────────────
+
+test("border-status does not import from the footer extension", () => {
+	const source = readFileSync(
+		fileURLToPath(new URL("./border-status.ts", import.meta.url)),
+		"utf8",
+	);
+	assert.ok(
+		!/from\s+["']\.\/footer(\.ts)?["']/.test(source),
+		"border-status.ts must be self-contained and not import from ./footer",
+	);
+});
+
+// ─── getThinkingLabel ──────────────────────────────────────────────────────────
+
+test("getThinkingLabel returns the level when reasoning is active", () => {
+	assert.equal(getThinkingLabel("high"), "high");
+	assert.equal(getThinkingLabel("xhigh"), "xhigh");
+});
+
+test("getThinkingLabel hides the label when off, null, or undefined", () => {
+	assert.equal(getThinkingLabel("off"), "");
+	assert.equal(getThinkingLabel(null), "");
+	assert.equal(getThinkingLabel(undefined), "");
+});
 
 // ─── formatCwd ────────────────────────────────────────────────────────────────
 
