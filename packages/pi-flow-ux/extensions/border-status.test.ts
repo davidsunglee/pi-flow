@@ -104,15 +104,15 @@ test("unknown context percentage uses the subdued symbol color", () => {
 	assert.equal(formatContextPercent(null, markerColorize), "[symbol:?]");
 });
 
-test("token window routes counts to context color and the slash to symbol color", () => {
+test("token window routes counts to cwd color and the slash to symbol color", () => {
 	// formatTokens(9300) === "9.3k", formatTokens(200000) === "200k"
 	assert.equal(
 		formatContextTokenWindow(9300, 200000, markerColorize),
-		"[context:9.3k][symbol:/][context:200k]",
+		"[cwd:9.3k][symbol:/][cwd:200k]",
 	);
 	assert.equal(
 		formatContextTokenWindow(null, 200000, markerColorize),
-		"[context:?][symbol:/][context:200k]",
+		"[cwd:?][symbol:/][cwd:200k]",
 	);
 });
 
@@ -281,11 +281,16 @@ test("composeBorderLines places model+thinking lower-left, context lower-right, 
 		assert.ok(bottom.includes("[model:gpt-5.5]"), "model routed to model color");
 		assert.ok(bottom.includes("<th:xhigh>"), "thinking uses the thinking border color");
 
-		// Lower-right: percentage + used/total token window with subdued slash.
+		// Lower-right: used/total token window with subdued slash, then percentage.
 		assert.ok(bottom.includes("[context:12.3%]"), "percentage routed to context color");
-		assert.ok(bottom.includes("[context:9.3k]"), "used tokens routed to context color");
+		assert.ok(bottom.includes("[cwd:9.3k]"), "used tokens routed to cwd color");
 		assert.ok(bottom.includes("[symbol:/]"), "slash uses subdued symbol color");
-		assert.ok(bottom.includes("[context:200k]"), "total tokens routed to context color");
+		assert.ok(bottom.includes("[cwd:200k]"), "total tokens routed to cwd color");
+		// Token counts render to the left of the percentage (percentage rightmost).
+		assert.ok(
+			bottom.indexOf("[cwd:9.3k]") < bottom.indexOf("[context:12.3%]"),
+			"token window appears before the context percentage",
+		);
 	} finally {
 		process.env.HOME = origHome;
 	}
@@ -334,6 +339,10 @@ test("composeBorderLines drops token window, then branch, then thinking as width
 	assert.ok(wide[2].includes("1.0k/200k"), "wide keeps token window");
 	assert.ok(wide[0].includes("feature-xyz"), "wide keeps branch");
 	assert.ok(wide[2].includes(" lo "), "wide keeps thinking");
+	assert.ok(
+		wide[2].indexOf("1.0k/200k") < wide[2].indexOf("50.0%"),
+		"token window renders to the left of the percentage",
+	);
 
 	// Drop token window first: pct stays, used/total gone, branch + thinking remain.
 	const noToken = composeBorderLines({ ...opts, width: 27 });

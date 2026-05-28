@@ -7,12 +7,13 @@
  *
  * Layout:
  *   top border:    ───────────────────────────────  ~/path branch ─
- *   bottom border: ─ model thinking ──────────  context% used/total ─
+ *   bottom border: ─ model thinking ──────────  used/total context% ─
  *
  * Colour routing is kept in lock-step with the footer extension by resolving
  * the same theme tokens the footer's fields resolve to:
  *   - model            → "accent"      (footer modelName: accent / Nord nord8)
- *   - context % + counts → "accent"    (footer contextUsage: accent / Nord nord8)
+ *   - context %        → "accent"      (footer contextUsage: accent / Nord nord8)
+ *   - token counts     → "muted"       (de-emphasized, same field as cwd)
  *   - branch           → "success"     (footer branch: success / Nord nord14)
  *   - "/" and ellipsis → "borderMuted" (footer symbols: borderMuted / Nord nord3)
  *   - cwd              → "muted"       (readable but subordinate)
@@ -101,8 +102,8 @@ export function formatContextPercent(
 }
 
 /**
- * Context token window as "used/total". Both counts use the context colour
- * (same as the percentage and model), while the slash stays subdued.
+ * Context token window as "used/total". Both counts use the cwd colour to
+ * de-emphasize them relative to the percentage, while the slash stays subdued.
  */
 export function formatContextTokenWindow(
 	tokens: number | null | undefined,
@@ -112,9 +113,9 @@ export function formatContextTokenWindow(
 	const used =
 		tokens === null || tokens === undefined ? "?" : formatTokens(tokens);
 	return (
-		colorize("context", used) +
+		colorize("cwd", used) +
 		colorize("symbol", "/") +
-		colorize("context", formatTokens(contextWindow))
+		colorize("cwd", formatTokens(contextWindow))
 	);
 }
 
@@ -366,13 +367,14 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 		bottomLeft += " " + p.thinkingColor(p.thinkingLabel);
 	}
 
-	// Bottom-right: context percentage + optional used/total token window.
-	let bottomRight = formatContextPercent(p.contextPercent, colorize);
-	if (flags.showTokenWindow) {
-		bottomRight +=
+	// Bottom-right: optional used/total token window, then the context
+	// percentage (kept rightmost). Width accounting is unchanged.
+	const percent = formatContextPercent(p.contextPercent, colorize);
+	const bottomRight = flags.showTokenWindow
+		? formatContextTokenWindow(p.contextTokens, p.contextWindow, colorize) +
 			" " +
-			formatContextTokenWindow(p.contextTokens, p.contextWindow, colorize);
-	}
+			percent
+		: percent;
 
 	// Top-right: cwd + optional branch, tail-truncated to fit its block budget.
 	const topRightBudget = width - CORNERS - GAP - BLOCK_PAD;
