@@ -193,13 +193,45 @@ function makeHarness() {
     await cmd!.handler(args, ctx);
   }
 
+  // Render whatever footer builder is currently installed so tests can tell the
+  // blank footer (renders []) apart from the custom footer (renders >=1 line).
+  function renderFooter(): string[] | undefined {
+    if (footerArg === UNSET || footerArg === undefined) return undefined;
+    const tui = { requestRender() {} };
+    const footerData = {
+      onBranchChange() {
+        return () => {};
+      },
+      getGitBranch() {
+        return undefined;
+      },
+      getAvailableProviderCount() {
+        return 1;
+      },
+      getExtensionStatuses() {
+        return new Map<string, string>();
+      },
+    };
+    const renderer = (footerArg as any)(tui, ui.theme, footerData);
+    return renderer.render(80);
+  }
+
   return {
     pi,
     ctx,
     emit,
     runStatus,
     notifications,
-    footerInstalled: () => footerArg !== UNSET && footerArg !== undefined,
+    renderFooter,
+    // "footer installed" means the custom footer renderer (renders content).
+    footerInstalled: () => {
+      const lines = renderFooter();
+      return Array.isArray(lines) && lines.length > 0;
+    },
+    blankFooterInstalled: () => {
+      const lines = renderFooter();
+      return Array.isArray(lines) && lines.length === 0;
+    },
     footerDisposed: () => footerArg === undefined,
     editorInstalled: () => editorArg !== UNSET && editorArg !== undefined,
     editorDisposed: () => editorArg === undefined,
@@ -221,10 +253,27 @@ async function bootSession(
 
 test("session_start with no user and no packaged config defaults to border", async () => {
   await withTmpDir(async ({ userPath, packagedPath }) => {
-    const { coordinator, editorInstalled, footerInstalled } = await bootSession(userPath, packagedPath);
+    const { coordinator, editorInstalled, footerInstalled, blankFooterInstalled } =
+      await bootSession(userPath, packagedPath);
     assert.equal(coordinator.getPlacement(), "border");
     assert.ok(editorInstalled(), "border placement installs the editor");
-    assert.ok(!footerInstalled(), "border placement does not install the footer");
+    assert.ok(!footerInstalled(), "border placement does not install the custom footer");
+    assert.ok(
+      blankFooterInstalled(),
+      "border placement suppresses the default footer with a blank footer",
+    );
+  });
+});
+
+test("default border placement suppresses the built-in footer and the blank footer renders no lines", async () => {
+  await withTmpDir(async ({ userPath, packagedPath }) => {
+    const { editorInstalled, blankFooterInstalled, renderFooter } = await bootSession(
+      userPath,
+      packagedPath,
+    );
+    assert.ok(editorInstalled(), "border editor is installed");
+    assert.ok(blankFooterInstalled(), "a blank footer suppresses the default footer");
+    assert.deepEqual(renderFooter(), [], "the blank footer renders no lines");
   });
 });
 
@@ -281,15 +330,52 @@ test("/status with no args reports the current placement and accepted values", a
   });
 });
 
-test("/status footer switches from border to footer in-session and disposes the editor", async () => {
+test("/status footer switches from border to footer in-session, disposing the editor and blank footer", async () => {
   await withTmpDir(async ({ userPath, packagedPath }) => {
     const harness = await bootSession(userPath, packagedPath);
     assert.ok(harness.editorInstalled(), "starts on the border editor");
+    assert.ok(harness.blankFooterInstalled(), "starts with the default footer suppressed");
 
     await harness.runStatus("footer");
     assert.equal(harness.coordinator.getPlacement(), "footer");
     assert.ok(harness.editorDisposed(), "switching away from border disposes the editor");
-    assert.ok(harness.footerInstalled(), "footer renderer is now installed");
+    assert.ok(!harness.blankFooterInstalled(), "the blank footer is replaced");
+    assert.ok(harness.footerInstalled(), "the custom footer renderer is now installed");
+  });
+});
+
+test("/status off from border disposes the editor and blank footer, restoring the default footer", async () => {
+  await withTmpDir(async ({ userPath, packagedPath }) => {
+    const harness = await bootSession(userPath, packagedPath);
+    assert.ok(harness.editorInstalled() && harness.blankFooterInstalled(), "starts on border");
+
+    await harness.runStatus("off");
+    assert.equal(harness.coordinator.getPlacement(), "off");
+    assert.ok(harness.editorDisposed(), "off removes the border editor");
+    assert.ok(harness.footerDisposed(), "off restores the built-in/default footer");
+  });
+});
+
+test("/status border after off re-suppresses the default footer with a blank footer", async () => {
+  await withTmpDir(async ({ userPath, packagedPath }) => {
+    const harness = await bootSession(userPath, packagedPath);
+    await harness.runStatus("off");
+    await harness.runStatus("border");
+    assert.equal(harness.coordinator.getPlacement(), "border");
+    assert.ok(harness.editorInstalled(), "border re-installs the editor");
+    assert.ok(harness.blankFooterInstalled(), "border re-suppresses the default footer");
+    assert.ok(!harness.footerInstalled(), "no custom footer under border");
+  });
+});
+
+test("session_shutdown under border restores the built-in/default footer", async () => {
+  await withTmpDir(async ({ userPath, packagedPath }) => {
+    const harness = await bootSession(userPath, packagedPath);
+    assert.ok(harness.blankFooterInstalled(), "starts with a blank footer");
+
+    await harness.emit("session_shutdown", {});
+    assert.ok(harness.footerDisposed(), "shutdown restores the default footer");
+    assert.ok(harness.editorDisposed(), "shutdown removes the border editor");
   });
 });
 
@@ -313,7 +399,7 @@ test("/status border re-installs the editor after off", async () => {
     await harness.runStatus("border");
     assert.equal(harness.coordinator.getPlacement(), "border");
     assert.ok(harness.editorInstalled(), "border re-installs the editor");
-    assert.ok(!harness.footerInstalled(), "footer is not installed under border");
+    assert.ok(!harness.footerInstalled(), "custom footer is not installed under border");
   });
 });
 

@@ -55,9 +55,9 @@ After Pi loads the package, the following resources become available:
 
 The status extension is a single coordinator that owns where session metadata is drawn. Exactly one placement is active at a time, so the placements are mutually exclusive:
 
-- **`border`** (default) — draws metadata into the editor's top and bottom border lines.
+- **`border`** (default) — draws metadata into the editor's top and bottom border lines, and blanks out Pi's built-in footer so the border is the only status surface (see below).
 - **`footer`** — draws metadata in a custom footer below the editor.
-- **`off`** — installs neither; no status UI is drawn.
+- **`off`** — installs neither; Pi's built-in/default footer is left in place.
 
 The border and footer renderers are internal implementation details of the coordinator; they are no longer loaded as independent extensions. The working indicator/message behavior is independent of status placement and is unaffected by your choice here.
 
@@ -75,6 +75,8 @@ When `border` is active:
 - **Lower-left border:** model id, plus the thinking level when reasoning is enabled.
 - **Lower-right border:** context percentage used, plus the `used/total` context-window token counts.
 - **Upper-right border:** the working directory (with `~` home substitution), followed by the git branch when in a repository.
+
+Because the border already carries the model, context, and project metadata, border placement also suppresses Pi's built-in footer (it installs a footer that renders nothing) so the same information isn't duplicated below the editor. Switching to `footer` or `off` restores the normal footer behavior automatically.
 
 Colors resolve from theme tokens per render (model/context metrics `accent`, git branch `success`, separators/ellipsis `borderMuted`, working directory `muted`; thinking uses the theme's thinking-border color), so theme switches update immediately with no stale cached ANSI. At narrow widths the optional fields degrade in priority order: the `used/total` token-window detail first, then the git branch, then the thinking level. The model id and context percentage are always kept (truncated only as a last resort) and the working directory is tail-truncated rather than dropped.
 

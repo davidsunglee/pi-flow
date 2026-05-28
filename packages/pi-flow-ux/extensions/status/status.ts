@@ -9,6 +9,7 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 
+import { installBlankFooter } from "../blank-footer.ts";
 import { installBorderStatus } from "../border-status.ts";
 import { installFooter } from "../footer.ts";
 
@@ -38,6 +39,27 @@ export type StatusRendererInstaller = (
 export interface StatusInstallers {
   border: StatusRendererInstaller;
   footer: StatusRendererInstaller;
+  /** Suppresses Pi's default footer; paired with `border` so metadata isn't duplicated. */
+  blankFooter: StatusRendererInstaller;
+}
+
+/**
+ * Combine several renderer handles into one. Dispose tears them down in reverse
+ * install order, and `onAgentEnd` fans out to each — so the border editor's git
+ * branch refresh keeps firing even when it shares a placement with the blank
+ * footer.
+ */
+function composeHandles(
+  handles: readonly StatusRendererHandle[],
+): StatusRendererHandle {
+  return {
+    dispose() {
+      for (let i = handles.length - 1; i >= 0; i--) handles[i].dispose();
+    },
+    onAgentEnd() {
+      for (const handle of handles) handle.onAgentEnd?.();
+    },
+  };
 }
 
 const VALID_PLACEMENTS: readonly StatusPlacement[] = ["border", "footer", "off"];
@@ -63,6 +85,7 @@ export const PACKAGE_DEFAULT_STATUS_SETTINGS_PATH = path.join(
 const REAL_INSTALLERS: StatusInstallers = {
   border: installBorderStatus,
   footer: installFooter,
+  blankFooter: installBlankFooter,
 };
 
 function cloneDefaultSettings(): StatusSettings {
@@ -258,11 +281,17 @@ export class StatusCoordinator {
     this.disposeActive();
     if (!this.pi || !this.ctx) return;
     if (this.settings.placement === "border") {
-      this.handle = this.installers.border(this.pi, this.ctx);
+      // Border draws metadata into the editor border; the blank footer
+      // suppresses Pi's default footer so the same metadata isn't duplicated
+      // below the editor. Both are torn down together on the next switch.
+      this.handle = composeHandles([
+        this.installers.border(this.pi, this.ctx),
+        this.installers.blankFooter(this.pi, this.ctx),
+      ]);
     } else if (this.settings.placement === "footer") {
       this.handle = this.installers.footer(this.pi, this.ctx);
     }
-    // "off" installs no renderer.
+    // "off" installs no renderer and leaves Pi's default footer in place.
   }
 
   private disposeActive(): void {
