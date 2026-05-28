@@ -1,0 +1,14 @@
+{
+  "packages": [
+    {
+      "source": "npm:@aphotic/pi-flow",
+      "extensions": [
+        "!node_modules/@aphotic/pi-flow-ux/extensions/**"
+      ],
+      "themes": [
+        "!node_modules/@aphotic/pi-flow-ux/themes/**"
+      ]
+    },
+    "../packages/pi-flow-ux"
+  ]
+}

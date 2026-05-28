@@ -145,6 +145,10 @@ vite.config.ts.timestamp-*
 # Git worktrees
 .worktrees/
 
+# Pi project package installs
+.pi/npm/
+.pi/git/
+
 # Build artifacts
 dist/
 __pycache__/
