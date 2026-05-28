@@ -46,19 +46,38 @@ async function loadResources() {
   }
 }
 
-test('pi loader discovers the footer extension from pi-flow-ux', async () => {
+test('pi loader discovers the status extension and registers the /status command', async () => {
   const { extensions } = await loadResources();
   assert.deepEqual(
     extensions.errors,
     [],
     `extension loader must not report errors; got ${JSON.stringify(extensions.errors)}`
   );
-  const footer = extensions.extensions.find(e => e.resolvedPath === pkgPath('extensions/footer.ts'));
+  const status = extensions.extensions.find(e => e.resolvedPath === pkgPath('extensions/status/index.ts'));
   assert.ok(
-    footer,
-    `pi loader must discover extensions/footer.ts; loaded paths=${JSON.stringify(
+    status,
+    `pi loader must discover extensions/status/index.ts; loaded paths=${JSON.stringify(
       extensions.extensions.map(e => e.resolvedPath)
     )}`
+  );
+  assert.ok(
+    status.commands.has('status'),
+    `status extension must register the /status command; got commands=${JSON.stringify([
+      ...status.commands.keys(),
+    ])}`
+  );
+});
+
+test('pi loader does not load footer or border-status as independent extensions', async () => {
+  const { extensions } = await loadResources();
+  const loadedPaths = extensions.extensions.map(e => e.resolvedPath);
+  assert.ok(
+    !loadedPaths.includes(pkgPath('extensions/footer.ts')),
+    'footer.ts must not be loaded as an independent extension'
+  );
+  assert.ok(
+    !loadedPaths.includes(pkgPath('extensions/border-status.ts')),
+    'border-status.ts must not be loaded as an independent extension'
   );
 });
 

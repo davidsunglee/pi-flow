@@ -29,11 +29,14 @@
 import {
 	CustomEditor,
 	type ExtensionAPI,
+	type ExtensionContext,
 	type KeybindingsManager,
 	type ThemeColor,
 } from "@earendil-works/pi-coding-agent";
 import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+
+import type { StatusRendererHandle } from "./status/status.ts";
 
 // ─── Colour routing ─────────────────────────────────────────────────────────
 
@@ -403,83 +406,89 @@ export function createBranchTracker(): BranchTracker {
 	};
 }
 
-// ─── Extension entry point ────────────────────────────────────────────────────
+// ─── Renderer install ──────────────────────────────────────────────────────────
 
-export default function (pi: ExtensionAPI) {
+/**
+ * Install the border-status editor into the active session and return a handle
+ * the status coordinator uses to remove it and to refresh the git branch when
+ * the agent settles. The border editor is one of the mutually-exclusive status
+ * placements; the coordinator owns the session lifecycle, so this module no
+ * longer registers its own session handlers.
+ */
+export function installBorderStatus(
+	pi: ExtensionAPI,
+	ctx: ExtensionContext,
+): StatusRendererHandle {
 	let activeTui: TUI | undefined;
-	let refreshBranch: (() => void) | undefined;
+	const tracker = createBranchTracker();
 
-	pi.on("session_shutdown", async (_event, ctx) => {
-		activeTui = undefined;
-		refreshBranch = undefined;
-		ctx.ui.setEditorComponent(undefined);
-	});
+	const refreshBranch = () => {
+		void tracker.refresh(pi.exec as unknown as ExecFn, ctx.cwd, () =>
+			activeTui?.requestRender(),
+		);
+	};
+	refreshBranch();
 
-	// Re-read the branch when the agent settles, in case it changed during work.
-	pi.on("agent_end", () => {
-		refreshBranch?.();
-	});
-
-	pi.on("session_start", async (_event, ctx) => {
-		const tracker = createBranchTracker();
-
-		refreshBranch = () => {
-			void tracker.refresh(pi.exec as unknown as ExecFn, ctx.cwd, () =>
-				activeTui?.requestRender(),
-			);
-		};
-		refreshBranch();
-
-		class BorderStatusEditor extends CustomEditor {
-			constructor(
-				tui: TUI,
-				theme: EditorTheme,
-				keybindings: KeybindingsManager,
-			) {
-				super(tui, theme, keybindings, { paddingX: 0 });
-				activeTui = tui;
-			}
-
-			render(width: number): string[] {
-				const lines = super.render(width);
-				if (lines.length < 2) return lines;
-
-				const theme = ctx.ui.theme;
-				const colorize: BorderColorize = (field, text) =>
-					theme.fg(BORDER_TOKENS[field], text);
-
-				const modelId = ctx.model?.id ?? "no-model";
-
-				const thinkingLevel = pi.getThinkingLevel() ?? "off";
-				const thinkingLabel = ctx.model?.reasoning
-					? getThinkingLabel(thinkingLevel)
-					: "";
-				const thinkingColor = theme.getThinkingBorderColor(thinkingLevel);
-
-				const usage = ctx.getContextUsage();
-				const contextWindow =
-					usage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
-
-				return composeBorderLines({
-					lines,
-					width,
-					modelId,
-					thinkingLabel,
-					thinkingColor,
-					contextPercent: usage?.percent ?? null,
-					contextTokens: usage?.tokens ?? null,
-					contextWindow,
-					cwd: ctx.cwd,
-					branch: tracker.current(),
-					colorize,
-					borderColor: (text: string) => this.borderColor(text),
-				});
-			}
+	class BorderStatusEditor extends CustomEditor {
+		constructor(
+			tui: TUI,
+			theme: EditorTheme,
+			keybindings: KeybindingsManager,
+		) {
+			super(tui, theme, keybindings, { paddingX: 0 });
+			activeTui = tui;
 		}
 
-		ctx.ui.setEditorComponent(
-			(tui, theme, keybindings) =>
-				new BorderStatusEditor(tui, theme, keybindings),
-		);
-	});
+		render(width: number): string[] {
+			const lines = super.render(width);
+			if (lines.length < 2) return lines;
+
+			const theme = ctx.ui.theme;
+			const colorize: BorderColorize = (field, text) =>
+				theme.fg(BORDER_TOKENS[field], text);
+
+			const modelId = ctx.model?.id ?? "no-model";
+
+			const thinkingLevel = pi.getThinkingLevel() ?? "off";
+			const thinkingLabel = ctx.model?.reasoning
+				? getThinkingLabel(thinkingLevel)
+				: "";
+			const thinkingColor = theme.getThinkingBorderColor(thinkingLevel);
+
+			const usage = ctx.getContextUsage();
+			const contextWindow =
+				usage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
+
+			return composeBorderLines({
+				lines,
+				width,
+				modelId,
+				thinkingLabel,
+				thinkingColor,
+				contextPercent: usage?.percent ?? null,
+				contextTokens: usage?.tokens ?? null,
+				contextWindow,
+				cwd: ctx.cwd,
+				branch: tracker.current(),
+				colorize,
+				borderColor: (text: string) => this.borderColor(text),
+			});
+		}
+	}
+
+	ctx.ui.setEditorComponent(
+		(tui, theme, keybindings) =>
+			new BorderStatusEditor(tui, theme, keybindings),
+	);
+
+	return {
+		dispose() {
+			activeTui = undefined;
+			ctx.ui.setEditorComponent(undefined);
+		},
+		// Re-read the branch when the agent settles, in case it changed mid-turn.
+		onAgentEnd() {
+			refreshBranch();
+		},
+	};
 }

@@ -1,17 +1,16 @@
 # @aphotic/pi-flow-ux
 
-Optional UX enhancements for pi-flow: footer extension, working indicator/message, Nord theme, and packaged working defaults.
+Optional UX enhancements for pi-flow: a unified status placement extension (border editor, footer, or off), working indicator/message, Nord theme, and packaged defaults.
 
 ## What this package provides
 
 This package contains optional UX polish that extends the core pi-flow experience:
 
-- **Footer extension** — displays context, model, thinking tokens, and other metadata in a customizable footer area
-- **Border-status extension** — draws key session metadata into the editor's top and bottom border lines, with theme-linked colors and responsive degradation at narrow widths
+- **Status extension** — a single coordinator that draws session metadata in exactly one place: the editor border (default), a custom footer, or nowhere. Switch in-session with `/status`.
 - **Working indicator** — animated indicator showing active, tool-use, and thinking states with Nord-tuned defaults
 - **Working message** — status messages corresponding to working states, customizable via configuration
 - **Nord theme** — a complete dark theme package tuned to the Nord color palette (https://www.nordtheme.com/)
-- **Packaged working defaults** — curated Nord-tuned settings for the working indicator and message, with user override support
+- **Packaged defaults** — curated Nord-tuned settings for the working indicator/message and a packaged status placement default, both with user override support
 
 ## Standalone install and use
 
@@ -48,23 +47,48 @@ Or reference the package in your Pi `settings.json` using one of the supported s
 
 After Pi loads the package, the following resources become available:
 
-- **Extensions:** footer renderer, border-status editor, working indicator, working message
+- **Extensions:** status placement coordinator (defaulting to the border editor), working indicator, working message
 - **Themes:** `nord` theme
-- **Working config defaults:** packaged `working.json` settings (described below)
+- **Config defaults:** packaged `working.json` and `status.json` settings (described below)
 
-## Border-status extension
+## Status extension
 
-The border-status extension wraps the editor and draws session metadata directly into the editor's top and bottom border lines, coexisting with the footer:
+The status extension is a single coordinator that owns where session metadata is drawn. Exactly one placement is active at a time, so the placements are mutually exclusive:
+
+- **`border`** (default) — draws metadata into the editor's top and bottom border lines.
+- **`footer`** — draws metadata in a custom footer below the editor.
+- **`off`** — installs neither; no status UI is drawn.
+
+The border and footer renderers are internal implementation details of the coordinator; they are no longer loaded as independent extensions. The working indicator/message behavior is independent of status placement and is unaffected by your choice here.
+
+### The `/status` command
+
+- `/status` — reports the current placement and the accepted values (`border|footer|off`).
+- `/status border`, `/status footer`, `/status off` — switch the placement immediately in the current session and persist your choice to `~/.pi/agent/status.json`.
+
+The selected placement persists across Pi reloads and sessions.
+
+### Border placement details
+
+When `border` is active:
 
 - **Lower-left border:** model id, plus the thinking level when reasoning is enabled.
 - **Lower-right border:** context percentage used, plus the `used/total` context-window token counts.
 - **Upper-right border:** the working directory (with `~` home substitution), followed by the git branch when in a repository.
 
-Colors are kept in lock-step with the footer by resolving the same theme tokens the footer's fields resolve to: model and context metrics use `accent`, the git branch uses `success`, the `/` separator and ellipsis use `borderMuted`, and the working directory uses `muted`. The thinking level uses the theme's thinking-border color for the active level. Colors are resolved per render, so theme switches update the border immediately with no stale cached ANSI.
+Colors resolve from theme tokens per render (model/context metrics `accent`, git branch `success`, separators/ellipsis `borderMuted`, working directory `muted`; thinking uses the theme's thinking-border color), so theme switches update immediately with no stale cached ANSI. At narrow widths the optional fields degrade in priority order: the `used/total` token-window detail first, then the git branch, then the thinking level. The model id and context percentage are always kept (truncated only as a last resort) and the working directory is tail-truncated rather than dropped.
 
-At narrow terminal widths the fields degrade in a footer-inspired priority order: the `used/total` token-window detail drops first, then the git branch, then the thinking level. The model id and context percentage are always kept (truncated ANSI-safely only as a last resort), and the working directory is tail-truncated rather than dropped.
+### Status configuration
 
-This extension installs only a custom editor and never replaces the footer, so the two render together until a later change removes the now-duplicated footer metadata.
+Status placement follows the same three-tier convention as the working settings (see below), with a `{ "placement": "border" | "footer" | "off" }` schema:
+
+1. **User override:** `~/.pi/agent/status.json` — takes precedence over all other tiers.
+2. **Packaged default:** `node_modules/@aphotic/pi-flow-ux/status.json` — ships with `placement: "border"`.
+3. **Code default:** hardcoded `placement: "border"`, used when both files are missing.
+
+Failure semantics match `working.json`: a missing or malformed user file falls back to the packaged default; a missing packaged file falls back to the code default; malformed packaged JSON throws on startup so a broken release surfaces loudly. `/status` mutations persist only to `~/.pi/agent/status.json` (written atomically) and never modify the packaged default.
+
+There is no project-specific status config layer; status placement is user-global only.
 
 ## Aggregate install and use
 
@@ -81,10 +105,12 @@ The aggregate forwards UX resources automatically through its `pi` manifest:
 
 ```json
 {
-  "extensions": ["node_modules/@aphotic/pi-flow-ux/extensions/footer.ts", "node_modules/@aphotic/pi-flow-ux/extensions/border-status.ts", "node_modules/@aphotic/pi-flow-ux/extensions/working/index.ts"],
+  "extensions": ["node_modules/@aphotic/pi-flow-ux/extensions/status/index.ts", "node_modules/@aphotic/pi-flow-ux/extensions/working/index.ts"],
   "themes": ["node_modules/@aphotic/pi-flow-ux/themes/nord.json"]
 }
 ```
+
+Both the direct `@aphotic/pi-flow-ux` install and the aggregate `@aphotic/pi-flow` install default to the same unified status behavior (`placement: "border"`), and the packaged `status.json` ships with both.
 
 ## Nord theme activation
 

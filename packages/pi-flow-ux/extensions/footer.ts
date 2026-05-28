@@ -38,9 +38,12 @@
 
 import {
   type ExtensionAPI,
+  type ExtensionContext,
   type ThemeColor,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+
+import type { StatusRendererHandle } from "./status/status.ts";
 
 // ─── Colour type and user-configurable map ────────────────────────────────────
 
@@ -435,11 +438,20 @@ function tailTruncate(text: string, maxWidth: number): string {
   return text.slice(text.length - maxWidth);
 }
 
-// ─── Extension entry point ────────────────────────────────────────────────────
+// ─── Renderer install ──────────────────────────────────────────────────────────
 
-export default function (pi: ExtensionAPI) {
-  pi.on("session_start", async (_event, ctx) => {
-    ctx.ui.setFooter((tui, theme, footerData) => {
+/**
+ * Install the custom footer renderer into the active session and return a handle
+ * the status coordinator uses to remove it again. The footer is one of the
+ * mutually-exclusive status placements; the coordinator decides when it is
+ * installed, so this module no longer registers its own session lifecycle
+ * handlers.
+ */
+export function installFooter(
+  pi: ExtensionAPI,
+  ctx: ExtensionContext,
+): StatusRendererHandle {
+  ctx.ui.setFooter((tui, theme, footerData) => {
       // Re-render whenever the git branch changes.
       const unsub = footerData.onBranchChange(() => tui.requestRender());
 
@@ -692,10 +704,11 @@ export default function (pi: ExtensionAPI) {
           return lines;
         },
       };
-    });
   });
 
-  pi.on("session_shutdown", async (_event, ctx) => {
-    ctx.ui.setFooter(undefined);
-  });
+  return {
+    dispose() {
+      ctx.ui.setFooter(undefined);
+    },
+  };
 }

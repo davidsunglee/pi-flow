@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import borderStatusFactory, {
+import {
 	BORDER_TOKENS,
 	composeBorderLines,
 	computeBorderVisibility,
@@ -14,6 +14,7 @@ import borderStatusFactory, {
 	formatContextTokenWindow,
 	formatCwd,
 	getThinkingLabel,
+	installBorderStatus,
 	type BorderFieldWidths,
 } from "./border-status.ts";
 import { visibleWidth } from "@earendil-works/pi-tui";
@@ -387,19 +388,15 @@ test("branch tracker treats exec failures as no branch", async () => {
 
 // ─── Extension lifecycle ───────────────────────────────────────────────────────
 
-test("session_start installs a border-status editor without touching the footer", async () => {
-	const handlers = new Map<string, (event: any, ctx: any) => void | Promise<void>>();
-	borderStatusFactory({
-		on(event: string, handler: (event: any, ctx: any) => void | Promise<void>) {
-			handlers.set(event, handler);
-		},
+test("installBorderStatus installs a border-status editor without touching the footer", async () => {
+	const pi = {
 		getThinkingLevel() {
 			return "off";
 		},
 		async exec() {
 			return { stdout: "", stderr: "", code: 0 };
 		},
-	} as any);
+	};
 
 	const editorFactories: unknown[] = [];
 	let footerCalls = 0;
@@ -431,24 +428,20 @@ test("session_start installs a border-status editor without touching the footer"
 		},
 	};
 
-	await handlers.get("session_start")!({}, ctx);
-	assert.equal(typeof editorFactories[0], "function", "session_start installs a custom editor");
-	assert.equal(footerCalls, 0, "border-status must coexist with the footer and not replace it");
+	installBorderStatus(pi as any, ctx as any);
+	assert.equal(typeof editorFactories[0], "function", "installBorderStatus installs a custom editor");
+	assert.equal(footerCalls, 0, "border-status must not touch the footer");
 });
 
-test("session_shutdown restores the built-in editor", async () => {
-	const handlers = new Map<string, (event: any, ctx: any) => void | Promise<void>>();
-	borderStatusFactory({
-		on(event: string, handler: (event: any, ctx: any) => void | Promise<void>) {
-			handlers.set(event, handler);
-		},
+test("dispose restores the built-in editor", async () => {
+	const pi = {
 		getThinkingLevel() {
 			return "off";
 		},
 		async exec() {
 			return { stdout: "", stderr: "", code: 0 };
 		},
-	} as any);
+	};
 
 	const editorCalls: unknown[] = [];
 	const ctx = {
@@ -477,9 +470,9 @@ test("session_shutdown restores the built-in editor", async () => {
 		},
 	};
 
-	await handlers.get("session_start")!({}, ctx);
-	await handlers.get("session_shutdown")!({ reason: "quit" }, ctx);
+	const handle = installBorderStatus(pi as any, ctx as any);
+	handle.dispose();
 
-	assert.equal(typeof editorCalls[0], "function", "session_start installs a custom editor");
-	assert.equal(editorCalls[1], undefined, "session_shutdown restores the built-in editor");
+	assert.equal(typeof editorCalls[0], "function", "installBorderStatus installs a custom editor");
+	assert.equal(editorCalls[1], undefined, "dispose restores the built-in editor");
 });

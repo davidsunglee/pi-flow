@@ -18,7 +18,7 @@
   },
   "pi": {
     "skills": ["node_modules/@aphotic/pi-flow-core/skills/*/SKILL.md"],
-    "extensions": ["node_modules/@aphotic/pi-flow-core/extensions/commands.ts", "node_modules/@aphotic/pi-flow-ux/extensions/footer.ts", "node_modules/@aphotic/pi-flow-ux/extensions/border-status.ts", "node_modules/@aphotic/pi-flow-ux/extensions/working/index.ts"],
+    "extensions": ["node_modules/@aphotic/pi-flow-core/extensions/commands.ts", "node_modules/@aphotic/pi-flow-ux/extensions/status/index.ts", "node_modules/@aphotic/pi-flow-ux/extensions/working/index.ts"],
     "themes": ["node_modules/@aphotic/pi-flow-ux/themes/nord.json"]
   },
   "license": "MIT",

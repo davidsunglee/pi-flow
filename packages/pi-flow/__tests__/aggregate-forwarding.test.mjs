@@ -140,14 +140,25 @@ test('aggregate-forwarding.test.mjs forwards core commands, UX extensions, and t
 
   const requiredExtensionSubstrings = [
     'node_modules/@aphotic/pi-flow-core/extensions/commands',
-    'node_modules/@aphotic/pi-flow-ux/extensions/footer',
-    'node_modules/@aphotic/pi-flow-ux/extensions/border-status',
+    'node_modules/@aphotic/pi-flow-ux/extensions/status/index',
     'node_modules/@aphotic/pi-flow-ux/extensions/working/index',
   ];
   for (const needle of requiredExtensionSubstrings) {
     assert.ok(
       extensions.some(e => e.includes(needle)),
       `pi.extensions must forward "${needle}"; got ${JSON.stringify(extensions)}`
+    );
+  }
+
+  // Footer and border-status are renderers behind the status coordinator and
+  // must not be forwarded as independent extensions.
+  for (const forbidden of [
+    'node_modules/@aphotic/pi-flow-ux/extensions/footer.ts',
+    'node_modules/@aphotic/pi-flow-ux/extensions/border-status.ts',
+  ]) {
+    assert.ok(
+      !extensions.includes(forbidden),
+      `pi.extensions must not forward ${forbidden} as an independent extension`
     );
   }
 

@@ -11,7 +11,7 @@ The aggregate package for pi-flow workflow resources — a single install point 
 - **Workflow skills and bundled agents** via `@aphotic/pi-flow-core`
 - **Slash commands and the `idea` tool** via `@aphotic/pi-flow-core`
 - **Helper runner** (`pi-flow helper <id>`, `pi-flow template <id>`) via `@aphotic/pi-flow-core/bin`
-- **UX enhancements** — footer extension, working indicator/message, Nord theme, and packaged defaults via `@aphotic/pi-flow-ux`
+- **UX enhancements** — status placement extension (`/status`: border editor, footer, or off), working indicator/message, Nord theme, and packaged defaults via `@aphotic/pi-flow-ux`
 
 ## /flow:* commands and idea tool
 

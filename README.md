@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | `@aphotic/pi-flow` | Aggregate package that forwards `@aphotic/pi-flow-core` and `@aphotic/pi-flow-ux` resources. | You want the default full Flow experience. |
 | `@aphotic/pi-flow-core` | Headless workflow package: skills, agents, helper runner, `/flow:*` commands, `idea` tool, `/flow:ideas` browser, and `/flow:setup`. | You want workflow automation without the UI extras. |
-| `@aphotic/pi-flow-ux` | Optional UX package: footer extension, working indicator/message, Nord theme, and packaged defaults. | You only want the UI layer or want to combine it manually. |
+| `@aphotic/pi-flow-ux` | Optional UX package: status placement extension (`/status`), working indicator/message, Nord theme, and packaged defaults. | You only want the UI layer or want to combine it manually. |
 
 The repository root is the development workspace. The distributable package entry points live under `packages/`.
 

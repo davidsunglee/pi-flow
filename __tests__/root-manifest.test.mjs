@@ -27,8 +27,7 @@ const EXPECTED_SKILL_NAMES = [
 
 const EXPECTED_ROOT_EXTENSIONS = [
   'packages/pi-flow-core/extensions/commands.ts',
-  'packages/pi-flow-ux/extensions/footer.ts',
-  'packages/pi-flow-ux/extensions/border-status.ts',
+  'packages/pi-flow-ux/extensions/status/index.ts',
   'packages/pi-flow-ux/extensions/working/index.ts',
 ];
 

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import footerFactory, {
+import {
 	computeVisibility,
 	DEFAULT_TOKENS,
 	formatContextTokenWindow,
@@ -10,6 +10,7 @@ import footerFactory, {
 	joinMetrics,
 	sanitizeStatusTexts,
 	THEME_COLORS,
+	installFooter,
 	type FieldWidths,
 } from "./footer.ts";
 
@@ -209,18 +210,14 @@ test("context token window wraps '/' in symbols color and uses token color for b
 });
 
 test("row 1 renders cwd and branch with one literal space separator", async () => {
-	const handlers = new Map<string, (event: any, ctx: any) => void | Promise<void>>();
-	footerFactory({
-		on(event: string, handler: (event: any, ctx: any) => void | Promise<void>) {
-			handlers.set(event, handler);
-		},
+	const pi = {
 		getSessionName() {
 			return "";
 		},
 		getThinkingLevel() {
 			return "off";
 		},
-	} as any);
+	};
 
 	let footerBuilder: any;
 	const ctx = {
@@ -267,7 +264,7 @@ test("row 1 renders cwd and branch with one literal space separator", async () =
 		},
 	};
 
-	await handlers.get("session_start")!({}, ctx);
+	installFooter(pi as any, ctx as any);
 	const footer = footerBuilder({ requestRender() {} }, theme, footerData);
 	const [line1, line2] = footer.render(80);
 
@@ -277,18 +274,14 @@ test("row 1 renders cwd and branch with one literal space separator", async () =
 });
 
 test("row 2 shows context percentage and context token window without input/output arrows", async () => {
-	const handlers = new Map<string, (event: any, ctx: any) => void | Promise<void>>();
-	footerFactory({
-		on(event: string, handler: (event: any, ctx: any) => void | Promise<void>) {
-			handlers.set(event, handler);
-		},
+	const pi = {
 		getSessionName() {
 			return "";
 		},
 		getThinkingLevel() {
 			return "off";
 		},
-	} as any);
+	};
 
 	let footerBuilder: any;
 	const ctx = {
@@ -343,7 +336,7 @@ test("row 2 shows context percentage and context token window without input/outp
 		},
 	};
 
-	await handlers.get("session_start")!({}, ctx);
+	installFooter(pi as any, ctx as any);
 	const footer = footerBuilder({ requestRender() {} }, theme, footerData);
 	const [, line2] = footer.render(80);
 
@@ -353,18 +346,14 @@ test("row 2 shows context percentage and context token window without input/outp
 });
 
 test("row 2 shows question mark over context window when context tokens are unknown", async () => {
-	const handlers = new Map<string, (event: any, ctx: any) => void | Promise<void>>();
-	footerFactory({
-		on(event: string, handler: (event: any, ctx: any) => void | Promise<void>) {
-			handlers.set(event, handler);
-		},
+	const pi = {
 		getSessionName() {
 			return "";
 		},
 		getThinkingLevel() {
 			return "off";
 		},
-	} as any);
+	};
 
 	let footerBuilder: any;
 	const ctx = {
@@ -411,7 +400,7 @@ test("row 2 shows question mark over context window when context tokens are unkn
 		},
 	};
 
-	await handlers.get("session_start")!({}, ctx);
+	installFooter(pi as any, ctx as any);
 	const footer = footerBuilder({ requestRender() {} }, theme, footerData);
 	const [, line2] = footer.render(80);
 
@@ -487,18 +476,15 @@ test("nord theme override sets provider prefix color to nord3 (#4c566a)", () => 
 	assert.equal(THEME_COLORS.everblush?.provider, undefined, "non-Nord themes must not override provider so they keep their dim-token rendering");
 });
 
-test("session_shutdown restores the built-in footer", async () => {
-	const handlers = new Map<string, (event: any, ctx: any) => void | Promise<void>>();
-	footerFactory({
-		on(event: string, handler: (event: any, ctx: any) => void | Promise<void>) {
-			handlers.set(event, handler);
+test("installFooter installs a custom footer and its dispose handle restores the built-in footer", async () => {
+	const pi = {
+		getSessionName() {
+			return "";
 		},
-	} as any);
-
-	const sessionStart = handlers.get("session_start");
-	const sessionShutdown = handlers.get("session_shutdown");
-	assert.ok(sessionStart, "session_start handler should be registered");
-	assert.ok(sessionShutdown, "session_shutdown handler should be registered");
+		getThinkingLevel() {
+			return "off";
+		},
+	};
 
 	const footerCalls: unknown[] = [];
 	const ctx = {
@@ -509,9 +495,9 @@ test("session_shutdown restores the built-in footer", async () => {
 		},
 	};
 
-	await sessionStart!({}, ctx);
-	await sessionShutdown!({ reason: "quit" }, ctx);
+	const handle = installFooter(pi as any, ctx as any);
+	handle.dispose();
 
-	assert.equal(typeof footerCalls[0], "function", "session_start should install a custom footer");
-	assert.equal(footerCalls[1], undefined, "session_shutdown should restore the built-in footer");
+	assert.equal(typeof footerCalls[0], "function", "installFooter should install a custom footer");
+	assert.equal(footerCalls[1], undefined, "dispose should restore the built-in footer");
 });
