@@ -19,7 +19,7 @@
     "@earendil-works/pi-tui": "^0.75.0"
   },
   "pi": {
-    "extensions": ["extensions/footer.ts", "extensions/working/index.ts"],
+    "extensions": ["extensions/footer.ts", "extensions/border-status.ts", "extensions/working/index.ts"],
     "themes": ["themes"]
   },
   "license": "MIT",

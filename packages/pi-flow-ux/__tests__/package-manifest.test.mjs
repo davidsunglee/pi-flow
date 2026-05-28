@@ -23,6 +23,7 @@ const EXCLUDED_EXTENSIONS = [
 
 const EXPECTED_EXTENSION_ENTRIES = [
   'extensions/footer.ts',
+  'extensions/border-status.ts',
   'extensions/working/index.ts',
 ];
 

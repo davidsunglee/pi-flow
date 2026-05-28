@@ -141,6 +141,7 @@ test('aggregate-forwarding.test.mjs forwards core commands, UX extensions, and t
   const requiredExtensionSubstrings = [
     'node_modules/@aphotic/pi-flow-core/extensions/commands',
     'node_modules/@aphotic/pi-flow-ux/extensions/footer',
+    'node_modules/@aphotic/pi-flow-ux/extensions/border-status',
     'node_modules/@aphotic/pi-flow-ux/extensions/working/index',
   ];
   for (const needle of requiredExtensionSubstrings) {

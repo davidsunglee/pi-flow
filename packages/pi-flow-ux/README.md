@@ -7,6 +7,7 @@ Optional UX enhancements for pi-flow: footer extension, working indicator/messag
 This package contains optional UX polish that extends the core pi-flow experience:
 
 - **Footer extension** — displays context, model, thinking tokens, and other metadata in a customizable footer area
+- **Border-status extension** — draws key session metadata into the editor's top and bottom border lines, with theme-linked colors and responsive degradation at narrow widths
 - **Working indicator** — animated indicator showing active, tool-use, and thinking states with Nord-tuned defaults
 - **Working message** — status messages corresponding to working states, customizable via configuration
 - **Nord theme** — a complete dark theme package tuned to the Nord color palette (https://www.nordtheme.com/)
@@ -47,9 +48,23 @@ Or reference the package in your Pi `settings.json` using one of the supported s
 
 After Pi loads the package, the following resources become available:
 
-- **Extensions:** footer renderer, working indicator, working message
+- **Extensions:** footer renderer, border-status editor, working indicator, working message
 - **Themes:** `nord` theme
 - **Working config defaults:** packaged `working.json` settings (described below)
+
+## Border-status extension
+
+The border-status extension wraps the editor and draws session metadata directly into the editor's top and bottom border lines, coexisting with the footer:
+
+- **Lower-left border:** model id, plus the thinking level when reasoning is enabled.
+- **Lower-right border:** context percentage used, plus the `used/total` context-window token counts.
+- **Upper-right border:** the working directory (with `~` home substitution), followed by the git branch when in a repository.
+
+Colors are kept in lock-step with the footer by resolving the same theme tokens the footer's fields resolve to: model and context metrics use `accent`, the git branch uses `success`, the `/` separator and ellipsis use `borderMuted`, and the working directory uses `muted`. The thinking level uses the theme's thinking-border color for the active level. Colors are resolved per render, so theme switches update the border immediately with no stale cached ANSI.
+
+At narrow terminal widths the fields degrade in a footer-inspired priority order: the `used/total` token-window detail drops first, then the git branch, then the thinking level. The model id and context percentage are always kept (truncated ANSI-safely only as a last resort), and the working directory is tail-truncated rather than dropped.
+
+This extension installs only a custom editor and never replaces the footer, so the two render together until a later change removes the now-duplicated footer metadata.
 
 ## Aggregate install and use
 
@@ -66,7 +81,7 @@ The aggregate forwards UX resources automatically through its `pi` manifest:
 
 ```json
 {
-  "extensions": ["node_modules/@aphotic/pi-flow-ux/extensions/footer.ts", "node_modules/@aphotic/pi-flow-ux/extensions/working/index.ts"],
+  "extensions": ["node_modules/@aphotic/pi-flow-ux/extensions/footer.ts", "node_modules/@aphotic/pi-flow-ux/extensions/border-status.ts", "node_modules/@aphotic/pi-flow-ux/extensions/working/index.ts"],
   "themes": ["node_modules/@aphotic/pi-flow-ux/themes/nord.json"]
 }
 ```

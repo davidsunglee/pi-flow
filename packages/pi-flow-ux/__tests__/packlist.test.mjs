@@ -20,6 +20,7 @@ test('packlist includes required files', () => {
   const files = getPacklist();
   const required = [
     'extensions/footer.ts',
+    'extensions/border-status.ts',
     'extensions/working/index.ts',
     'themes/nord.json',
     'working.json',
