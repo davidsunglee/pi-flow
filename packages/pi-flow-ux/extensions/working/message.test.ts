@@ -59,12 +59,16 @@ function bootExtensions(
 
 function makeCtx(hasUI: boolean) {
   const workingMessages: Array<string | undefined> = [];
+  const workingVisible: boolean[] = [];
   const notifications: Array<{ message: string; level: string }> = [];
   const ctx = {
     hasUI,
     ui: {
       setWorkingMessage(message?: string) {
         workingMessages.push(message);
+      },
+      setWorkingVisible(visible: boolean) {
+        workingVisible.push(visible);
       },
       setWorkingIndicator() {},
       setStatus() {},
@@ -73,7 +77,7 @@ function makeCtx(hasUI: boolean) {
       },
     },
   };
-  return { ctx, workingMessages, notifications };
+  return { ctx, workingMessages, workingVisible, notifications };
 }
 
 test("active state publishes a plain colored message without starting animation", async () => {
@@ -265,6 +269,42 @@ test("message stands down without animating while the border owns the working in
     } finally {
       globalThis.setInterval = originalSetInterval;
     }
+  });
+});
+
+test("border mode hides the host working loader row, not just the custom message", async () => {
+  await withTmpDir(async (dir) => {
+    const settingsPath = path.join(dir, "working.json");
+    const pkg = path.join(dir, "package-default-missing.json");
+    const coordinator = getWorkingCoordinator(settingsPath, pkg);
+    coordinator.setBorderOwnsIndicator(true);
+
+    const { emit } = bootExtensions(settingsPath, pkg);
+    const { ctx, workingVisible } = makeCtx(true);
+    await emit("turn_start", {}, ctx);
+    await emit("tool_execution_start", { toolCallId: "call-1" }, ctx);
+
+    // The border owns the working surface, so the built-in loader row must be
+    // hidden outright — leaving it visible keeps the old working surface alive.
+    assert.equal(workingVisible.at(-1), false, "host working loader row is hidden in border mode");
+  });
+});
+
+test("switching from border to footer restores the host working loader row", async () => {
+  await withTmpDir(async (dir) => {
+    const settingsPath = path.join(dir, "working.json");
+    const pkg = path.join(dir, "package-default-missing.json");
+    const coordinator = getWorkingCoordinator(settingsPath, pkg);
+    coordinator.setBorderOwnsIndicator(true);
+
+    const { emit } = bootExtensions(settingsPath, pkg);
+    const { ctx, workingVisible } = makeCtx(true);
+    await emit("turn_start", {}, ctx);
+    assert.equal(workingVisible.at(-1), false, "loader row hidden while border owns it");
+
+    coordinator.setBorderOwnsIndicator(false);
+
+    assert.equal(workingVisible.at(-1), true, "loader row is restored when footer/off takes over");
   });
 });
 

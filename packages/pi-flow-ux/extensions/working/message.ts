@@ -18,6 +18,16 @@ export function createExtension(
     let ctxRef: ExtensionContext | undefined;
     let styledRenderingSupported = true;
     let unsubscribe: (() => void) | undefined;
+    // Tracks whether we have hidden the host working loader row so we only
+    // toggle visibility on transitions (border <-> footer/off) and restore it
+    // exactly once.
+    let hostWorkingHidden = false;
+
+    function setHostWorkingHidden(hidden: boolean): void {
+      if (hostWorkingHidden === hidden) return;
+      hostWorkingHidden = hidden;
+      ctxRef?.ui.setWorkingVisible(!hidden);
+    }
 
     function stopAnimation(): void {
       if (timer !== undefined) {
@@ -31,12 +41,19 @@ export function createExtension(
       const snapshot = coordinator.getSnapshot();
 
       if (snapshot.borderOwned) {
-        // Border placement keeps full messages out of the border and does not
-        // relocate them elsewhere, so stand down to the host default message.
+        // Border placement relocates the working surface into the compact
+        // border slot, so suppress the host working loader row entirely — not
+        // just the custom message. Otherwise the built-in loader/message row
+        // lingers in its old above-editor location and competes with the
+        // border slot.
         stopAnimation();
-        ctxRef.ui.setWorkingMessage();
+        setHostWorkingHidden(true);
         return;
       }
+
+      // Footer/off placement keeps the full working surface in its host
+      // location, so make sure the loader row we may have hidden is restored.
+      setHostWorkingHidden(false);
 
       if (!snapshot.visible || currentMessage === undefined) {
         stopAnimation();
@@ -117,6 +134,9 @@ export function createExtension(
     pi.on("session_shutdown", () => {
       stopAnimation();
       currentMessage = undefined;
+      // Restore the host loader row if we hid it for border placement, so we
+      // never leave the working surface suppressed after teardown.
+      setHostWorkingHidden(false);
       ctxRef = undefined;
       unsubscribe?.();
       unsubscribe = undefined;
