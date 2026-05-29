@@ -200,10 +200,11 @@ function tailTruncate(text: string, maxWidth: number): string {
 }
 
 /**
- * Build the upper-right status block (cwd + optional branch), fitting it within
- * `maxWidth`. The cwd is tail-truncated (with a leading ellipsis) so the tail of
- * the path stays visible; the branch is kept intact (all-or-nothing) — callers
- * decide via computeBorderVisibility whether the branch is present at all.
+ * Build the upper-right status block (optional branch + cwd), fitting it within
+ * `maxWidth`. The branch is rendered first and kept intact (all-or-nothing); the
+ * cwd follows and is tail-truncated (with a leading ellipsis) so the tail of the
+ * path stays visible. Callers decide via computeBorderVisibility whether the
+ * branch is present at all.
  */
 export function fitTopRight(
 	cwdStr: string,
@@ -211,22 +212,34 @@ export function fitTopRight(
 	maxWidth: number,
 	colorize: BorderColorize,
 ): string {
-	const branchPart = branch ? " " + colorize("branch", branch) : "";
-	const branchPlainWidth = branch ? visibleWidth(" " + branch) : 0;
+	const branchColored = branch ? colorize("branch", branch) : "";
+	const branchPlainWidth = branch ? visibleWidth(branch) : 0;
+	// The cwd follows the branch, separated by a single space when a branch is shown.
+	const sep = branch ? " " : "";
+	const sepWidth = branch ? 1 : 0;
 	const cwdColored = colorize("cwd", cwdStr);
 
-	if (visibleWidth(cwdColored) + branchPlainWidth <= maxWidth) {
-		return cwdColored + branchPart;
+	if (branchPlainWidth + sepWidth + visibleWidth(cwdColored) <= maxWidth) {
+		return branchColored + sep + cwdColored;
 	}
 
 	const ellipsis = colorize("symbol", "…");
-	const availForCwd = maxWidth - branchPlainWidth - 1; // 1 for the ellipsis
+	const availForCwd = maxWidth - branchPlainWidth - sepWidth - 1; // 1 for the ellipsis
 	if (availForCwd >= 1) {
-		return ellipsis + colorize("cwd", tailTruncate(cwdStr, availForCwd)) + branchPart;
+		return (
+			branchColored +
+			sep +
+			ellipsis +
+			colorize("cwd", tailTruncate(cwdStr, availForCwd))
+		);
 	}
 
 	// Not even room for the branch plus one cwd char: last-resort ANSI-safe truncate.
-	return truncateToWidth(cwdColored + branchPart, Math.max(0, maxWidth), "");
+	return truncateToWidth(
+		branchColored + sep + cwdColored,
+		Math.max(0, maxWidth),
+		"",
+	);
 }
 
 // ─── Responsive priority dropper ───────────────────────────────────────────────

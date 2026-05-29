@@ -205,14 +205,14 @@ test("thinking drops last among optional border fields", () => {
 
 test("fitTopRight returns full cwd and branch when they fit", () => {
 	const out = fitTopRight("~/proj", "main", 40, idColorize);
-	assert.equal(out, "~/proj main");
+	assert.equal(out, "main ~/proj");
 });
 
 test("fitTopRight tail-truncates cwd while keeping branch intact", () => {
-	// branch part " main" = 5; ellipsis 1; maxWidth 12 → availForCwd = 12 - 5 - 1 = 6.
+	// branch "main" (4) + sep (1) + ellipsis (1) leaves availForCwd = 12 - 4 - 1 - 1 = 6.
 	// tail 6 chars of "/a/b/c/deep" === "c/deep".
 	const out = fitTopRight("/a/b/c/deep", "main", 12, idColorize);
-	assert.equal(out, "…c/deep main");
+	assert.equal(out, "main …c/deep");
 	assert.ok(out.includes("main"), "branch must remain intact");
 	assert.ok(visibleWidth(out) <= 12);
 });
@@ -282,6 +282,11 @@ test("composeBorderLines places model+thinking lower-left, context lower-right, 
 		// Upper-right: cwd (muted) and branch (success).
 		assert.ok(top.includes("[cwd:~/proj]"), "cwd routed to cwd color with ~ substitution");
 		assert.ok(top.includes("[branch:feature]"), "branch routed to branch color");
+		// Branch renders before the cwd in the top-right block (position swap).
+		assert.ok(
+			top.indexOf("[branch:feature]") < top.indexOf("[cwd:~/proj]"),
+			"branch must render before the cwd",
+		);
 
 		// Lower-left: model (accent) and thinking de-emphasized via the thinking field.
 		assert.ok(bottom.includes("[model:gpt-5.5]"), "model routed to model color");
