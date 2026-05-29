@@ -27,8 +27,6 @@ export interface StatusSettings {
  */
 export interface StatusRendererHandle {
   dispose(): void;
-  /** Optional hook invoked when the agent settles (used by the border tracker). */
-  onAgentEnd?(): void;
 }
 
 export type StatusRendererInstaller = (
@@ -45,9 +43,8 @@ export interface StatusInstallers {
 
 /**
  * Combine several renderer handles into one. Dispose tears them down in reverse
- * install order, and `onAgentEnd` fans out to each — so the border editor's git
- * branch refresh keeps firing even when it shares a placement with the blank
- * footer.
+ * install order, so the border editor and its paired blank footer are removed
+ * together on the next placement switch.
  */
 function composeHandles(
   handles: readonly StatusRendererHandle[],
@@ -55,9 +52,6 @@ function composeHandles(
   return {
     dispose() {
       for (let i = handles.length - 1; i >= 0; i--) handles[i].dispose();
-    },
-    onAgentEnd() {
-      for (const handle of handles) handle.onAgentEnd?.();
     },
   };
 }
@@ -249,10 +243,6 @@ export class StatusCoordinator {
         const user = await loadSavedStatusSettings(this.settingsPath, baseline);
         this.settings = user ?? baseline;
         this.installActive();
-      });
-
-      pi.on("agent_end", () => {
-        this.handle?.onAgentEnd?.();
       });
 
       pi.on("session_shutdown", () => {

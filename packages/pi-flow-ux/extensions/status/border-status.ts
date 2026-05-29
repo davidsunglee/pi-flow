@@ -6,9 +6,9 @@
  * override render(width), rewrite the top/bottom border rows and frame the
  * interior rows with vertical edges to close the rectangle).
  *
- * Layout (closed rectangle; branch precedes cwd on the top edge):
- *   top edge:    ╭──────────────────────────  branch ~/path ─╮
- *   side rows:   │ …editor content…                          │
+ * Layout (closed rectangle; the cwd alone sits on the top edge):
+ *   top edge:    ╭───────────────────────────────────  ~/path ─╮
+ *   side rows:   │ …editor content…                            │
  *   bottom edge: ╰─ model thinking ──────  used/total context% ─╯
  *
  * Emphasized fields stay in lock-step with the footer; the secondary fields are
@@ -18,7 +18,6 @@
  *   - context %          → "accent"      (footer contextUsage: accent / Nord nord8)
  *   - cwd                → "success"     (emphasized path / Nord nord14)
  *   - "/" and ellipsis   → "borderMuted" (footer symbols: borderMuted / Nord nord3)
- *   - branch             → "muted"       (de-emphasized; own field, shares muted)
  *   - thinking           → "muted"       (de-emphasized; own field, shares muted)
  *   - contextTokensUsed  → "muted"       (de-emphasized; own field, shares muted)
  *   - contextWindowTotal → "muted"       (de-emphasized; own field, shares muted)
@@ -47,7 +46,7 @@ import type { StatusRendererHandle } from "./status.ts";
 // ─── Colour routing ─────────────────────────────────────────────────────────
 
 /**
- * Semantic border fields routed to theme tokens. `branch`, `thinking`,
+ * Semantic border fields routed to theme tokens. `thinking`,
  * `contextTokensUsed`, and `contextWindowTotal` are conceptually distinct
  * values that currently happen to share the `muted` token; keeping them as
  * separate fields lets a future theme change re-colour any one of them
@@ -56,7 +55,6 @@ import type { StatusRendererHandle } from "./status.ts";
 export type BorderColorField =
 	| "model"
 	| "context"
-	| "branch"
 	| "symbol"
 	| "cwd"
 	| "thinking"
@@ -68,14 +66,13 @@ export type BorderColorize = (field: BorderColorField, text: string) => string;
 
 /**
  * Theme tokens each border field resolves to. These mirror the footer's
- * resolved colours so the two stay visually consistent across themes. The four
- * secondary fields (branch, thinking, used tokens, total window) are intentionally
+ * resolved colours so the two stay visually consistent across themes. The three
+ * secondary fields (thinking, used tokens, total window) are intentionally
  * de-emphasized to the same `muted` token while remaining distinct keys.
  */
 export const BORDER_TOKENS: Record<BorderColorField, ThemeColor> = {
 	model: "accent",
 	context: "accent",
-	branch: "muted",
 	symbol: "borderMuted",
 	cwd: "success",
 	thinking: "muted",
@@ -222,46 +219,29 @@ function tailTruncate(text: string, maxWidth: number): string {
 }
 
 /**
- * Build the upper-right status block (optional branch + cwd), fitting it within
- * `maxWidth`. The branch is rendered first and kept intact (all-or-nothing); the
- * cwd follows and is tail-truncated (with a leading ellipsis) so the tail of the
- * path stays visible. Callers decide via computeBorderVisibility whether the
- * branch is present at all.
+ * Build the upper-right status block (cwd only), fitting it within `maxWidth`.
+ * The cwd is tail-truncated (with a leading ellipsis) so the tail of the path
+ * stays visible. The cwd is always present and never dropped.
  */
 export function fitTopRight(
 	cwdStr: string,
-	branch: string | undefined,
 	maxWidth: number,
 	colorize: BorderColorize,
 ): string {
-	const branchColored = branch ? colorize("branch", branch) : "";
-	const branchPlainWidth = branch ? visibleWidth(branch) : 0;
-	// The cwd follows the branch, separated by a single space when a branch is shown.
-	const sep = branch ? " " : "";
-	const sepWidth = branch ? 1 : 0;
 	const cwdColored = colorize("cwd", cwdStr);
 
-	if (branchPlainWidth + sepWidth + visibleWidth(cwdColored) <= maxWidth) {
-		return branchColored + sep + cwdColored;
+	if (visibleWidth(cwdColored) <= maxWidth) {
+		return cwdColored;
 	}
 
 	const ellipsis = colorize("symbol", "…");
-	const availForCwd = maxWidth - branchPlainWidth - sepWidth - 1; // 1 for the ellipsis
+	const availForCwd = maxWidth - 1; // 1 for the ellipsis
 	if (availForCwd >= 1) {
-		return (
-			branchColored +
-			sep +
-			ellipsis +
-			colorize("cwd", tailTruncate(cwdStr, availForCwd))
-		);
+		return ellipsis + colorize("cwd", tailTruncate(cwdStr, availForCwd));
 	}
 
-	// Not even room for the branch plus one cwd char: last-resort ANSI-safe truncate.
-	return truncateToWidth(
-		branchColored + sep + cwdColored,
-		Math.max(0, maxWidth),
-		"",
-	);
+	// Not even room for the ellipsis plus one cwd char: last-resort ANSI-safe truncate.
+	return truncateToWidth(cwdColored, Math.max(0, maxWidth), "");
 }
 
 // ─── Responsive priority dropper ───────────────────────────────────────────────
@@ -273,18 +253,13 @@ export interface BorderFieldWidths {
 	thinkingWidth: number; // bottom-left optional; includes leading separator space
 	pctWidth: number; // bottom-right, highest priority (never dropped)
 	tokenWindowWidth: number; // bottom-right optional; includes leading separator space
-	cwdWidth: number; // top-right; truncatable, always present
-	branchWidth: number; // top-right optional; includes leading separator space
-	ellipsisWidth: number;
 	hasThinking: boolean;
-	hasBranch: boolean;
 	hasTokenWindow: boolean;
 }
 
 /** Surviving optional-field visibility after the priority dropper has run. */
 export interface BorderVisibility {
 	showThinking: boolean;
-	showBranch: boolean;
 	showTokenWindow: boolean;
 }
 
@@ -292,7 +267,6 @@ export interface BorderVisibility {
 const CORNERS = 2; // leading + trailing corner dash
 const GAP = 3; // fitBorder minimumGap between left and right blocks
 const BLOCK_PAD = 2; // one leading + one trailing space padding per status block
-const MIN_CWD_CHARS = 4; // minimum cwd chars kept visible when preserving branch
 // Shoulder dashes drawn just inside the corners to nudge each block one column
 // toward the centre. The bottom line carries one inside each corner (bottom-left
 // shifts right, bottom-right shifts left); the top line carries one inside the
@@ -302,14 +276,13 @@ const SHOULDER_TOP = 1;
 
 /**
  * Pure priority dropper. Model id and context percentage are always kept; the
- * cwd is always present (truncatable). Optional fields drop in a strict global
- * priority order as the terminal narrows — token window first, then branch,
- * then thinking — each sacrificed (lowest priority first) until both border
- * lines fit, regardless of which line the dropped field lives on.
+ * cwd on the top edge is always present (tail-truncated, never dropped), so only
+ * the two bottom-edge optional fields can drop. They drop in a strict priority
+ * order as the terminal narrows — token window first, then thinking — each
+ * sacrificed (lowest priority first) until the bottom border line fits.
  */
 export function computeBorderVisibility(f: BorderFieldWidths): BorderVisibility {
 	let showTokenWindow = f.hasTokenWindow;
-	let showBranch = f.hasBranch;
 	let showThinking = f.hasThinking;
 
 	const bottomFits = (): boolean => {
@@ -321,22 +294,10 @@ export function computeBorderVisibility(f: BorderFieldWidths): BorderVisibility 
 		);
 	};
 
-	const topFits = (): boolean => {
-		if (!showBranch) return true; // cwd alone can always tail-truncate to fit
-		const minCwd = f.ellipsisWidth + MIN_CWD_CHARS;
-		return (
-			CORNERS + SHOULDER_TOP + BLOCK_PAD + minCwd + f.branchWidth + GAP <=
-			f.width
-		);
-	};
+	if (showTokenWindow && !bottomFits()) showTokenWindow = false;
+	if (showThinking && !bottomFits()) showThinking = false;
 
-	const allFit = (): boolean => bottomFits() && topFits();
-
-	if (showTokenWindow && !allFit()) showTokenWindow = false;
-	if (showBranch && !allFit()) showBranch = false;
-	if (showThinking && !allFit()) showThinking = false;
-
-	return { showThinking, showBranch, showTokenWindow };
+	return { showThinking, showTokenWindow };
 }
 
 // ─── Border line composition ───────────────────────────────────────────────────
@@ -355,7 +316,6 @@ export interface ComposeBorderLinesOptions {
 	contextTokens: number | null;
 	contextWindow: number;
 	cwd: string;
-	branch: string | undefined;
 	colorize: BorderColorize;
 	borderColor: (text: string) => string;
 }
@@ -411,8 +371,6 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 		"/" +
 		formatTokens(p.contextWindow);
 	const tokenWindowWidth = p.contextWindow > 0 ? visibleWidth(tokenWindowPlain) : 0;
-	const cwdWidth = visibleWidth(cwdStr);
-	const branchWidth = p.branch ? visibleWidth(" " + p.branch) : 0;
 
 	const flags = computeBorderVisibility({
 		width,
@@ -420,11 +378,7 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 		thinkingWidth,
 		pctWidth,
 		tokenWindowWidth,
-		cwdWidth,
-		branchWidth,
-		ellipsisWidth: 1,
 		hasThinking: thinkingWidth > 0,
-		hasBranch: branchWidth > 0,
 		hasTokenWindow: tokenWindowWidth > 0,
 	});
 
@@ -443,14 +397,9 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 			percent
 		: percent;
 
-	// Top-right: optional branch + cwd, tail-truncated to fit its block budget.
+	// Top-right: cwd only, tail-truncated to fit its block budget.
 	const topRightBudget = width - CORNERS - SHOULDER_TOP - GAP - BLOCK_PAD;
-	const topRight = fitTopRight(
-		cwdStr,
-		flags.showBranch ? p.branch : undefined,
-		Math.max(0, topRightBudget),
-		colorize,
-	);
+	const topRight = fitTopRight(cwdStr, Math.max(0, topRightBudget), colorize);
 
 	// Two columns are reserved for the left/right vertical edges. The caller
 	// renders the inner editor at this width, so each interior row — padded to
@@ -514,70 +463,18 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 	return out;
 }
 
-// ─── Branch tracking ───────────────────────────────────────────────────────────
-
-type ExecFn = (
-	command: string,
-	args: string[],
-	options?: { cwd?: string },
-) => Promise<{ stdout: string } | undefined>;
-
-export interface BranchTracker {
-	current(): string | undefined;
-	refresh(exec: ExecFn, cwd: string, onChange: () => void): Promise<void>;
-}
-
-/**
- * Track the current git branch. `refresh` re-reads the branch and invokes
- * `onChange` only when the value actually changes, so re-renders happen only on
- * real branch switches (matching the footer's onBranchChange semantics).
- */
-export function createBranchTracker(): BranchTracker {
-	let current: string | undefined;
-	return {
-		current() {
-			return current;
-		},
-		async refresh(exec, cwd, onChange) {
-			let next: string | undefined;
-			try {
-				const result = await exec("git", ["branch", "--show-current"], { cwd });
-				const stdout = result?.stdout?.trim();
-				next = stdout && stdout.length > 0 ? stdout : undefined;
-			} catch {
-				next = undefined;
-			}
-			if (next !== current) {
-				current = next;
-				onChange();
-			}
-		},
-	};
-}
-
 // ─── Renderer install ──────────────────────────────────────────────────────────
 
 /**
  * Install the border-status editor into the active session and return a handle
- * the status coordinator uses to remove it and to refresh the git branch when
- * the agent settles. The border editor is one of the mutually-exclusive status
- * placements; the coordinator owns the session lifecycle, so this module no
- * longer registers its own session handlers.
+ * the status coordinator uses to remove it. The border editor is one of the
+ * mutually-exclusive status placements; the coordinator owns the session
+ * lifecycle, so this module no longer registers its own session handlers.
  */
 export function installBorderStatus(
 	pi: ExtensionAPI,
 	ctx: ExtensionContext,
 ): StatusRendererHandle {
-	let activeTui: TUI | undefined;
-	const tracker = createBranchTracker();
-
-	const refreshBranch = () => {
-		void tracker.refresh(pi.exec as unknown as ExecFn, ctx.cwd, () =>
-			activeTui?.requestRender(),
-		);
-	};
-	refreshBranch();
-
 	class BorderStatusEditor extends CustomEditor {
 		constructor(
 			tui: TUI,
@@ -585,7 +482,6 @@ export function installBorderStatus(
 			keybindings: KeybindingsManager,
 		) {
 			super(tui, theme, keybindings, { paddingX: 0 });
-			activeTui = tui;
 		}
 
 		render(width: number): string[] {
@@ -619,7 +515,6 @@ export function installBorderStatus(
 				contextTokens: usage?.tokens ?? null,
 				contextWindow,
 				cwd: ctx.cwd,
-				branch: tracker.current(),
 				colorize,
 				borderColor: (text: string) => this.borderColor(text),
 			});
@@ -633,12 +528,7 @@ export function installBorderStatus(
 
 	return {
 		dispose() {
-			activeTui = undefined;
 			ctx.ui.setEditorComponent(undefined);
-		},
-		// Re-read the branch when the agent settles, in case it changed mid-turn.
-		onAgentEnd() {
-			refreshBranch();
 		},
 	};
 }

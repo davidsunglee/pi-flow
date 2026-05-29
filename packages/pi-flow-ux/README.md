@@ -74,11 +74,11 @@ When `border` is active:
 
 - **Lower-left border:** model id, plus the thinking level when reasoning is enabled.
 - **Lower-right border:** the `used/total` context-window token counts followed by the context percentage used, with the percentage as the rightmost value (e.g. `9.3k/200k 12.3%`).
-- **Upper-right border:** the working directory (with `~` home substitution), followed by the git branch when in a repository.
+- **Upper-right border:** the working directory (with `~` home substitution).
 
 Because the border already carries the model, context, and project metadata, border placement also suppresses Pi's built-in footer (it installs a footer that renders nothing) so the same information isn't duplicated below the editor. Switching to `footer` or `off` restores the normal footer behavior automatically.
 
-Colors resolve from theme tokens per render: the model id and the emphasized context percentage use `accent`, the git branch uses `success`, and separators/ellipsis use `borderMuted`. The secondary values — the thinking level, the working directory, the current context-token count, and the total context-window count — are each de-emphasized to the same muted gray. They remain conceptually separate fields (so any one can be re-colored later), even though they currently all resolve to the `muted` token. Because tokens resolve per render, theme switches update immediately with no stale cached ANSI. At narrow widths the optional fields degrade in priority order: the `used/total` token-window detail first, then the git branch, then the thinking level. The model id and context percentage are always kept (truncated only as a last resort) and the working directory is tail-truncated rather than dropped.
+Colors resolve from theme tokens per render: the model id and the emphasized context percentage use `accent`, the working directory uses `success`, and separators/ellipsis use `borderMuted`. The secondary values — the thinking level, the current context-token count, and the total context-window count — are each de-emphasized to the same muted gray. They remain conceptually separate fields (so any one can be re-colored later), even though they currently all resolve to the `muted` token. Because tokens resolve per render, theme switches update immediately with no stale cached ANSI. At narrow widths the optional fields degrade in priority order: the `used/total` token-window detail first, then the thinking level. The model id and context percentage are always kept (truncated only as a last resort) and the working directory is tail-truncated rather than dropped.
 
 ### Status configuration
 

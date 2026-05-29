@@ -7,7 +7,6 @@ import {
 	BORDER_TOKENS,
 	composeBorderLines,
 	computeBorderVisibility,
-	createBranchTracker,
 	fitBorder,
 	fitTopRight,
 	formatContextPercent,
@@ -31,8 +30,8 @@ const idBorder = (text: string) => text;
  * only the fields they exercise.
  *
  * Width-measurement reminder:
- *   - thinkingWidth / branchWidth / tokenWindowWidth INCLUDE their leading
- *     single-space separator (matches production measurement).
+ *   - thinkingWidth / tokenWindowWidth INCLUDE their leading single-space
+ *     separator (matches production measurement).
  */
 function bw(
 	width: number,
@@ -44,11 +43,7 @@ function bw(
 		thinkingWidth: 0,
 		pctWidth: 0,
 		tokenWindowWidth: 0,
-		cwdWidth: 0,
-		branchWidth: 0,
-		ellipsisWidth: 1,
 		hasThinking: false,
-		hasBranch: false,
 		hasTokenWindow: false,
 	};
 	return { ...base, ...overrides };
@@ -64,6 +59,19 @@ test("border-status does not import from the footer extension", () => {
 	assert.ok(
 		!/from\s+["']\.\/footer(\.ts)?["']/.test(source),
 		"border-status.ts must be self-contained and not import from ./footer",
+	);
+});
+
+// ─── No git branch in the border ─────────────────────────────────────────────
+
+test("border-status carries no git branch tracking", () => {
+	const source = readFileSync(
+		fileURLToPath(new URL("./border-status.ts", import.meta.url)),
+		"utf8",
+	);
+	assert.ok(
+		!/branch/i.test(source),
+		"border-status.ts must not reference the git branch anywhere",
 	);
 });
 
@@ -121,12 +129,17 @@ test("border tokens map model/context to accent, cwd to success, symbol to borde
 	assert.equal(BORDER_TOKENS.context, "accent");
 	assert.equal(BORDER_TOKENS.cwd, "success");
 	assert.equal(BORDER_TOKENS.symbol, "borderMuted");
-	assert.equal(BORDER_TOKENS.branch, "muted");
 	assert.equal(BORDER_TOKENS.thinking, "muted");
 	assert.equal(BORDER_TOKENS.contextTokensUsed, "muted");
 	assert.equal(BORDER_TOKENS.contextWindowTotal, "muted");
+	// No git branch field exists on the token map.
+	assert.equal(
+		Object.prototype.hasOwnProperty.call(BORDER_TOKENS, "branch"),
+		false,
+		"there must be no branch token",
+	);
 	// The secondary fields remain distinct keys even though they share the token.
-	const secondaryKeys = ["branch", "thinking", "contextTokensUsed", "contextWindowTotal"];
+	const secondaryKeys = ["thinking", "contextTokensUsed", "contextWindowTotal"];
 	assert.equal(new Set(secondaryKeys).size, secondaryKeys.length);
 });
 
@@ -139,59 +152,34 @@ test("wide terminal keeps every optional border field visible", () => {
 			thinkingWidth: 6,
 			pctWidth: 5,
 			tokenWindowWidth: 10,
-			cwdWidth: 30,
-			branchWidth: 8,
 			hasThinking: true,
-			hasBranch: true,
 			hasTokenWindow: true,
 		}),
 	);
 	assert.ok(flags.showTokenWindow);
-	assert.ok(flags.showBranch);
 	assert.ok(flags.showThinking);
 });
 
-test("token window drops before branch", () => {
+test("token window drops before thinking", () => {
 	// bottom overhead 11 (corners 2 + shoulders 2 + 2×block-pad 4 + gap 3).
-	// bottom with token window: 7 + 5 + 10 + 11 = 33 > 30 → drop token window.
-	// bottom without: 7 + 5 + 11 = 23 ≤ 30.
-	// top with branch: 13 (corners 2 + shoulder 1 + block-pad 2 + min-cwd 5 + gap 3)
-	//   + 8 = 21 ≤ 30 → branch survives.
+	// with token window: 11 + (7 + 6) + (5 + 10) = 39 > 30 → drop token window.
+	// without token window: 11 + (7 + 6) + 5 = 29 ≤ 30 → thinking survives.
 	const flags = computeBorderVisibility(
 		bw(30, {
 			modelWidth: 7,
+			thinkingWidth: 6,
 			pctWidth: 5,
 			tokenWindowWidth: 10,
-			cwdWidth: 20,
-			branchWidth: 8,
-			hasBranch: true,
+			hasThinking: true,
 			hasTokenWindow: true,
 		}),
 	);
 	assert.ok(!flags.showTokenWindow, "token window should drop first");
-	assert.ok(flags.showBranch, "branch should survive");
-});
-
-test("branch drops before thinking", () => {
-	// top with branch needs width ≥ 13 + branchWidth(8) = 21; at 19 branch drops.
-	// bottom with thinking: 3 + 3 + 2 + 11 = 19 ≤ 19 → thinking survives.
-	const flags = computeBorderVisibility(
-		bw(19, {
-			modelWidth: 3,
-			thinkingWidth: 3,
-			pctWidth: 2,
-			cwdWidth: 20,
-			branchWidth: 8,
-			hasThinking: true,
-			hasBranch: true,
-		}),
-	);
-	assert.ok(!flags.showBranch, "branch should drop");
-	assert.ok(flags.showThinking, "thinking should survive (lower drop priority)");
+	assert.ok(flags.showThinking, "thinking should survive");
 });
 
 test("thinking drops last among optional border fields", () => {
-	// bottom with thinking: 3 + 3 + 2 + 11 = 19 > 16 → thinking drops.
+	// bottom with thinking: 11 + (3 + 3) + 2 = 19 > 16 → thinking drops.
 	const flags = computeBorderVisibility(
 		bw(16, {
 			modelWidth: 3,
@@ -205,18 +193,16 @@ test("thinking drops last among optional border fields", () => {
 
 // ─── fitTopRight ───────────────────────────────────────────────────────────────
 
-test("fitTopRight returns full cwd and branch when they fit", () => {
-	const out = fitTopRight("~/proj", "main", 40, idColorize);
-	assert.equal(out, "main ~/proj");
+test("fitTopRight returns the full cwd when it fits", () => {
+	const out = fitTopRight("~/proj", 40, idColorize);
+	assert.equal(out, "~/proj");
 });
 
-test("fitTopRight tail-truncates cwd while keeping branch intact", () => {
-	// branch "main" (4) + sep (1) + ellipsis (1) leaves availForCwd = 12 - 4 - 1 - 1 = 6.
-	// tail 6 chars of "/a/b/c/deep" === "c/deep".
-	const out = fitTopRight("/a/b/c/deep", "main", 12, idColorize);
-	assert.equal(out, "main …c/deep");
-	assert.ok(out.includes("main"), "branch must remain intact");
-	assert.ok(visibleWidth(out) <= 12);
+test("fitTopRight tail-truncates the cwd with a leading ellipsis", () => {
+	// maxWidth 7: ellipsis (1) leaves availForCwd = 6; tail 6 of "/a/b/c/deep" === "c/deep".
+	const out = fitTopRight("/a/b/c/deep", 7, idColorize);
+	assert.equal(out, "…c/deep");
+	assert.ok(visibleWidth(out) <= 7);
 });
 
 // ─── fitBorder ─────────────────────────────────────────────────────────────────
@@ -259,14 +245,13 @@ test("composeBorderLines returns lines unchanged when there are fewer than two",
 		contextTokens: 1000,
 		contextWindow: 200000,
 		cwd: "/repo",
-		branch: undefined,
 		colorize: idColorize,
 		borderColor: idBorder,
 	});
 	assert.deepEqual(out, ["only"]);
 });
 
-test("composeBorderLines places model+thinking lower-left, context lower-right, cwd+branch upper-right", () => {
+test("composeBorderLines places model+thinking lower-left, context lower-right, cwd upper-right", () => {
 	const origHome = process.env.HOME;
 	process.env.HOME = "/Users/test";
 	try {
@@ -281,7 +266,6 @@ test("composeBorderLines places model+thinking lower-left, context lower-right, 
 			contextTokens: 9300,
 			contextWindow: 200000,
 			cwd: "/Users/test/proj",
-			branch: "feature",
 			colorize: markerColorize,
 			borderColor: idBorder,
 		});
@@ -291,22 +275,13 @@ test("composeBorderLines places model+thinking lower-left, context lower-right, 
 		assert.notEqual(top, "TOP-BORDER", "top border should be rewritten");
 		assert.notEqual(bottom, "BOTTOM-BORDER", "bottom border should be rewritten");
 
-		// Upper-right: branch (muted) and cwd (success).
+		// Upper-right: cwd only (success), with ~ home substitution. No branch.
 		assert.ok(top.includes("[cwd:~/proj]"), "cwd routed to cwd color with ~ substitution");
-		assert.ok(top.includes("[branch:feature]"), "branch routed to branch color");
-		// Branch renders before the cwd in the top-right block (position swap).
-		assert.ok(
-			top.indexOf("[branch:feature]") < top.indexOf("[cwd:~/proj]"),
-			"branch must render before the cwd",
-		);
+		assert.ok(!/\[branch:/.test(top), "no git branch should appear on the top border");
 
 		// Lower-left: model (accent) and thinking de-emphasized via the thinking field.
 		assert.ok(bottom.includes("[model:gpt-5.5]"), "model routed to model color");
 		assert.ok(bottom.includes("[thinking:xhigh]"), "thinking routed to its own muted field");
-		assert.ok(
-			!bottom.includes("<th:xhigh>"),
-			"thinking no longer uses the old thinking-border marker",
-		);
 
 		// Lower-right: used/total token window with subdued slash, then percentage.
 		assert.ok(bottom.includes("[context:12.3%]"), "percentage routed to context color");
@@ -344,7 +319,6 @@ test("composeBorderLines keeps model and context percent at very narrow widths",
 		contextTokens: 1000,
 		contextWindow: 200000,
 		cwd: "/some/deep/path/here",
-		branch: "feature-branch",
 		colorize: idColorize,
 		borderColor: idBorder,
 	});
@@ -355,9 +329,27 @@ test("composeBorderLines keeps model and context percent at very narrow widths",
 	assert.equal(visibleWidth(out[2]), 24, "bottom border spans full width");
 });
 
-test("composeBorderLines drops token window, then branch, then thinking as width shrinks", () => {
-	// Geometry chosen so the top branch block is the binding constraint before
-	// the bottom thinking block, exercising the global token→branch→thinking order.
+test("composeBorderLines always keeps the cwd on the top border, tail-truncated", () => {
+	const out = composeBorderLines({
+		lines: baseLines(),
+		width: 24,
+		modelId: "gpt",
+		thinkingLabel: "",
+		contextPercent: 50,
+		contextTokens: 1000,
+		contextWindow: 200000,
+		cwd: "/some/deep/path/here",
+		colorize: idColorize,
+		borderColor: idBorder,
+	});
+	const top = out[0];
+	// The tail of the path is preserved behind a leading ellipsis.
+	assert.ok(top.includes("here"), "cwd tail stays visible");
+	assert.ok(top.includes("…"), "cwd is tail-truncated with a leading ellipsis");
+	assert.equal(visibleWidth(top), 24, "top border spans full width");
+});
+
+test("composeBorderLines drops token window, then thinking as width shrinks", () => {
 	const opts = {
 		lines: baseLines(),
 		modelId: "m",
@@ -366,30 +358,28 @@ test("composeBorderLines drops token window, then branch, then thinking as width
 		contextTokens: 1000,
 		contextWindow: 200000,
 		cwd: "/r",
-		branch: "feature-xyz",
 		colorize: idColorize,
 		borderColor: idBorder,
 	};
 
 	const wide = composeBorderLines({ ...opts, width: 30 });
 	assert.ok(wide[2].includes("1.0k/200k"), "wide keeps token window");
-	assert.ok(wide[0].includes("feature-xyz"), "wide keeps branch");
 	assert.ok(wide[2].includes(" lo "), "wide keeps thinking");
 	assert.ok(
 		wide[2].indexOf("1.0k/200k") < wide[2].indexOf("50.0%"),
 		"token window renders to the left of the percentage",
 	);
 
-	// Drop token window first: pct stays, used/total gone, branch + thinking remain.
+	// Drop token window first: pct stays, used/total gone, thinking remains.
 	const noToken = composeBorderLines({ ...opts, width: 27 });
 	assert.ok(!noToken[2].includes("1.0k/200k"), "token window dropped first");
-	assert.ok(noToken[0].includes("feature-xyz"), "branch still present");
+	assert.ok(noToken[2].includes(" lo "), "thinking still present");
 	assert.ok(noToken[2].includes("50.0%"), "percentage retained");
 
-	// Narrower: branch dropped next, thinking still retained.
-	const noBranch = composeBorderLines({ ...opts, width: 23 });
-	assert.ok(!noBranch[0].includes("feature-xyz"), "branch dropped after token window");
-	assert.ok(noBranch[2].includes(" lo "), "thinking retained after branch drops");
+	// Narrower: thinking dropped next.
+	const noThinking = composeBorderLines({ ...opts, width: 18 });
+	assert.ok(!noThinking[2].includes(" lo "), "thinking dropped after token window");
+	assert.ok(noThinking[2].includes("50.0%"), "percentage retained");
 });
 
 test("composeBorderLines preserves autocomplete matches and removes the interior stock border", () => {
@@ -406,7 +396,6 @@ test("composeBorderLines preserves autocomplete matches and removes the interior
 		contextTokens: 9300,
 		contextWindow: 200000,
 		cwd: "/repo",
-		branch: undefined,
 		colorize: idColorize,
 		borderColor: idBorder,
 	});
@@ -443,7 +432,6 @@ test("composeBorderLines frames the editor as a full rectangle with corners and 
 		contextTokens: 1000,
 		contextWindow: 200000,
 		cwd: "/r",
-		branch: "main",
 		colorize: idColorize,
 		borderColor: idBorder,
 	});
@@ -469,7 +457,6 @@ test("composeBorderLines nudges bottom-left right and bottom-right/top-right lef
 		contextTokens: 1000,
 		contextWindow: 200000,
 		cwd: "/r",
-		branch: "main",
 		colorize: idColorize,
 		borderColor: idBorder,
 	});
@@ -513,7 +500,6 @@ test("composeBorderLines keeps every line within the requested width at extremel
 			contextTokens: 1000,
 			contextWindow: 200000,
 			cwd: "/r",
-			branch: "main",
 			colorize: idColorize,
 			borderColor: idBorder,
 		});
@@ -526,54 +512,12 @@ test("composeBorderLines keeps every line within the requested width at extremel
 	}
 });
 
-// ─── createBranchTracker (rerender-on-change) ──────────────────────────────────
-
-test("branch tracker only fires the change callback when the branch actually changes", async () => {
-	const tracker = createBranchTracker();
-	let renders = 0;
-	const onChange = () => {
-		renders++;
-	};
-	const execReturning = (value: string) => async () => ({ stdout: value, stderr: "", code: 0 });
-
-	await tracker.refresh(execReturning("main\n") as any, "/r", onChange);
-	assert.equal(tracker.current(), "main");
-	assert.equal(renders, 1, "first resolution should trigger a render");
-
-	await tracker.refresh(execReturning("main\n") as any, "/r", onChange);
-	assert.equal(renders, 1, "unchanged branch should not trigger a render");
-
-	await tracker.refresh(execReturning("dev\n") as any, "/r", onChange);
-	assert.equal(tracker.current(), "dev");
-	assert.equal(renders, 2, "changed branch should trigger a render");
-
-	await tracker.refresh(execReturning("") as any, "/r", onChange);
-	assert.equal(tracker.current(), undefined);
-	assert.equal(renders, 3, "clearing the branch should trigger a render");
-});
-
-test("branch tracker treats exec failures as no branch", async () => {
-	const tracker = createBranchTracker();
-	let renders = 0;
-	const failingExec = async () => {
-		throw new Error("not a git repo");
-	};
-	await tracker.refresh(failingExec as any, "/r", () => {
-		renders++;
-	});
-	assert.equal(tracker.current(), undefined);
-	assert.equal(renders, 0, "staying at undefined should not trigger a render");
-});
-
 // ─── Extension lifecycle ───────────────────────────────────────────────────────
 
 test("installBorderStatus installs a border-status editor without touching the footer", async () => {
 	const pi = {
 		getThinkingLevel() {
 			return "off";
-		},
-		async exec() {
-			return { stdout: "", stderr: "", code: 0 };
 		},
 	};
 
@@ -616,9 +560,6 @@ test("dispose restores the built-in editor", async () => {
 	const pi = {
 		getThinkingLevel() {
 			return "off";
-		},
-		async exec() {
-			return { stdout: "", stderr: "", code: 0 };
 		},
 	};
 
