@@ -6,6 +6,7 @@ import path from "node:path";
 
 import { createExtension as createWorkingMessageExtension } from "./message.ts";
 import { createExtension as createWorkingIndicatorExtension } from "./indicator.ts";
+import { MESSAGE_ANIMATION_INTERVAL_MS } from "./effects.ts";
 import { resetWorkingCoordinatorForTests } from "./working.ts";
 
 type EventHandler = (event: any, ctx: any) => void | Promise<void>;
@@ -97,6 +98,34 @@ test("active state publishes a plain colored message without starting animation"
       assert.equal(setIntervalCallCount, 0, "active plain mode should not animate");
     } finally {
       globalThis.setInterval = originalSetInterval;
+    }
+  });
+});
+
+test("gleam animation schedules its timer at the slowed-down 120ms cadence", async () => {
+  await withTmpDir(async (dir) => {
+    const { emit } = bootExtensions(path.join(dir, "working.json"));
+    const intervalDelays: number[] = [];
+    const timerHandles: ReturnType<typeof setInterval>[] = [];
+    const originalSetInterval = globalThis.setInterval;
+    const originalClearInterval = globalThis.clearInterval;
+    globalThis.setInterval = ((...args: Parameters<typeof setInterval>) => {
+      intervalDelays.push(args[1] as number);
+      const handle = originalSetInterval(...args);
+      timerHandles.push(handle);
+      return handle;
+    }) as typeof setInterval;
+
+    try {
+      const { ctx } = makeCtx(true);
+      await emit("turn_start", {}, ctx);
+      await emit("tool_execution_start", { toolCallId: "call-1" }, ctx);
+
+      assert.equal(MESSAGE_ANIMATION_INTERVAL_MS, 120, "message animation constant is slowed to 120ms");
+      assert.deepEqual(intervalDelays, [120], "gleam timer is scheduled at 120ms");
+    } finally {
+      globalThis.setInterval = originalSetInterval;
+      timerHandles.forEach((handle) => originalClearInterval(handle));
     }
   });
 });

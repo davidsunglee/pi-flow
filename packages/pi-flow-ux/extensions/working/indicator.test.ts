@@ -205,6 +205,15 @@ test("/working indicator=wave persists the wave indicator shape with four frames
   });
 });
 
+test("buildWorkingIndicator animation intervals run at the slowed-down cadence", () => {
+  const style = { color: "#81A1C1", gleam: false, rainbow: false };
+
+  assert.equal((buildWorkingIndicator("spinner", style) as any).intervalMs, 160, "spinner ticks every 160ms");
+  assert.equal((buildWorkingIndicator("pulse", style) as any).intervalMs, 240, "pulse ticks every 240ms");
+  assert.equal((buildWorkingIndicator("wave", style) as any).intervalMs, 240, "wave ticks every 240ms");
+  assert.equal("intervalMs" in (buildWorkingIndicator("dot", style) as any), false, "dot stays static with no interval");
+});
+
 test("buildWorkingIndicator('wave', style) returns four styled frames with the wave glyphs and a symmetric loop", () => {
   const style = { color: "#81A1C1", gleam: false, rainbow: false };
   const indicator = buildWorkingIndicator("wave", style) as any;

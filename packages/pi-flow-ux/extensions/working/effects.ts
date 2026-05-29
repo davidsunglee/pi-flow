@@ -18,7 +18,11 @@ const PULSE_FRAMES = ["·", "•", "●", "•"];
 const DOT_FRAMES = ["●"];
 const WAVE_FRAMES = ["∼", "≈", "≋", "≈"];
 
-export const MESSAGE_ANIMATION_INTERVAL_MS = 60;
+export const MESSAGE_ANIMATION_INTERVAL_MS = 120;
+
+const SPINNER_INTERVAL_MS = 160;
+const PULSE_INTERVAL_MS = 240;
+const WAVE_INTERVAL_MS = 240;
 
 export function normalizeHexColor(value: string): string {
   return value.toUpperCase();
@@ -91,11 +95,11 @@ function getIndicatorGlyphs(shape: IndicatorShape): { glyphs: string[]; interval
     case "dot":
       return { glyphs: DOT_FRAMES };
     case "pulse":
-      return { glyphs: PULSE_FRAMES, intervalMs: 120 };
+      return { glyphs: PULSE_FRAMES, intervalMs: PULSE_INTERVAL_MS };
     case "spinner":
-      return { glyphs: SPINNER_FRAMES, intervalMs: 80 };
+      return { glyphs: SPINNER_FRAMES, intervalMs: SPINNER_INTERVAL_MS };
     case "wave":
-      return { glyphs: WAVE_FRAMES, intervalMs: 120 };
+      return { glyphs: WAVE_FRAMES, intervalMs: WAVE_INTERVAL_MS };
   }
 }
 
