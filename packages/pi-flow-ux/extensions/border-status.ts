@@ -412,7 +412,7 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 			percent
 		: percent;
 
-	// Top-right: cwd + optional branch, tail-truncated to fit its block budget.
+	// Top-right: optional branch + cwd, tail-truncated to fit its block budget.
 	const topRightBudget = width - CORNERS - GAP - BLOCK_PAD;
 	const topRight = fitTopRight(
 		cwdStr,
@@ -458,10 +458,19 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 	// edge at the rectangle's right side, without overwriting any content (the
 	// cursor marker stays inside the row, shifted one column right, and the TUI
 	// recomputes its column from this line).
+	// At widths < 3 there is no room for both vertical edges plus a content
+	// column, so framing would push interior rows past `width` (e.g. `│x│` is 3
+	// columns wide). In that case skip the edges and clamp each row to `width`
+	// so pi-tui's width validation never sees an over-wide line.
 	const verticalEdge = p.borderColor("│");
+	const canFrame = width >= 3;
 	for (let i = 1; i < out.length - 1; i++) {
-		const pad = Math.max(0, innerWidth - visibleWidth(out[i]));
-		out[i] = verticalEdge + out[i] + " ".repeat(pad) + verticalEdge;
+		if (canFrame) {
+			const pad = Math.max(0, innerWidth - visibleWidth(out[i]));
+			out[i] = verticalEdge + out[i] + " ".repeat(pad) + verticalEdge;
+		} else if (visibleWidth(out[i]) > width) {
+			out[i] = truncateToWidth(out[i], Math.max(0, width), "");
+		}
 	}
 	return out;
 }

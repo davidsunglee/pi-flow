@@ -457,6 +457,35 @@ test("composeBorderLines frames the editor as a full rectangle with corners and 
 	assert.ok(out[1].endsWith("│"), "right vertical edge frames content");
 });
 
+test("composeBorderLines keeps every line within the requested width at extremely narrow widths", () => {
+	// pi-tui validates rendered line width against the terminal width, so an
+	// over-wide row can stop rendering. At widths 0/1/2 there is no room for both
+	// vertical edges plus content, so framing must be skipped/bounded.
+	for (const width of [0, 1, 2]) {
+		const innerWidth = Math.max(1, width - 2); // mirrors BorderStatusEditor.render
+		const stockBorder = "─".repeat(innerWidth);
+		const out = composeBorderLines({
+			lines: [stockBorder, "x".repeat(innerWidth), stockBorder],
+			width,
+			modelId: "m",
+			thinkingLabel: "",
+			contextPercent: 50,
+			contextTokens: 1000,
+			contextWindow: 200000,
+			cwd: "/r",
+			branch: "main",
+			colorize: idColorize,
+			borderColor: idBorder,
+		});
+		for (const line of out) {
+			assert.ok(
+				visibleWidth(line) <= width,
+				`width ${width}: line "${line}" (${visibleWidth(line)}) must not exceed ${width}`,
+			);
+		}
+	}
+});
+
 // ─── createBranchTracker (rerender-on-change) ──────────────────────────────────
 
 test("branch tracker only fires the change callback when the branch actually changes", async () => {
