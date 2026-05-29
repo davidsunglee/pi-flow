@@ -1,5 +1,5 @@
 {
-  "indicatorShape": "pulse",
+  "indicatorShape": "wave",
   "active": {
     "color": "#81A1C1",
     "gleam": false,

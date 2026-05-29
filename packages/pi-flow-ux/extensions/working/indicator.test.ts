@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { createExtension } from "./indicator.ts";
+import { buildWorkingIndicator } from "./effects.ts";
 import { resetWorkingCoordinatorForTests } from "./working.ts";
 
 type EventHandler = (event: any, ctx: any) => void | Promise<void>;
@@ -181,6 +182,39 @@ test("/working indicator=dot persists the new indicator shape", async () => {
     const parsed = JSON.parse(await readFile(filePath, "utf8"));
     assert.equal(parsed.indicatorShape, "dot");
   });
+});
+
+test("/working indicator=wave persists the wave indicator shape with four frames", async () => {
+  await withTmpFile(async (filePath) => {
+    const { emit, command } = bootExtension(filePath);
+    const { ctx, indicatorCalls, notifications } = makeCtx();
+    await emit("session_start", { reason: "startup" }, ctx);
+    await emit("turn_start", {}, ctx);
+
+    await command.handler("indicator=wave", ctx);
+
+    const lastCall = indicatorCalls.at(-1) as any;
+    assert.ok(lastCall, "indicator is re-applied immediately while a turn is active");
+    assert.equal(lastCall.frames.length, 4, "wave indicator uses four frames");
+    assert.equal(notifications.length, 1);
+    assert.equal(notifications[0]!.level, "info");
+    assert.match(notifications[0]!.message, /indicatorShape=wave/);
+
+    const parsed = JSON.parse(await readFile(filePath, "utf8"));
+    assert.equal(parsed.indicatorShape, "wave");
+  });
+});
+
+test("buildWorkingIndicator('wave', style) returns four styled frames with the wave glyphs and a symmetric loop", () => {
+  const style = { color: "#81A1C1", gleam: false, rainbow: false };
+  const indicator = buildWorkingIndicator("wave", style) as any;
+
+  assert.equal(indicator.frames.length, 4, "wave loops over four frames");
+  assert.ok(indicator.frames[0].includes("∼"), "frame 1 is the single-line wave");
+  assert.ok(indicator.frames[1].includes("≈"), "frame 2 is the double-line wave");
+  assert.ok(indicator.frames[2].includes("≋"), "frame 3 is the triple-line wave");
+  assert.ok(indicator.frames[3].includes("≈"), "frame 4 returns to the double-line wave");
+  assert.equal(indicator.frames[1], indicator.frames[3], "frame 2 equals frame 4 after styling");
 });
 
 test("/working thinking color=default resets that state to the built-in default color", async () => {

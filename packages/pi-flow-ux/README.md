@@ -166,7 +166,7 @@ This overrides only `indicatorShape` and the `active.color`. All other settings 
 
 The `working.json` file in this package (`packages/pi-flow-ux/working.json`) is tuned for the Nord theme and includes:
 
-- `indicatorShape` — animation shape ('pulse', 'spinner', etc.)
+- `indicatorShape` — animation shape (`dot`, `pulse`, `spinner`, or `wave`; defaults to `wave`)
 - `active` — settings for the active state (color, gleam, rainbow effects)
 - `toolUse` — settings for tool-use state (color, gleam, rainbow effects)
 - `thinking` — settings for thinking state (color, gleam, rainbow effects)

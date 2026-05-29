@@ -9,7 +9,7 @@ import { DEFAULT_WORKING_COLOR, normalizeHexColor } from "./effects.ts";
 
 export type WorkingState = "active" | "toolUse" | "thinking";
 export type WorkingCommandState = "active" | "tool-use" | "thinking";
-export type IndicatorShape = "dot" | "pulse" | "spinner";
+export type IndicatorShape = "dot" | "pulse" | "spinner" | "wave";
 
 export interface WorkingStyle {
   color: string;
@@ -32,7 +32,7 @@ export interface WorkingSnapshot {
 
 const FOOTER_STATUS_KEY = "working-indicator";
 const VALID_COMMAND_STATES: readonly WorkingCommandState[] = ["active", "tool-use", "thinking"];
-const VALID_INDICATOR_SHAPES: readonly IndicatorShape[] = ["dot", "pulse", "spinner"];
+const VALID_INDICATOR_SHAPES: readonly IndicatorShape[] = ["dot", "pulse", "spinner", "wave"];
 
 export const DEFAULT_SETTINGS_PATH = path.join(os.homedir(), ".pi", "agent", "working.json");
 // Resolves to packages/pi-flow-ux/working.json when this module is loaded from
@@ -168,7 +168,7 @@ export async function saveWorkingSettings(filePath: string, settings: WorkingSet
 function getUsage(): string {
   return [
     "Usage: /working",
-    "       /working indicator=dot|pulse|spinner",
+    "       /working indicator=dot|pulse|spinner|wave",
     "       /working active color=default|#RRGGBB",
     "       /working active gleam=on|off",
     "       /working active rainbow=on|off",

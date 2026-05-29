@@ -139,7 +139,7 @@ test('packaged working.json default exists at package root with Nord-tuned defau
   const workingPath = pkgPath('working.json');
   assert.ok(existsSync(workingPath), 'working.json must exist at the package root');
   const raw = JSON.parse(readFileSync(workingPath, 'utf8'));
-  assert.equal(raw.indicatorShape, 'pulse', 'packaged working.json must default to indicatorShape "pulse"');
+  assert.equal(raw.indicatorShape, 'wave', 'packaged working.json must default to indicatorShape "wave"');
 });
 
 test('excluded personal extensions are absent from the UX package', () => {

@@ -16,6 +16,7 @@ const RESET = "\x1b[0m";
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const PULSE_FRAMES = ["·", "•", "●", "•"];
 const DOT_FRAMES = ["●"];
+const WAVE_FRAMES = ["∼", "≈", "≋", "≈"];
 
 export const MESSAGE_ANIMATION_INTERVAL_MS = 60;
 
@@ -93,6 +94,8 @@ function getIndicatorGlyphs(shape: IndicatorShape): { glyphs: string[]; interval
       return { glyphs: PULSE_FRAMES, intervalMs: 120 };
     case "spinner":
       return { glyphs: SPINNER_FRAMES, intervalMs: 80 };
+    case "wave":
+      return { glyphs: WAVE_FRAMES, intervalMs: 120 };
   }
 }
 

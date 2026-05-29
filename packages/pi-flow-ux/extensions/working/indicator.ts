@@ -7,7 +7,7 @@
  *
  * Command:
  *   /working
- *   /working indicator=dot|pulse|spinner
+ *   /working indicator=dot|pulse|spinner|wave
  *   /working active color=default|#RRGGBB
  *   /working active gleam=on|off
  *   /working active rainbow=on|off
