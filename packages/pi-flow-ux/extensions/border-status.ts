@@ -3,11 +3,13 @@
  *
  * Draws key session metadata into the editor's top and bottom border lines,
  * following pi's `border-status-editor.ts` example pattern (extend CustomEditor,
- * override render(width), rewrite the top/bottom border rows).
+ * override render(width), rewrite the top/bottom border rows and frame the
+ * interior rows with vertical edges to close the rectangle).
  *
- * Layout:
- *   top border:    ───────────────────────────────  ~/path branch ─
- *   bottom border: ─ model thinking ──────────  used/total context% ─
+ * Layout (closed rectangle; branch precedes cwd on the top edge):
+ *   top edge:    ╭──────────────────────────  branch ~/path ─╮
+ *   side rows:   │ …editor content…                          │
+ *   bottom edge: ╰─ model thinking ──────  used/total context% ─╯
  *
  * Emphasized fields stay in lock-step with the footer; the secondary fields are
  * deliberately de-emphasized to the same `muted` token while remaining distinct
@@ -154,9 +156,10 @@ export function fitBorder(
 	width: number,
 	border: (text: string) => string,
 	fill: (text: string) => string = border,
+	caps: { left: string; right: string } = { left: "─", right: "─" },
 ): string {
 	if (width <= 0) return "";
-	if (width === 1) return border("─");
+	if (width === 1) return border(caps.left);
 
 	let leftText = left;
 	let rightText = right;
@@ -190,7 +193,7 @@ export function fitBorder(
 		0,
 		width - fixedWidth - visibleWidth(leftText) - visibleWidth(rightText),
 	);
-	return `${border("─")}${leftText}${fill("─".repeat(gapWidth))}${rightText}${border("─")}`;
+	return `${border(caps.left)}${leftText}${fill("─".repeat(gapWidth))}${rightText}${border(caps.right)}`;
 }
 
 /** Return the last `maxWidth` characters of `text` (plain text, no ANSI). */
@@ -418,21 +421,47 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 		colorize,
 	);
 
+	// Two columns are reserved for the left/right vertical edges. The caller
+	// renders the inner editor at this width, so each interior row — padded to
+	// `innerWidth` if shorter, then wrapped in a vertical bar on each side —
+	// spans exactly `width`.
+	const innerWidth = Math.max(1, width - 2);
+
+	const topLine = fitBorder("", ` ${topRight} `, width, p.borderColor, p.borderColor, {
+		left: "╭",
+		right: "╮",
+	});
 	const bottomLine = fitBorder(
 		` ${bottomLeft} `,
 		` ${bottomRight} `,
 		width,
 		p.borderColor,
+		p.borderColor,
+		{ left: "╰", right: "╯" },
 	);
-	const bottomBorderIndex = findEditorBottomBorderIndex(p.lines, width);
+	const bottomBorderIndex = findEditorBottomBorderIndex(p.lines, innerWidth);
 
 	const out = [...p.lines];
-	out[0] = fitBorder("", ` ${topRight} `, width, p.borderColor);
+	out[0] = topLine;
 	if (bottomBorderIndex < out.length - 1) {
 		out.splice(bottomBorderIndex, 1);
 		out.push(bottomLine);
 	} else {
 		out[bottomBorderIndex] = bottomLine;
+	}
+
+	// Frame the interior rows (editor content + any autocomplete rows) with
+	// vertical edges so the horizontal borders join into a closed rectangle.
+	// Content rows already span `innerWidth`, but shorter rows (e.g. autocomplete
+	// matches) do not, so each row is right-padded to `innerWidth` before the
+	// bars are added. One bar on each side then restores `width` with the right
+	// edge at the rectangle's right side, without overwriting any content (the
+	// cursor marker stays inside the row, shifted one column right, and the TUI
+	// recomputes its column from this line).
+	const verticalEdge = p.borderColor("│");
+	for (let i = 1; i < out.length - 1; i++) {
+		const pad = Math.max(0, innerWidth - visibleWidth(out[i]));
+		out[i] = verticalEdge + out[i] + " ".repeat(pad) + verticalEdge;
 	}
 	return out;
 }
@@ -512,7 +541,10 @@ export function installBorderStatus(
 		}
 
 		render(width: number): string[] {
-			const lines = super.render(width);
+			// Reserve two columns for the rectangle's vertical edges so the
+			// framed interior rows span the full width.
+			const innerWidth = Math.max(1, width - 2);
+			const lines = super.render(innerWidth);
 			if (lines.length < 2) return lines;
 
 			const theme = ctx.ui.theme;

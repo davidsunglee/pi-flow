@@ -231,6 +231,16 @@ test("fitBorder truncates right text first when too narrow", () => {
 	assert.equal(visibleWidth(line), 12);
 });
 
+test("fitBorder applies custom corner caps", () => {
+	const line = fitBorder(" L ", " R ", 20, idBorder, idBorder, {
+		left: "╭",
+		right: "╮",
+	});
+	assert.equal(visibleWidth(line), 20);
+	assert.ok(line.startsWith("╭"), "left cap applied");
+	assert.ok(line.endsWith("╮"), "right cap applied");
+});
+
 // ─── composeBorderLines (integration of formatting + layout) ───────────────────
 
 function baseLines(): string[] {
@@ -381,11 +391,13 @@ test("composeBorderLines drops token window, then branch, then thinking as width
 });
 
 test("composeBorderLines preserves autocomplete matches and removes the interior stock border", () => {
-	const stockBorder = "─".repeat(80);
+	const width = 80;
+	const innerWidth = width - 2;
+	const stockBorder = "─".repeat(innerWidth);
 	const exactMatch = "→ status";
 	const out = composeBorderLines({
 		lines: [stockBorder, "/stat █", stockBorder, exactMatch],
-		width: 80,
+		width,
 		modelId: "gpt-5.5",
 		thinkingLabel: "xhigh",
 		contextPercent: 12.3,
@@ -398,13 +410,51 @@ test("composeBorderLines preserves autocomplete matches and removes the interior
 	});
 
 	assert.equal(out.length, 4, "rewrapping should not add vertical height");
-	assert.equal(out[2], exactMatch, "single exact command match must remain visible");
+	assert.equal(
+		out[2],
+		"│" + exactMatch.padEnd(innerWidth, " ") + "│",
+		"single exact command match stays visible, padded and framed to the full rectangle width",
+	);
+	assert.equal(
+		visibleWidth(out[2]),
+		width,
+		"the framed autocomplete row spans the full rectangle width",
+	);
 	assert.ok(out[3].includes("gpt-5.5"), "status border moves below autocomplete");
 	assert.equal(
-		out.slice(1, -1).some((line) => line === stockBorder),
+		out.slice(1, -1).some((line) => line.includes(stockBorder)),
 		false,
 		"the original editor bottom border should not remain as an extra interior line",
 	);
+});
+
+test("composeBorderLines frames the editor as a full rectangle with corners and vertical edges", () => {
+	const width = 40;
+	const innerWidth = width - 2;
+	const content = "  hello".padEnd(innerWidth, " ");
+	const out = composeBorderLines({
+		lines: ["─".repeat(innerWidth), content, "─".repeat(innerWidth)],
+		width,
+		modelId: "m",
+		thinkingLabel: "",
+		contextPercent: 50,
+		contextTokens: 1000,
+		contextWindow: 200000,
+		cwd: "/r",
+		branch: "main",
+		colorize: idColorize,
+		borderColor: idBorder,
+	});
+
+	for (const line of out) {
+		assert.equal(visibleWidth(line), width, "every row spans the full width");
+	}
+	assert.ok(out[0].startsWith("╭"), "top-left rounded corner");
+	assert.ok(out[0].endsWith("╮"), "top-right rounded corner");
+	assert.ok(out[out.length - 1].startsWith("╰"), "bottom-left rounded corner");
+	assert.ok(out[out.length - 1].endsWith("╯"), "bottom-right rounded corner");
+	assert.ok(out[1].startsWith("│"), "left vertical edge frames content");
+	assert.ok(out[1].endsWith("│"), "right vertical edge frames content");
 });
 
 // ─── createBranchTracker (rerender-on-change) ──────────────────────────────────
