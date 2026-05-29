@@ -116,17 +116,17 @@ test("token window routes used/total counts through their own semantic fields an
 	);
 });
 
-test("border tokens map model/context to accent, branch to success, symbol to borderMuted, and secondary fields to muted", () => {
+test("border tokens map model/context to accent, cwd to success, symbol to borderMuted, and secondary fields to muted", () => {
 	assert.equal(BORDER_TOKENS.model, "accent");
 	assert.equal(BORDER_TOKENS.context, "accent");
-	assert.equal(BORDER_TOKENS.branch, "success");
+	assert.equal(BORDER_TOKENS.cwd, "success");
 	assert.equal(BORDER_TOKENS.symbol, "borderMuted");
-	assert.equal(BORDER_TOKENS.cwd, "muted");
+	assert.equal(BORDER_TOKENS.branch, "muted");
 	assert.equal(BORDER_TOKENS.thinking, "muted");
 	assert.equal(BORDER_TOKENS.contextTokensUsed, "muted");
 	assert.equal(BORDER_TOKENS.contextWindowTotal, "muted");
 	// The secondary fields remain distinct keys even though they share the token.
-	const secondaryKeys = ["cwd", "thinking", "contextTokensUsed", "contextWindowTotal"];
+	const secondaryKeys = ["branch", "thinking", "contextTokensUsed", "contextWindowTotal"];
 	assert.equal(new Set(secondaryKeys).size, secondaryKeys.length);
 });
 
@@ -279,7 +279,7 @@ test("composeBorderLines places model+thinking lower-left, context lower-right, 
 		assert.notEqual(top, "TOP-BORDER", "top border should be rewritten");
 		assert.notEqual(bottom, "BOTTOM-BORDER", "bottom border should be rewritten");
 
-		// Upper-right: cwd (muted) and branch (success).
+		// Upper-right: branch (muted) and cwd (success).
 		assert.ok(top.includes("[cwd:~/proj]"), "cwd routed to cwd color with ~ substitution");
 		assert.ok(top.includes("[branch:feature]"), "branch routed to branch color");
 		// Branch renders before the cwd in the top-right block (position swap).

@@ -14,9 +14,9 @@
  * semantic fields so any one can be re-coloured later without touching the rest:
  *   - model              → "accent"      (footer modelName: accent / Nord nord8)
  *   - context %          → "accent"      (footer contextUsage: accent / Nord nord8)
- *   - branch             → "success"     (footer branch: success / Nord nord14)
+ *   - cwd                → "success"     (emphasized path / Nord nord14)
  *   - "/" and ellipsis   → "borderMuted" (footer symbols: borderMuted / Nord nord3)
- *   - cwd                → "muted"       (readable but subordinate)
+ *   - branch             → "muted"       (de-emphasized; own field, shares muted)
  *   - thinking           → "muted"       (de-emphasized; own field, shares muted)
  *   - contextTokensUsed  → "muted"       (de-emphasized; own field, shares muted)
  *   - contextWindowTotal → "muted"       (de-emphasized; own field, shares muted)
@@ -44,7 +44,7 @@ import type { StatusRendererHandle } from "./status/status.ts";
 // ─── Colour routing ─────────────────────────────────────────────────────────
 
 /**
- * Semantic border fields routed to theme tokens. `cwd`, `thinking`,
+ * Semantic border fields routed to theme tokens. `branch`, `thinking`,
  * `contextTokensUsed`, and `contextWindowTotal` are conceptually distinct
  * values that currently happen to share the `muted` token; keeping them as
  * separate fields lets a future theme change re-colour any one of them
@@ -66,15 +66,15 @@ export type BorderColorize = (field: BorderColorField, text: string) => string;
 /**
  * Theme tokens each border field resolves to. These mirror the footer's
  * resolved colours so the two stay visually consistent across themes. The four
- * secondary fields (cwd, thinking, used tokens, total window) are intentionally
+ * secondary fields (branch, thinking, used tokens, total window) are intentionally
  * de-emphasized to the same `muted` token while remaining distinct keys.
  */
 export const BORDER_TOKENS: Record<BorderColorField, ThemeColor> = {
 	model: "accent",
 	context: "accent",
-	branch: "success",
+	branch: "muted",
 	symbol: "borderMuted",
-	cwd: "muted",
+	cwd: "success",
 	thinking: "muted",
 	contextTokensUsed: "muted",
 	contextWindowTotal: "muted",
