@@ -72,11 +72,11 @@ test('pi loader does not load footer or border-status as independent extensions'
   const { extensions } = await loadResources();
   const loadedPaths = extensions.extensions.map(e => e.resolvedPath);
   assert.ok(
-    !loadedPaths.includes(pkgPath('extensions/footer.ts')),
+    !loadedPaths.includes(pkgPath('extensions/status/footer.ts')),
     'footer.ts must not be loaded as an independent extension'
   );
   assert.ok(
-    !loadedPaths.includes(pkgPath('extensions/border-status.ts')),
+    !loadedPaths.includes(pkgPath('extensions/status/border-status.ts')),
     'border-status.ts must not be loaded as an independent extension'
   );
 });

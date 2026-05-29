@@ -15,7 +15,7 @@ import type {
 	ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 
-import type { StatusRendererHandle } from "./status/status.ts";
+import type { StatusRendererHandle } from "./status.ts";
 
 export function installBlankFooter(
 	_pi: ExtensionAPI,

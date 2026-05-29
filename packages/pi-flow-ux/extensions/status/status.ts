@@ -9,9 +9,9 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 
-import { installBlankFooter } from "../blank-footer.ts";
-import { installBorderStatus } from "../border-status.ts";
-import { installFooter } from "../footer.ts";
+import { installBlankFooter } from "./blank-footer.ts";
+import { installBorderStatus } from "./border-status.ts";
+import { installFooter } from "./footer.ts";
 
 /** Where session status metadata is drawn, or `off` to draw none of it. */
 export type StatusPlacement = "border" | "footer" | "off";

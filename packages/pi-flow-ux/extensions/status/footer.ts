@@ -43,7 +43,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
-import type { StatusRendererHandle } from "./status/status.ts";
+import type { StatusRendererHandle } from "./status.ts";
 
 // ─── Colour type and user-configurable map ────────────────────────────────────
 

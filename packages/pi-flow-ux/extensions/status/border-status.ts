@@ -26,9 +26,10 @@
  * Because these tokens resolve per-render, theme switches update the border
  * colours automatically with no cached ANSI to invalidate.
  *
- * This extension installs only a custom editor (via setEditorComponent) and
- * never touches the footer, so it coexists with the footer extension until a
- * later decision removes the now-duplicated footer metadata.
+ * This internal status renderer installs only a custom editor (via
+ * setEditorComponent) and never touches the footer. The status coordinator
+ * pairs it with the blank-footer renderer so the border remains the only
+ * visible status surface.
  */
 
 import {
@@ -41,7 +42,7 @@ import {
 import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
-import type { StatusRendererHandle } from "./status/status.ts";
+import type { StatusRendererHandle } from "./status.ts";
 
 // ─── Colour routing ─────────────────────────────────────────────────────────
 

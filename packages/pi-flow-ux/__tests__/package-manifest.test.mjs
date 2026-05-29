@@ -30,8 +30,8 @@ const EXPECTED_EXTENSION_ENTRIES = [
 // modules behind the status coordinator; they must NOT be registered as
 // independent extensions in the manifest.
 const FORBIDDEN_EXTENSION_ENTRIES = [
-  'extensions/footer.ts',
-  'extensions/border-status.ts',
+  'extensions/status/footer.ts',
+  'extensions/status/border-status.ts',
 ];
 
 // Mirror of the glob helper used in aggregate-forwarding.test.mjs and
