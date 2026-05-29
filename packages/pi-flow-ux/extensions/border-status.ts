@@ -9,15 +9,17 @@
  *   top border:    ───────────────────────────────  ~/path branch ─
  *   bottom border: ─ model thinking ──────────  used/total context% ─
  *
- * Colour routing is kept in lock-step with the footer extension by resolving
- * the same theme tokens the footer's fields resolve to:
- *   - model            → "accent"      (footer modelName: accent / Nord nord8)
- *   - context %        → "accent"      (footer contextUsage: accent / Nord nord8)
- *   - token counts     → "muted"       (de-emphasized, same field as cwd)
- *   - branch           → "success"     (footer branch: success / Nord nord14)
- *   - "/" and ellipsis → "borderMuted" (footer symbols: borderMuted / Nord nord3)
- *   - cwd              → "muted"       (readable but subordinate)
- *   - thinking         → theme.getThinkingBorderColor(level) (matches footer)
+ * Emphasized fields stay in lock-step with the footer; the secondary fields are
+ * deliberately de-emphasized to the same `muted` token while remaining distinct
+ * semantic fields so any one can be re-coloured later without touching the rest:
+ *   - model              → "accent"      (footer modelName: accent / Nord nord8)
+ *   - context %          → "accent"      (footer contextUsage: accent / Nord nord8)
+ *   - branch             → "success"     (footer branch: success / Nord nord14)
+ *   - "/" and ellipsis   → "borderMuted" (footer symbols: borderMuted / Nord nord3)
+ *   - cwd                → "muted"       (readable but subordinate)
+ *   - thinking           → "muted"       (de-emphasized; own field, shares muted)
+ *   - contextTokensUsed  → "muted"       (de-emphasized; own field, shares muted)
+ *   - contextWindowTotal → "muted"       (de-emphasized; own field, shares muted)
  *
  * Because these tokens resolve per-render, theme switches update the border
  * colours automatically with no cached ANSI to invalidate.
@@ -41,15 +43,31 @@ import type { StatusRendererHandle } from "./status/status.ts";
 
 // ─── Colour routing ─────────────────────────────────────────────────────────
 
-/** Semantic border fields routed to theme tokens (thinking is handled separately). */
-export type BorderColorField = "model" | "context" | "branch" | "symbol" | "cwd";
+/**
+ * Semantic border fields routed to theme tokens. `cwd`, `thinking`,
+ * `contextTokensUsed`, and `contextWindowTotal` are conceptually distinct
+ * values that currently happen to share the `muted` token; keeping them as
+ * separate fields lets a future theme change re-colour any one of them
+ * independently.
+ */
+export type BorderColorField =
+	| "model"
+	| "context"
+	| "branch"
+	| "symbol"
+	| "cwd"
+	| "thinking"
+	| "contextTokensUsed"
+	| "contextWindowTotal";
 
 /** Colorize callback shared by the formatting helpers and composeBorderLines. */
 export type BorderColorize = (field: BorderColorField, text: string) => string;
 
 /**
  * Theme tokens each border field resolves to. These mirror the footer's
- * resolved colours so the two stay visually consistent across themes.
+ * resolved colours so the two stay visually consistent across themes. The four
+ * secondary fields (cwd, thinking, used tokens, total window) are intentionally
+ * de-emphasized to the same `muted` token while remaining distinct keys.
  */
 export const BORDER_TOKENS: Record<BorderColorField, ThemeColor> = {
 	model: "accent",
@@ -57,6 +75,9 @@ export const BORDER_TOKENS: Record<BorderColorField, ThemeColor> = {
 	branch: "success",
 	symbol: "borderMuted",
 	cwd: "muted",
+	thinking: "muted",
+	contextTokensUsed: "muted",
+	contextWindowTotal: "muted",
 };
 
 // ─── Formatting helpers ────────────────────────────────────────────────────────
@@ -102,8 +123,9 @@ export function formatContextPercent(
 }
 
 /**
- * Context token window as "used/total". Both counts use the cwd colour to
- * de-emphasize them relative to the percentage, while the slash stays subdued.
+ * Context token window as "used/total". The used count and total window each
+ * route through their own muted semantic field to de-emphasize them relative
+ * to the percentage, while the slash stays subdued on the symbol field.
  */
 export function formatContextTokenWindow(
 	tokens: number | null | undefined,
@@ -113,9 +135,9 @@ export function formatContextTokenWindow(
 	const used =
 		tokens === null || tokens === undefined ? "?" : formatTokens(tokens);
 	return (
-		colorize("cwd", used) +
+		colorize("contextTokensUsed", used) +
 		colorize("symbol", "/") +
-		colorize("cwd", formatTokens(contextWindow))
+		colorize("contextWindowTotal", formatTokens(contextWindow))
 	);
 }
 
@@ -282,8 +304,6 @@ export interface ComposeBorderLinesOptions {
 	modelId: string;
 	/** Thinking level label, or "" when thinking should not be shown. */
 	thinkingLabel: string;
-	/** Thinking border colour for the current level (theme.getThinkingBorderColor). */
-	thinkingColor: (text: string) => string;
 	contextPercent: number | null;
 	contextTokens: number | null;
 	contextWindow: number;
@@ -364,7 +384,7 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 	// Bottom-left: model + optional thinking.
 	let bottomLeft = colorize("model", p.modelId);
 	if (flags.showThinking) {
-		bottomLeft += " " + p.thinkingColor(p.thinkingLabel);
+		bottomLeft += " " + colorize("thinking", p.thinkingLabel);
 	}
 
 	// Bottom-right: optional used/total token window, then the context
@@ -492,7 +512,6 @@ export function installBorderStatus(
 			const thinkingLabel = ctx.model?.reasoning
 				? getThinkingLabel(thinkingLevel)
 				: "";
-			const thinkingColor = theme.getThinkingBorderColor(thinkingLevel);
 
 			const usage = ctx.getContextUsage();
 			const contextWindow =
@@ -503,7 +522,6 @@ export function installBorderStatus(
 				width,
 				modelId,
 				thinkingLabel,
-				thinkingColor,
 				contextPercent: usage?.percent ?? null,
 				contextTokens: usage?.tokens ?? null,
 				contextWindow,

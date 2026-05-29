@@ -104,24 +104,30 @@ test("unknown context percentage uses the subdued symbol color", () => {
 	assert.equal(formatContextPercent(null, markerColorize), "[symbol:?]");
 });
 
-test("token window routes counts to cwd color and the slash to symbol color", () => {
+test("token window routes used/total counts through their own semantic fields and the slash to symbol color", () => {
 	// formatTokens(9300) === "9.3k", formatTokens(200000) === "200k"
 	assert.equal(
 		formatContextTokenWindow(9300, 200000, markerColorize),
-		"[cwd:9.3k][symbol:/][cwd:200k]",
+		"[contextTokensUsed:9.3k][symbol:/][contextWindowTotal:200k]",
 	);
 	assert.equal(
 		formatContextTokenWindow(null, 200000, markerColorize),
-		"[cwd:?][symbol:/][cwd:200k]",
+		"[contextTokensUsed:?][symbol:/][contextWindowTotal:200k]",
 	);
 });
 
-test("border tokens map model/context to accent, branch to success, symbol to borderMuted, cwd to muted", () => {
+test("border tokens map model/context to accent, branch to success, symbol to borderMuted, and secondary fields to muted", () => {
 	assert.equal(BORDER_TOKENS.model, "accent");
 	assert.equal(BORDER_TOKENS.context, "accent");
 	assert.equal(BORDER_TOKENS.branch, "success");
 	assert.equal(BORDER_TOKENS.symbol, "borderMuted");
 	assert.equal(BORDER_TOKENS.cwd, "muted");
+	assert.equal(BORDER_TOKENS.thinking, "muted");
+	assert.equal(BORDER_TOKENS.contextTokensUsed, "muted");
+	assert.equal(BORDER_TOKENS.contextWindowTotal, "muted");
+	// The secondary fields remain distinct keys even though they share the token.
+	const secondaryKeys = ["cwd", "thinking", "contextTokensUsed", "contextWindowTotal"];
+	assert.equal(new Set(secondaryKeys).size, secondaryKeys.length);
 });
 
 // ─── computeBorderVisibility (priority dropper) ────────────────────────────────
@@ -237,7 +243,6 @@ test("composeBorderLines returns lines unchanged when there are fewer than two",
 		width: 80,
 		modelId: "gpt-5.5",
 		thinkingLabel: "",
-		thinkingColor: idBorder,
 		contextPercent: 10,
 		contextTokens: 1000,
 		contextWindow: 200000,
@@ -255,10 +260,11 @@ test("composeBorderLines places model+thinking lower-left, context lower-right, 
 	try {
 		const out = composeBorderLines({
 			lines: baseLines(),
-			width: 90,
+			// Wide enough that the marker colorize's inflated field names (which
+			// add visible width that real zero-width ANSI would not) all fit.
+			width: 160,
 			modelId: "gpt-5.5",
 			thinkingLabel: "xhigh",
-			thinkingColor: (t) => `<th:${t}>`,
 			contextPercent: 12.3,
 			contextTokens: 9300,
 			contextWindow: 200000,
@@ -277,18 +283,33 @@ test("composeBorderLines places model+thinking lower-left, context lower-right, 
 		assert.ok(top.includes("[cwd:~/proj]"), "cwd routed to cwd color with ~ substitution");
 		assert.ok(top.includes("[branch:feature]"), "branch routed to branch color");
 
-		// Lower-left: model (accent) and thinking via thinking border color.
+		// Lower-left: model (accent) and thinking de-emphasized via the thinking field.
 		assert.ok(bottom.includes("[model:gpt-5.5]"), "model routed to model color");
-		assert.ok(bottom.includes("<th:xhigh>"), "thinking uses the thinking border color");
+		assert.ok(bottom.includes("[thinking:xhigh]"), "thinking routed to its own muted field");
+		assert.ok(
+			!bottom.includes("<th:xhigh>"),
+			"thinking no longer uses the old thinking-border marker",
+		);
 
 		// Lower-right: used/total token window with subdued slash, then percentage.
 		assert.ok(bottom.includes("[context:12.3%]"), "percentage routed to context color");
-		assert.ok(bottom.includes("[cwd:9.3k]"), "used tokens routed to cwd color");
+		assert.ok(bottom.includes("[contextTokensUsed:9.3k]"), "used tokens routed to their own field");
 		assert.ok(bottom.includes("[symbol:/]"), "slash uses subdued symbol color");
-		assert.ok(bottom.includes("[cwd:200k]"), "total tokens routed to cwd color");
-		// Token counts render to the left of the percentage (percentage rightmost).
+		assert.ok(bottom.includes("[contextWindowTotal:200k]"), "total tokens routed to their own field");
+		// Used/total render before the percentage (percentage rightmost).
 		assert.ok(
-			bottom.indexOf("[cwd:9.3k]") < bottom.indexOf("[context:12.3%]"),
+			bottom.indexOf("[contextTokensUsed:9.3k]") <
+				bottom.indexOf("[symbol:/]"),
+			"used tokens appear before the slash",
+		);
+		assert.ok(
+			bottom.indexOf("[symbol:/]") <
+				bottom.indexOf("[contextWindowTotal:200k]"),
+			"slash appears before the total window",
+		);
+		assert.ok(
+			bottom.indexOf("[contextWindowTotal:200k]") <
+				bottom.indexOf("[context:12.3%]"),
 			"token window appears before the context percentage",
 		);
 	} finally {
@@ -302,7 +323,6 @@ test("composeBorderLines keeps model and context percent at very narrow widths",
 		width: 24,
 		modelId: "gpt",
 		thinkingLabel: "high",
-		thinkingColor: idBorder,
 		contextPercent: 50,
 		contextTokens: 1000,
 		contextWindow: 200000,
@@ -325,7 +345,6 @@ test("composeBorderLines drops token window, then branch, then thinking as width
 		lines: baseLines(),
 		modelId: "m",
 		thinkingLabel: "lo",
-		thinkingColor: idBorder,
 		contextPercent: 50,
 		contextTokens: 1000,
 		contextWindow: 200000,
@@ -364,7 +383,6 @@ test("composeBorderLines preserves autocomplete matches and removes the interior
 		width: 80,
 		modelId: "gpt-5.5",
 		thinkingLabel: "xhigh",
-		thinkingColor: idBorder,
 		contextPercent: 12.3,
 		contextTokens: 9300,
 		contextWindow: 200000,
