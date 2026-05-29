@@ -149,6 +149,12 @@ export function formatContextTokenWindow(
  * Fit left/right status text into a single border line of the given width.
  * Truncates right text first, then left text, ANSI-safely, never breaking the
  * corner dashes. Ported from pi's border-status-editor example.
+ *
+ * `shoulders` optionally draws one extra border-coloured dash just inside the
+ * matching corner, nudging that status block one column toward the centre. The
+ * shoulder is counted in the fixed overhead so the line still spans exactly
+ * `width`, and is suppressed at widths too narrow to hold the corners plus
+ * shoulders so the tight-width behaviour is unchanged.
  */
 export function fitBorder(
 	left: string,
@@ -157,13 +163,23 @@ export function fitBorder(
 	border: (text: string) => string,
 	fill: (text: string) => string = border,
 	caps: { left: string; right: string } = { left: "─", right: "─" },
+	shoulders: { left: boolean; right: boolean } = { left: false, right: false },
 ): string {
 	if (width <= 0) return "";
 	if (width === 1) return border(caps.left);
 
+	let leftShoulder = shoulders.left;
+	let rightShoulder = shoulders.right;
+	// Without room for the corners plus shoulders, drop the shoulders so the
+	// line never exceeds `width` at very narrow terminals.
+	if (width < 2 + (leftShoulder ? 1 : 0) + (rightShoulder ? 1 : 0)) {
+		leftShoulder = false;
+		rightShoulder = false;
+	}
+
 	let leftText = left;
 	let rightText = right;
-	const fixedWidth = 2;
+	const fixedWidth = 2 + (leftShoulder ? 1 : 0) + (rightShoulder ? 1 : 0);
 	const minimumGap = 3;
 
 	while (
@@ -193,7 +209,9 @@ export function fitBorder(
 		0,
 		width - fixedWidth - visibleWidth(leftText) - visibleWidth(rightText),
 	);
-	return `${border(caps.left)}${leftText}${fill("─".repeat(gapWidth))}${rightText}${border(caps.right)}`;
+	const leftCap = border(caps.left) + (leftShoulder ? border("─") : "");
+	const rightCap = (rightShoulder ? border("─") : "") + border(caps.right);
+	return `${leftCap}${leftText}${fill("─".repeat(gapWidth))}${rightText}${rightCap}`;
 }
 
 /** Return the last `maxWidth` characters of `text` (plain text, no ANSI). */
@@ -274,6 +292,12 @@ const CORNERS = 2; // leading + trailing corner dash
 const GAP = 3; // fitBorder minimumGap between left and right blocks
 const BLOCK_PAD = 2; // one leading + one trailing space padding per status block
 const MIN_CWD_CHARS = 4; // minimum cwd chars kept visible when preserving branch
+// Shoulder dashes drawn just inside the corners to nudge each block one column
+// toward the centre. The bottom line carries one inside each corner (bottom-left
+// shifts right, bottom-right shifts left); the top line carries one inside the
+// right corner only (top-right shifts left; top-left is unchanged).
+const SHOULDERS_BOTTOM = 2;
+const SHOULDER_TOP = 1;
 
 /**
  * Pure priority dropper. Model id and context percentage are always kept; the
@@ -290,13 +314,19 @@ export function computeBorderVisibility(f: BorderFieldWidths): BorderVisibility 
 	const bottomFits = (): boolean => {
 		const left = f.modelWidth + (showThinking ? f.thinkingWidth : 0);
 		const right = f.pctWidth + (showTokenWindow ? f.tokenWindowWidth : 0);
-		return CORNERS + BLOCK_PAD + left + BLOCK_PAD + right + GAP <= f.width;
+		return (
+			CORNERS + SHOULDERS_BOTTOM + BLOCK_PAD + left + BLOCK_PAD + right + GAP <=
+			f.width
+		);
 	};
 
 	const topFits = (): boolean => {
 		if (!showBranch) return true; // cwd alone can always tail-truncate to fit
 		const minCwd = f.ellipsisWidth + MIN_CWD_CHARS;
-		return CORNERS + BLOCK_PAD + minCwd + f.branchWidth + GAP <= f.width;
+		return (
+			CORNERS + SHOULDER_TOP + BLOCK_PAD + minCwd + f.branchWidth + GAP <=
+			f.width
+		);
 	};
 
 	const allFit = (): boolean => bottomFits() && topFits();
@@ -413,7 +443,7 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 		: percent;
 
 	// Top-right: optional branch + cwd, tail-truncated to fit its block budget.
-	const topRightBudget = width - CORNERS - GAP - BLOCK_PAD;
+	const topRightBudget = width - CORNERS - SHOULDER_TOP - GAP - BLOCK_PAD;
 	const topRight = fitTopRight(
 		cwdStr,
 		flags.showBranch ? p.branch : undefined,
@@ -427,10 +457,16 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 	// spans exactly `width`.
 	const innerWidth = Math.max(1, width - 2);
 
-	const topLine = fitBorder("", ` ${topRight} `, width, p.borderColor, p.borderColor, {
-		left: "╭",
-		right: "╮",
-	});
+	const topLine = fitBorder(
+		"",
+		` ${topRight} `,
+		width,
+		p.borderColor,
+		p.borderColor,
+		{ left: "╭", right: "╮" },
+		// Top-right nudges left; the top-left corner stays put.
+		{ left: false, right: true },
+	);
 	const bottomLine = fitBorder(
 		` ${bottomLeft} `,
 		` ${bottomRight} `,
@@ -438,6 +474,8 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 		p.borderColor,
 		p.borderColor,
 		{ left: "╰", right: "╯" },
+		// Bottom-left nudges right, bottom-right nudges left.
+		{ left: true, right: true },
 	);
 	const bottomBorderIndex = findEditorBottomBorderIndex(p.lines, innerWidth);
 

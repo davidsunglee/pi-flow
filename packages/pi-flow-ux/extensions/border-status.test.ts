@@ -152,9 +152,11 @@ test("wide terminal keeps every optional border field visible", () => {
 });
 
 test("token window drops before branch", () => {
-	// bottom with token window: 7 + 5 + 10 + 9 = 31 > 30 → drop token window.
-	// bottom without: 7 + 5 + 9 = 21 ≤ 30.
-	// top with branch: 12 + 8 = 20 ≤ 30 → branch survives.
+	// bottom overhead 11 (corners 2 + shoulders 2 + 2×block-pad 4 + gap 3).
+	// bottom with token window: 7 + 5 + 10 + 11 = 33 > 30 → drop token window.
+	// bottom without: 7 + 5 + 11 = 23 ≤ 30.
+	// top with branch: 13 (corners 2 + shoulder 1 + block-pad 2 + min-cwd 5 + gap 3)
+	//   + 8 = 21 ≤ 30 → branch survives.
 	const flags = computeBorderVisibility(
 		bw(30, {
 			modelWidth: 7,
@@ -171,8 +173,8 @@ test("token window drops before branch", () => {
 });
 
 test("branch drops before thinking", () => {
-	// top with branch needs width ≥ 12 + branchWidth(8) = 20; at 19 branch drops.
-	// bottom with thinking: 3 + 3 + 2 + 9 = 17 ≤ 19 → thinking survives.
+	// top with branch needs width ≥ 13 + branchWidth(8) = 21; at 19 branch drops.
+	// bottom with thinking: 3 + 3 + 2 + 11 = 19 ≤ 19 → thinking survives.
 	const flags = computeBorderVisibility(
 		bw(19, {
 			modelWidth: 3,
@@ -189,7 +191,7 @@ test("branch drops before thinking", () => {
 });
 
 test("thinking drops last among optional border fields", () => {
-	// bottom with thinking: 3 + 3 + 2 + 9 = 17 > 16 → thinking drops.
+	// bottom with thinking: 3 + 3 + 2 + 11 = 19 > 16 → thinking drops.
 	const flags = computeBorderVisibility(
 		bw(16, {
 			modelWidth: 3,
@@ -455,6 +457,44 @@ test("composeBorderLines frames the editor as a full rectangle with corners and 
 	assert.ok(out[out.length - 1].endsWith("╯"), "bottom-right rounded corner");
 	assert.ok(out[1].startsWith("│"), "left vertical edge frames content");
 	assert.ok(out[1].endsWith("│"), "right vertical edge frames content");
+});
+
+test("composeBorderLines nudges bottom-left right and bottom-right/top-right left with shoulder dashes inside the corners", () => {
+	const out = composeBorderLines({
+		lines: baseLines(),
+		width: 60,
+		modelId: "gpt",
+		thinkingLabel: "high",
+		contextPercent: 50,
+		contextTokens: 1000,
+		contextWindow: 200000,
+		cwd: "/r",
+		branch: "main",
+		colorize: idColorize,
+		borderColor: idBorder,
+	});
+	const top = out[0];
+	const bottom = out[2];
+
+	// Top-right shifts one column inward: a border dash sits just inside the
+	// right corner, between the status text's trailing pad and the corner glyph.
+	assert.ok(top.endsWith("─╮"), "top-right gains a shoulder dash before the corner");
+	// The top-left corner is untouched (it leads straight into the fill dashes).
+	assert.ok(top.startsWith("╭"), "top-left corner is unchanged");
+
+	// Bottom-left shifts one column inward: a shoulder dash follows the corner
+	// before the status text's leading pad.
+	assert.ok(
+		bottom.startsWith("╰─ "),
+		"bottom-left gains a shoulder dash after the corner",
+	);
+	// Bottom-right shifts one column inward: a shoulder dash before the corner.
+	assert.ok(bottom.endsWith("─╯"), "bottom-right gains a shoulder dash before the corner");
+
+	// Every framed row still spans exactly the requested width.
+	for (const line of out) {
+		assert.equal(visibleWidth(line), 60, "shoulder dashes preserve the full width");
+	}
 });
 
 test("composeBorderLines keeps every line within the requested width at extremely narrow widths", () => {
