@@ -28,6 +28,12 @@ export interface WorkingSnapshot {
   visible: boolean;
   state: WorkingState;
   settings: WorkingSettings;
+  /**
+   * True while the editor border owns the compact working indicator (status
+   * placement = border). The host loader-row indicator/message extensions stand
+   * down in that case so the border is the only animated working surface.
+   */
+  borderOwned: boolean;
 }
 
 const FOOTER_STATUS_KEY = "working-indicator";
@@ -215,6 +221,9 @@ class WorkingCoordinator {
   // using a plain depth counter — lets us collapse those into one in-flight
   // unit so the same invocation is never double-counted.
   private inflightToolCalls = new Set<string>();
+  // Set by the border-status renderer while it owns the compact indicator, so
+  // the host loader-row indicator/message extensions know to stand down.
+  private borderOwnsIndicator = false;
   private listeners = new Set<(snapshot: WorkingSnapshot) => void>();
   private runtimeRegistered = false;
   private commandRegistered = false;
@@ -231,7 +240,18 @@ class WorkingCoordinator {
       visible: this.activeTurn,
       state: this.resolveState(),
       settings: cloneSettings(this.settings),
+      borderOwned: this.borderOwnsIndicator,
     };
+  }
+
+  // Toggle whether the editor border owns the compact working indicator. Emits
+  // on change so the host loader-row indicator/message extensions re-render and
+  // stand down (or resume) immediately, including across runtime `/status`
+  // placement switches.
+  setBorderOwnsIndicator(value: boolean): void {
+    if (this.borderOwnsIndicator === value) return;
+    this.borderOwnsIndicator = value;
+    this.emit();
   }
 
   subscribe(listener: (snapshot: WorkingSnapshot) => void): () => void {

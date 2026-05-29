@@ -59,7 +59,13 @@ The status extension is a single coordinator that owns where session metadata is
 - **`footer`** — draws metadata in a custom footer below the editor.
 - **`off`** — installs neither; Pi's built-in/default footer is left in place.
 
-The border and footer renderers are internal implementation details of the coordinator; they are no longer loaded as independent extensions. The working indicator/message behavior is independent of status placement and is unaffected by your choice here.
+The border and footer renderers are internal implementation details of the coordinator; they are no longer loaded as independent extensions.
+
+Working-state placement follows the status placement:
+
+- **`border`** — a compact working indicator is embedded in the editor's bottom border, immediately to the left of the model name (see [Border placement details](#border-placement-details)). The host loader-row spinner and the working **message** stand down so they don't compete; full working messages are intentionally kept out of the border.
+- **`footer`** — the full working indicator and working message remain in their usual location with all current effects (gleam, rainbow, per-state styling).
+- **`off`** — unchanged; the working indicator and message behave exactly as configured, independent of any border/footer customization.
 
 ### The `/status` command
 
@@ -72,9 +78,16 @@ The selected placement persists across Pi reloads and sessions.
 
 When `border` is active:
 
-- **Lower-left border:** model id, plus the thinking level when reasoning is enabled.
+- **Lower-left border:** a fixed-width working-activity slot, then the model id, plus the thinking level when reasoning is enabled.
 - **Lower-right border:** the `used/total` context-window token counts followed by the context percentage used, with the percentage as the rightmost value (e.g. `9.3k/200k 12.3%`).
 - **Upper-right border:** the working directory (with `~` home substitution).
+
+The activity slot sits just left of the model name and reuses the working indicator's own frames, so the configured spinner/pulse/wave shape and the gleam/rainbow styling for the active, tool-use, and thinking states all carry over. While Pi is working the slot animates; when idle it is filled with border dashes so the border stays continuous and the model name never shifts column. Only single-width glyphs are used, the slot keeps a constant visible width across every frame, and at narrow widths it follows the same priority/drop rules as the other optional fields.
+
+```
+border active:  ╰─ ⠋ claude-sonnet-4-5 xhigh ───── 42k/200k 21.0% ─╯
+border idle:    ╰─── claude-sonnet-4-5 xhigh ───── 42k/200k 21.0% ─╯
+```
 
 Because the border already carries the model, context, and project metadata, border placement also suppresses Pi's built-in footer (it installs a footer that renders nothing) so the same information isn't duplicated below the editor. Switching to `footer` or `off` restores the normal footer behavior automatically.
 

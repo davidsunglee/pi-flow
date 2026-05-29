@@ -30,6 +30,14 @@ export function createExtension(
       if (!ctxRef) return;
       const snapshot = coordinator.getSnapshot();
 
+      if (snapshot.borderOwned) {
+        // Border placement keeps full messages out of the border and does not
+        // relocate them elsewhere, so stand down to the host default message.
+        stopAnimation();
+        ctxRef.ui.setWorkingMessage();
+        return;
+      }
+
       if (!snapshot.visible || currentMessage === undefined) {
         stopAnimation();
         ctxRef.ui.setWorkingMessage();
@@ -54,6 +62,13 @@ export function createExtension(
     function syncAnimation(): void {
       if (!ctxRef || currentMessage === undefined) return;
       const snapshot = coordinator.getSnapshot();
+      if (snapshot.borderOwned) {
+        // The border owns the working surface; never animate a host message.
+        stopAnimation();
+        frame = 0;
+        render();
+        return;
+      }
       const style = snapshot.settings[snapshot.state];
       const animate = snapshot.visible && ctxRef.hasUI && styledRenderingSupported && shouldAnimateStyle(style);
 

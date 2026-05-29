@@ -41,6 +41,14 @@ import {
 import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
+import {
+	buildWorkingIndicator,
+	pickWorkingIndicatorFrame,
+} from "../working/effects.ts";
+import {
+	getWorkingCoordinator,
+	type WorkingSnapshot,
+} from "../working/working.ts";
 import type { StatusRendererHandle } from "./status.ts";
 
 // ─── Colour routing ─────────────────────────────────────────────────────────
@@ -255,6 +263,9 @@ export interface BorderFieldWidths {
 	tokenWindowWidth: number; // bottom-right optional; includes leading separator space
 	hasThinking: boolean;
 	hasTokenWindow: boolean;
+	// Fixed-width activity slot reserved before the model name (0 when no slot).
+	// Counted in the bottom-left budget so the optional fields drop correctly.
+	activitySlotWidth?: number;
 }
 
 /** Surviving optional-field visibility after the priority dropper has run. */
@@ -286,7 +297,10 @@ export function computeBorderVisibility(f: BorderFieldWidths): BorderVisibility 
 	let showThinking = f.hasThinking;
 
 	const bottomFits = (): boolean => {
-		const left = f.modelWidth + (showThinking ? f.thinkingWidth : 0);
+		const left =
+			(f.activitySlotWidth ?? 0) +
+			f.modelWidth +
+			(showThinking ? f.thinkingWidth : 0);
 		const right = f.pctWidth + (showTokenWindow ? f.tokenWindowWidth : 0);
 		return (
 			CORNERS + SHOULDERS_BOTTOM + BLOCK_PAD + left + BLOCK_PAD + right + GAP <=
@@ -301,6 +315,48 @@ export function computeBorderVisibility(f: BorderFieldWidths): BorderVisibility 
 }
 
 // ─── Border line composition ───────────────────────────────────────────────────
+
+/**
+ * Compact working-state indicator embedded in the bottom border, just left of
+ * the model name. When `active`, `glyph` is a pre-styled single-visible-width
+ * frame (the working indicator's own spinner/pulse/wave glyph, already coloured
+ * with any gleam/rainbow effects). When idle, the slot is filled with border
+ * dashes so the border stays visually continuous and the model column never
+ * jitters between idle and active frames.
+ */
+export interface BorderActivity {
+	active: boolean;
+	/** Pre-styled, single-visible-width indicator glyph; used only when active. */
+	glyph: string;
+}
+
+// Visible columns the activity slot adds to the bottom-left block beyond the
+// existing block padding: one indicator column plus its trailing separator
+// (active), or two border dashes (idle). Both keep the model column stable.
+const ACTIVITY_SLOT_WIDTH = 2;
+
+/**
+ * Map a working snapshot to the border activity slot. While a turn is active the
+ * slot shows the working indicator's own styled frame for the current state
+ * (reusing the shared frame generation, so spinner/pulse/wave shape, gleam, and
+ * rainbow styling all carry over); otherwise the slot is idle and the border
+ * fills it. `nowMs` selects the animation frame from a wall-clock timestamp.
+ */
+export function resolveBorderActivity(
+	snapshot: WorkingSnapshot,
+	nowMs: number,
+): BorderActivity {
+	if (!snapshot.visible) return { active: false, glyph: "" };
+	const style = snapshot.settings[snapshot.state];
+	return {
+		active: true,
+		glyph: pickWorkingIndicatorFrame(
+			snapshot.settings.indicatorShape,
+			style,
+			nowMs,
+		),
+	};
+}
 
 export interface ComposeBorderLinesOptions {
 	/**
@@ -318,6 +374,12 @@ export interface ComposeBorderLinesOptions {
 	cwd: string;
 	colorize: BorderColorize;
 	borderColor: (text: string) => string;
+	/**
+	 * Optional compact working-state slot. When present, a fixed-width activity
+	 * slot is reserved before the model name (rendering `glyph` while active and
+	 * border fill while idle). When omitted, no slot is reserved.
+	 */
+	activity?: BorderActivity;
 }
 
 const ANSI_ESCAPE_RE =
@@ -380,12 +442,28 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 		tokenWindowWidth,
 		hasThinking: thinkingWidth > 0,
 		hasTokenWindow: tokenWindowWidth > 0,
+		activitySlotWidth: p.activity ? ACTIVITY_SLOT_WIDTH : 0,
 	});
 
-	// Bottom-left: model + optional thinking.
+	// Bottom-left: optional activity slot, then model + optional thinking.
 	let bottomLeft = colorize("model", p.modelId);
 	if (flags.showThinking) {
 		bottomLeft += " " + colorize("thinking", p.thinkingLabel);
+	}
+
+	// Compose the bottom-left status text together with its surrounding block
+	// padding. The activity slot, when present, occupies a fixed two columns
+	// before the model so the model column stays put across idle/active frames:
+	//   active: " ⠋ model "   (leading pad, glyph, separator, …, trailing pad)
+	//   idle:   "── model "   (two border dashes fill the glyph + separator)
+	let bottomLeftBlock: string;
+	if (p.activity) {
+		bottomLeftBlock =
+			p.activity.active && p.activity.glyph
+				? ` ${p.activity.glyph} ${bottomLeft} `
+				: `${p.borderColor("──")} ${bottomLeft} `;
+	} else {
+		bottomLeftBlock = ` ${bottomLeft} `;
 	}
 
 	// Bottom-right: optional used/total token window, then the context
@@ -418,7 +496,7 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 		{ left: false, right: true },
 	);
 	const bottomLine = fitBorder(
-		` ${bottomLeft} `,
+		bottomLeftBlock,
 		` ${bottomRight} `,
 		width,
 		p.borderColor,
@@ -466,15 +544,71 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 // ─── Renderer install ──────────────────────────────────────────────────────────
 
 /**
+ * Frame cadence for the border activity slot, or `undefined` when the current
+ * indicator is static (a single frame) and needs no animation timer. The
+ * cadence mirrors the working indicator's own per-shape timing.
+ */
+function borderActivityCadenceMs(snapshot: WorkingSnapshot): number | undefined {
+	const style = snapshot.settings[snapshot.state];
+	const { frames, intervalMs } = buildWorkingIndicator(
+		snapshot.settings.indicatorShape,
+		style,
+	);
+	if (!frames || frames.length <= 1) return undefined;
+	return intervalMs ?? 120;
+}
+
+/**
  * Install the border-status editor into the active session and return a handle
  * the status coordinator uses to remove it. The border editor is one of the
  * mutually-exclusive status placements; the coordinator owns the session
  * lifecycle, so this module no longer registers its own session handlers.
+ *
+ * While installed, the border owns the compact working indicator: it flags the
+ * shared working coordinator so the host loader-row indicator/message
+ * extensions stand down, consumes the working snapshot to draw the activity
+ * slot, and drives a modest animation timer so the slot animates independently
+ * of the host's own loader.
  */
 export function installBorderStatus(
 	pi: ExtensionAPI,
 	ctx: ExtensionContext,
 ): StatusRendererHandle {
+	const working = getWorkingCoordinator();
+	let editor: BorderStatusEditor | undefined;
+	let animationTimer: ReturnType<typeof setInterval> | undefined;
+	let timerCadence: number | undefined;
+
+	function stopAnimation(): void {
+		if (animationTimer !== undefined) {
+			clearInterval(animationTimer);
+			animationTimer = undefined;
+		}
+		timerCadence = undefined;
+	}
+
+	// Re-render the border on every working-state change, and run a timer at the
+	// indicator's cadence while a turn is active so the slot animates. The timer
+	// only requests a redraw (cheap); the frame itself is recomputed from the
+	// snapshot and wall clock inside render().
+	function syncAnimation(snapshot: WorkingSnapshot): void {
+		editor?.requestRedraw();
+		const cadence = snapshot.visible
+			? borderActivityCadenceMs(snapshot)
+			: undefined;
+		if (cadence === undefined) {
+			stopAnimation();
+			return;
+		}
+		if (animationTimer !== undefined && timerCadence === cadence) return;
+		stopAnimation();
+		timerCadence = cadence;
+		animationTimer = setInterval(() => editor?.requestRedraw(), cadence);
+	}
+
+	const unsubscribe = working.subscribe(syncAnimation);
+	working.setBorderOwnsIndicator(true);
+
 	class BorderStatusEditor extends CustomEditor {
 		constructor(
 			tui: TUI,
@@ -482,6 +616,11 @@ export function installBorderStatus(
 			keybindings: KeybindingsManager,
 		) {
 			super(tui, theme, keybindings, { paddingX: 0 });
+		}
+
+		/** Ask the TUI to re-render so the animated activity slot advances. */
+		requestRedraw(): void {
+			this.tui.requestRender();
 		}
 
 		render(width: number): string[] {
@@ -517,17 +656,21 @@ export function installBorderStatus(
 				cwd: ctx.cwd,
 				colorize,
 				borderColor: (text: string) => this.borderColor(text),
+				activity: resolveBorderActivity(working.getSnapshot(), Date.now()),
 			});
 		}
 	}
 
-	ctx.ui.setEditorComponent(
-		(tui, theme, keybindings) =>
-			new BorderStatusEditor(tui, theme, keybindings),
-	);
+	ctx.ui.setEditorComponent((tui, theme, keybindings) => {
+		editor = new BorderStatusEditor(tui, theme, keybindings);
+		return editor;
+	});
 
 	return {
 		dispose() {
+			stopAnimation();
+			unsubscribe();
+			working.setBorderOwnsIndicator(false);
 			ctx.ui.setEditorComponent(undefined);
 		},
 	};

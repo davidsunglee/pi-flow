@@ -132,3 +132,28 @@ export function buildWorkingIndicator(shape: IndicatorShape, style: WorkingStyle
     ...(intervalMs !== undefined ? { intervalMs } : {}),
   };
 }
+
+// Cadence used to pick a frame for shapes that carry no interval of their own
+// (e.g. the single-frame dot). Keeps the time-based frame selection well-defined
+// without affecting which glyph a one-frame shape resolves to.
+const DEFAULT_INDICATOR_INTERVAL_MS = 120;
+
+/**
+ * Pick the styled indicator frame for the given moment, reusing the exact frame
+ * generation (and thus spinner/pulse/wave shape, gleam, and rainbow styling) of
+ * `buildWorkingIndicator`. Callers that drive their own render loop — such as
+ * the border activity slot — use this to animate from a wall-clock timestamp
+ * instead of relying on the host's loader animation.
+ */
+export function pickWorkingIndicatorFrame(
+  shape: IndicatorShape,
+  style: WorkingStyle,
+  nowMs: number,
+): string {
+  const { frames, intervalMs } = buildWorkingIndicator(shape, style);
+  const list = frames ?? [];
+  if (list.length === 0) return "";
+  const interval = intervalMs ?? DEFAULT_INDICATOR_INTERVAL_MS;
+  const index = Math.floor(Math.max(0, nowMs) / interval) % list.length;
+  return list[index]!;
+}

@@ -6,7 +6,7 @@ import path from "node:path";
 
 import { createExtension } from "./indicator.ts";
 import { buildWorkingIndicator } from "./effects.ts";
-import { resetWorkingCoordinatorForTests } from "./working.ts";
+import { getWorkingCoordinator, resetWorkingCoordinatorForTests } from "./working.ts";
 
 type EventHandler = (event: any, ctx: any) => void | Promise<void>;
 type CommandDef = { description: string; handler: (args: string, ctx: any) => void | Promise<void> };
@@ -123,6 +123,45 @@ test("indicator hides when a turn ends and re-appears on the next turn_start", a
 
     await emit("turn_start", {}, ctx);
     assert.ok((indicatorCalls.at(-1) as any)?.frames, "next turn_start re-applies the indicator");
+  });
+});
+
+test("indicator stands down to an empty host loader frame while the border owns the working indicator", async () => {
+  await withTmpFile(async (filePath, dir) => {
+    const pkg = path.join(dir, "package-default-missing.json");
+    const coordinator = getWorkingCoordinator(filePath, pkg);
+    coordinator.setBorderOwnsIndicator(true);
+
+    const { emit } = bootExtension(filePath, pkg);
+    const { ctx, indicatorCalls } = makeCtx();
+    await emit("session_start", { reason: "startup" }, ctx);
+    await emit("turn_start", {}, ctx);
+
+    // The border draws the compact indicator, so the host loader-row spinner is
+    // hidden (frames: []) rather than showing a competing custom spinner.
+    assert.deepEqual(
+      indicatorCalls.at(-1),
+      { frames: [] },
+      "host loader spinner is hidden while the border owns the indicator",
+    );
+  });
+});
+
+test("indicator resumes its custom host loader frames once the border releases ownership", async () => {
+  await withTmpFile(async (filePath, dir) => {
+    const pkg = path.join(dir, "package-default-missing.json");
+    const coordinator = getWorkingCoordinator(filePath, pkg);
+    coordinator.setBorderOwnsIndicator(true);
+
+    const { emit } = bootExtension(filePath, pkg);
+    const { ctx, indicatorCalls } = makeCtx();
+    await emit("session_start", { reason: "startup" }, ctx);
+    await emit("turn_start", {}, ctx);
+    assert.deepEqual(indicatorCalls.at(-1), { frames: [] }, "hidden while owned");
+
+    coordinator.setBorderOwnsIndicator(false);
+    const resumed = indicatorCalls.at(-1) as any;
+    assert.ok(resumed?.frames?.length, "custom host indicator returns when ownership is released");
   });
 });
 

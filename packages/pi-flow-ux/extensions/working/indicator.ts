@@ -40,6 +40,12 @@ export function createExtension(
     const render = () => {
       if (!ctxRef) return;
       const snapshot = coordinator.getSnapshot();
+      if (snapshot.borderOwned) {
+        // The editor border draws the compact indicator; hide the host
+        // loader-row spinner so the two don't compete.
+        ctxRef.ui.setWorkingIndicator({ frames: [] });
+        return;
+      }
       if (!snapshot.visible) {
         // Explicitly restore the host default when we're idle so the custom
         // indicator does not linger on the screen between turns.

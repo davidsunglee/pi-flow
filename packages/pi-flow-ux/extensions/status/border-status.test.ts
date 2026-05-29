@@ -14,8 +14,11 @@ import {
 	formatCwd,
 	getThinkingLabel,
 	installBorderStatus,
+	resolveBorderActivity,
 	type BorderFieldWidths,
 } from "./border-status.ts";
+import { pickWorkingIndicatorFrame } from "../working/effects.ts";
+import type { WorkingSnapshot } from "../working/working.ts";
 import { visibleWidth } from "@earendil-works/pi-tui";
 
 /** Marker colorize for routing assertions: wraps text in `[field:text]`. */
@@ -484,6 +487,104 @@ test("composeBorderLines nudges bottom-left right and bottom-right/top-right lef
 	}
 });
 
+// ─── Activity slot (border working indicator) ──────────────────────────────────
+
+test("composeBorderLines renders the active indicator glyph in the activity slot before the model", () => {
+	const out = composeBorderLines({
+		lines: baseLines(),
+		width: 60,
+		modelId: "claude",
+		thinkingLabel: "",
+		contextPercent: 21,
+		contextTokens: 42000,
+		contextWindow: 200000,
+		cwd: "/r",
+		colorize: idColorize,
+		borderColor: idBorder,
+		activity: { active: true, glyph: "⠋" },
+	});
+	const bottom = out[2];
+	// Active slot: corner + shoulder, a space, the glyph, a space, then model.
+	assert.ok(
+		bottom.startsWith("╰─ ⠋ claude"),
+		`active glyph should sit before the model: ${bottom}`,
+	);
+	assert.equal(visibleWidth(bottom), 60, "bottom border still spans the full width");
+});
+
+test("composeBorderLines renders idle border fill in the activity slot", () => {
+	const out = composeBorderLines({
+		lines: baseLines(),
+		width: 60,
+		modelId: "claude",
+		thinkingLabel: "",
+		contextPercent: 21,
+		contextTokens: 42000,
+		contextWindow: 200000,
+		cwd: "/r",
+		colorize: idColorize,
+		borderColor: idBorder,
+		activity: { active: false, glyph: "" },
+	});
+	const bottom = out[2];
+	// Idle slot: the glyph column is filled with border dashes so the border
+	// stays visually continuous instead of leaving a gap.
+	assert.ok(
+		bottom.startsWith("╰─── claude"),
+		`idle slot should be filled with border dashes: ${bottom}`,
+	);
+	assert.equal(visibleWidth(bottom), 60, "bottom border still spans the full width");
+});
+
+test("composeBorderLines keeps the model column stable across idle and active activity frames", () => {
+	const opts = {
+		lines: baseLines(),
+		width: 60,
+		modelId: "claude",
+		thinkingLabel: "xhigh",
+		contextPercent: 21,
+		contextTokens: 42000,
+		contextWindow: 200000,
+		cwd: "/r",
+		colorize: idColorize,
+		borderColor: idBorder,
+	};
+	const idle = composeBorderLines({ ...opts, activity: { active: false, glyph: "" } });
+	const spinner = composeBorderLines({ ...opts, activity: { active: true, glyph: "⠋" } });
+	const pulse = composeBorderLines({ ...opts, activity: { active: true, glyph: "●" } });
+	const wave = composeBorderLines({ ...opts, activity: { active: true, glyph: "≈" } });
+
+	const modelCol = (line: string) => line.indexOf("claude");
+	const base = modelCol(idle[2]);
+	assert.ok(base > 0, "model should be present");
+	assert.equal(modelCol(spinner[2]), base, "spinner frame keeps the model column stable");
+	assert.equal(modelCol(pulse[2]), base, "pulse frame keeps the model column stable");
+	assert.equal(modelCol(wave[2]), base, "wave frame keeps the model column stable");
+	for (const out of [idle, spinner, pulse, wave]) {
+		assert.equal(visibleWidth(out[2]), 60, "every activity frame spans the full width");
+	}
+});
+
+test("computeBorderVisibility reserves the activity slot width in the bottom-left budget", () => {
+	// Without the slot the layout just fits; reserving the 2-column slot pushes
+	// the lowest-priority optional field (token window) out.
+	// bottom overhead is 11 (corners 2 + shoulders 2 + 2×block-pad 4 + gap 3).
+	// without slot: 11 + (7 + 6) + (5 + 10) = 39 ≤ 40 → token window fits.
+	// with a 2-col slot: 11 + (2 + 7 + 6) + (5 + 10) = 41 > 40 → token window drops.
+	const base = bw(40, {
+		modelWidth: 7,
+		thinkingWidth: 6,
+		pctWidth: 5,
+		tokenWindowWidth: 10,
+		hasThinking: true,
+		hasTokenWindow: true,
+	});
+	const withoutSlot = computeBorderVisibility(base);
+	const withSlot = computeBorderVisibility({ ...base, activitySlotWidth: 2 });
+	assert.ok(withoutSlot.showTokenWindow, "token window fits without the reserved slot");
+	assert.ok(!withSlot.showTokenWindow, "reserving the slot drops the token window first");
+});
+
 test("composeBorderLines keeps every line within the requested width at extremely narrow widths", () => {
 	// pi-tui validates rendered line width against the terminal width, so an
 	// over-wide row can stop rendering. At widths 0/1/2 there is no room for both
@@ -510,6 +611,50 @@ test("composeBorderLines keeps every line within the requested width at extremel
 			);
 		}
 	}
+});
+
+// ─── resolveBorderActivity (working snapshot → border slot) ────────────────────
+
+function snapshot(overrides: Partial<WorkingSnapshot> = {}): WorkingSnapshot {
+	return {
+		visible: false,
+		state: "active",
+		borderOwned: true,
+		settings: {
+			indicatorShape: "spinner",
+			active: { color: "#81A1C1", gleam: false, rainbow: false },
+			toolUse: { color: "#81A1C1", gleam: true, rainbow: false },
+			thinking: { color: "#81A1C1", gleam: true, rainbow: true },
+		},
+		...overrides,
+	};
+}
+
+test("resolveBorderActivity reports an idle slot when no turn is active", () => {
+	const activity = resolveBorderActivity(snapshot({ visible: false }), 0);
+	assert.deepEqual(activity, { active: false, glyph: "" });
+});
+
+test("resolveBorderActivity renders the spinner frame for the current state and time", () => {
+	const snap = snapshot({ visible: true, state: "active" });
+	const activity = resolveBorderActivity(snap, 0);
+	assert.equal(activity.active, true);
+	assert.equal(
+		activity.glyph,
+		pickWorkingIndicatorFrame("spinner", snap.settings.active, 0),
+		"glyph reuses the shared working indicator frame generation",
+	);
+});
+
+test("resolveBorderActivity applies the thinking style (rainbow) when thinking", () => {
+	const snap = snapshot({ visible: true, state: "thinking" });
+	const activity = resolveBorderActivity(snap, 0);
+	assert.ok(activity.active);
+	assert.equal(
+		activity.glyph,
+		pickWorkingIndicatorFrame("spinner", snap.settings.thinking, 0),
+		"thinking uses the thinking style's rainbow frame",
+	);
 });
 
 // ─── Extension lifecycle ───────────────────────────────────────────────────────

@@ -7,7 +7,7 @@ import path from "node:path";
 import { createExtension as createWorkingMessageExtension } from "./message.ts";
 import { createExtension as createWorkingIndicatorExtension } from "./indicator.ts";
 import { MESSAGE_ANIMATION_INTERVAL_MS } from "./effects.ts";
-import { resetWorkingCoordinatorForTests } from "./working.ts";
+import { getWorkingCoordinator, resetWorkingCoordinatorForTests } from "./working.ts";
 
 type EventHandler = (event: any, ctx: any) => void | Promise<void>;
 type CommandDef = { description: string; handler: (args: string, ctx: any) => void | Promise<void> };
@@ -231,6 +231,40 @@ test("styled rendering fallback is sticky across later state changes and turns",
     assert.equal(styledMessages.length, 1, "styled rendering should only be attempted once per runtime");
     assert.equal(workingMessages.filter((message) => typeof message === "string").length, 3, "later renders should fall back to plain text");
     assert.equal(workingMessages.at(-1)?.includes("\x1b["), false);
+  });
+});
+
+test("message stands down without animating while the border owns the working indicator", async () => {
+  await withTmpDir(async (dir) => {
+    const settingsPath = path.join(dir, "working.json");
+    const pkg = path.join(dir, "package-default-missing.json");
+    const coordinator = getWorkingCoordinator(settingsPath, pkg);
+    coordinator.setBorderOwnsIndicator(true);
+
+    let setIntervalCallCount = 0;
+    const originalSetInterval = globalThis.setInterval;
+    globalThis.setInterval = ((...args: Parameters<typeof setInterval>) => {
+      setIntervalCallCount++;
+      return originalSetInterval(...args);
+    }) as typeof setInterval;
+
+    try {
+      const { emit } = bootExtensions(settingsPath, pkg);
+      const { ctx, workingMessages } = makeCtx(true);
+      await emit("turn_start", {}, ctx);
+      await emit("tool_execution_start", { toolCallId: "call-1" }, ctx);
+
+      // Border mode keeps full messages out: no custom message is published and
+      // the host default is restored (undefined), with no animation timer.
+      assert.equal(workingMessages.at(-1), undefined, "no custom working message in border mode");
+      assert.ok(
+        workingMessages.every((m) => m === undefined),
+        "message extension never publishes a styled message while border-owned",
+      );
+      assert.equal(setIntervalCallCount, 0, "no message animation while border-owned");
+    } finally {
+      globalThis.setInterval = originalSetInterval;
+    }
   });
 });
 
