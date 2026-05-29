@@ -11,14 +11,14 @@
  *   side rows:   │ …editor content…                            │
  *   bottom edge: ╰─ model thinking ──────  used/total context% ─╯
  *
- * Emphasized fields stay in lock-step with the footer; the secondary fields are
- * deliberately de-emphasized to the same `muted` token while remaining distinct
- * semantic fields so any one can be re-coloured later without touching the rest:
+ * Emphasized fields stay in lock-step with the footer; thinking uses Pi's
+ * per-level thinking colour while lower-priority token counts remain
+ * de-emphasized:
  *   - model              → "accent"      (footer modelName: accent / Nord nord8)
  *   - context %          → "accent"      (footer contextUsage: accent / Nord nord8)
  *   - cwd                → "success"     (emphasized path / Nord nord14)
  *   - "/" and ellipsis   → "borderMuted" (footer symbols: borderMuted / Nord nord3)
- *   - thinking           → "muted"       (de-emphasized; own field, shares muted)
+ *   - thinking           → getThinkingBorderColor(level) (matches editor/footer)
  *   - contextTokensUsed  → "muted"       (de-emphasized; own field, shares muted)
  *   - contextWindowTotal → "muted"       (de-emphasized; own field, shares muted)
  *
@@ -33,6 +33,7 @@
 
 import {
 	CustomEditor,
+	SettingsManager,
 	type ExtensionAPI,
 	type ExtensionContext,
 	type KeybindingsManager,
@@ -54,11 +55,9 @@ import type { StatusRendererHandle } from "./status.ts";
 // ─── Colour routing ─────────────────────────────────────────────────────────
 
 /**
- * Semantic border fields routed to theme tokens. `thinking`,
- * `contextTokensUsed`, and `contextWindowTotal` are conceptually distinct
- * values that currently happen to share the `muted` token; keeping them as
- * separate fields lets a future theme change re-colour any one of them
- * independently.
+ * Semantic border fields. Most fields route through static theme tokens;
+ * `thinking` routes through the active level's `getThinkingBorderColor()` so it
+ * tracks Pi's editor/footer thinking colour after runtime placement switches.
  */
 export type BorderColorField =
 	| "model"
@@ -73,20 +72,61 @@ export type BorderColorField =
 export type BorderColorize = (field: BorderColorField, text: string) => string;
 
 /**
- * Theme tokens each border field resolves to. These mirror the footer's
- * resolved colours so the two stay visually consistent across themes. The three
- * secondary fields (thinking, used tokens, total window) are intentionally
- * de-emphasized to the same `muted` token while remaining distinct keys.
+ * Static theme tokens for border fields that do not depend on runtime state.
+ * The used-token and total-window fields are intentionally de-emphasized to the
+ * same `muted` token while remaining distinct keys.
  */
-export const BORDER_TOKENS: Record<BorderColorField, ThemeColor> = {
+type StaticBorderColorField = Exclude<BorderColorField, "thinking">;
+
+export const BORDER_TOKENS: Record<StaticBorderColorField, ThemeColor> = {
 	model: "accent",
 	context: "accent",
 	symbol: "borderMuted",
 	cwd: "success",
-	thinking: "muted",
 	contextTokensUsed: "muted",
 	contextWindowTotal: "muted",
 };
+
+type ThinkingLevel = ReturnType<ExtensionAPI["getThinkingLevel"]>;
+type TextColorizer = (text: string) => string;
+
+/**
+ * Mirror Pi's editor border-colour routing inside the custom border editor.
+ * Pi updates only the currently active editor when thinking/bash mode changes;
+ * a custom editor installed after that can inherit a stale default-editor
+ * border colour. Resolving from the live editor text and thinking level at
+ * render time keeps runtime /status switches in sync with the host behaviour.
+ */
+export function resolveEditorBorderColor(
+	editorText: string,
+	theme: {
+		getThinkingBorderColor(level: ThinkingLevel): TextColorizer;
+		getBashModeBorderColor(): TextColorizer;
+	},
+	thinkingLevel: ThinkingLevel,
+): TextColorizer {
+	return editorText.trimStart().startsWith("!")
+		? theme.getBashModeBorderColor()
+		: theme.getThinkingBorderColor(thinkingLevel);
+}
+
+function loadAutocompleteMaxVisible(cwd: string): number | undefined {
+	try {
+		return SettingsManager.create(cwd).getAutocompleteMaxVisible();
+	} catch {
+		return undefined;
+	}
+}
+
+function getBorderEditorOptions(cwd: string): {
+	paddingX: number;
+	autocompleteMaxVisible?: number;
+} {
+	const autocompleteMaxVisible = loadAutocompleteMaxVisible(cwd);
+	return autocompleteMaxVisible === undefined
+		? { paddingX: 0 }
+		: { paddingX: 0, autocompleteMaxVisible };
+}
 
 // ─── Formatting helpers ────────────────────────────────────────────────────────
 
@@ -615,7 +655,7 @@ export function installBorderStatus(
 			theme: EditorTheme,
 			keybindings: KeybindingsManager,
 		) {
-			super(tui, theme, keybindings, { paddingX: 0 });
+			super(tui, theme, keybindings, getBorderEditorOptions(ctx.cwd));
 		}
 
 		/** Ask the TUI to re-render so the animated activity slot advances. */
@@ -631,12 +671,19 @@ export function installBorderStatus(
 			if (lines.length < 2) return lines;
 
 			const theme = ctx.ui.theme;
+			const thinkingLevel = pi.getThinkingLevel() ?? "off";
+			const borderColor = resolveEditorBorderColor(
+				this.getText(),
+				theme,
+				thinkingLevel,
+			);
 			const colorize: BorderColorize = (field, text) =>
-				theme.fg(BORDER_TOKENS[field], text);
+				field === "thinking"
+					? theme.getThinkingBorderColor(thinkingLevel)(text)
+					: theme.fg(BORDER_TOKENS[field], text);
 
 			const modelId = ctx.model?.id ?? "no-model";
 
-			const thinkingLevel = pi.getThinkingLevel() ?? "off";
 			const thinkingLabel = ctx.model?.reasoning
 				? getThinkingLabel(thinkingLevel)
 				: "";
@@ -655,7 +702,7 @@ export function installBorderStatus(
 				contextWindow,
 				cwd: ctx.cwd,
 				colorize,
-				borderColor: (text: string) => this.borderColor(text),
+				borderColor,
 				activity: resolveBorderActivity(working.getSnapshot(), Date.now()),
 			});
 		}

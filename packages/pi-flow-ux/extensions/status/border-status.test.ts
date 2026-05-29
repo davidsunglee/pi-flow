@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -15,6 +18,7 @@ import {
 	getThinkingLabel,
 	installBorderStatus,
 	resolveBorderActivity,
+	resolveEditorBorderColor,
 	type BorderFieldWidths,
 } from "./border-status.ts";
 import { pickWorkingIndicatorFrame } from "../working/effects.ts";
@@ -127,22 +131,26 @@ test("token window routes used/total counts through their own semantic fields an
 	);
 });
 
-test("border tokens map model/context to accent, cwd to success, symbol to borderMuted, and secondary fields to muted", () => {
+test("border tokens map model/context to accent, cwd to success, symbol to borderMuted, and token counts to muted", () => {
 	assert.equal(BORDER_TOKENS.model, "accent");
 	assert.equal(BORDER_TOKENS.context, "accent");
 	assert.equal(BORDER_TOKENS.cwd, "success");
 	assert.equal(BORDER_TOKENS.symbol, "borderMuted");
-	assert.equal(BORDER_TOKENS.thinking, "muted");
 	assert.equal(BORDER_TOKENS.contextTokensUsed, "muted");
 	assert.equal(BORDER_TOKENS.contextWindowTotal, "muted");
-	// No git branch field exists on the token map.
+	// Dynamic fields and removed status fields do not have static token entries.
+	assert.equal(
+		Object.prototype.hasOwnProperty.call(BORDER_TOKENS, "thinking"),
+		false,
+		"thinking is colored via getThinkingBorderColor(level), not a static token",
+	);
 	assert.equal(
 		Object.prototype.hasOwnProperty.call(BORDER_TOKENS, "branch"),
 		false,
 		"there must be no branch token",
 	);
-	// The secondary fields remain distinct keys even though they share the token.
-	const secondaryKeys = ["thinking", "contextTokensUsed", "contextWindowTotal"];
+	// The token-window fields remain distinct keys even though they share the token.
+	const secondaryKeys = ["contextTokensUsed", "contextWindowTotal"];
 	assert.equal(new Set(secondaryKeys).size, secondaryKeys.length);
 });
 
@@ -655,6 +663,181 @@ test("resolveBorderActivity applies the thinking style (rainbow) when thinking",
 		pickWorkingIndicatorFrame("spinner", snap.settings.thinking, 0),
 		"thinking uses the thinking style's rainbow frame",
 	);
+});
+
+// ─── Editor settings / border colour integration ───────────────────────────────
+
+const fakeTui = {
+	terminal: { rows: 24 },
+	requestRender() {},
+};
+
+const fakeKeybindings = {
+	matches() {
+		return false;
+	},
+	getKeys() {
+		return [];
+	},
+};
+
+const fakeEditorTheme = {
+	borderColor(text: string) {
+		return text;
+	},
+	selectList: {},
+};
+
+async function withTempPiSettings(
+	settings: Record<string, unknown>,
+	fn: (paths: { agentDir: string; cwd: string }) => Promise<void>,
+): Promise<void> {
+	const dir = await mkdtemp(path.join(os.tmpdir(), "pi-border-status-"));
+	const agentDir = path.join(dir, "agent");
+	const cwd = path.join(dir, "project");
+	const oldAgentDir = process.env.PI_CODING_AGENT_DIR;
+	try {
+		process.env.PI_CODING_AGENT_DIR = agentDir;
+		await mkdir(agentDir, { recursive: true });
+		await writeFile(
+			path.join(agentDir, "settings.json"),
+			`${JSON.stringify(settings)}\n`,
+			"utf8",
+		);
+		await fn({ agentDir, cwd });
+	} finally {
+		if (oldAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = oldAgentDir;
+		await rm(dir, { recursive: true, force: true });
+	}
+}
+
+test("resolveEditorBorderColor uses thinking-level color unless the editor is in bash mode", () => {
+	const theme = {
+		getThinkingBorderColor(level: string) {
+			return (text: string) => `[thinking-${level}:${text}]`;
+		},
+		getBashModeBorderColor() {
+			return (text: string) => `[bash:${text}]`;
+		},
+	};
+
+	assert.equal(
+		resolveEditorBorderColor("", theme as any, "high" as any)("─"),
+		"[thinking-high:─]",
+	);
+	assert.equal(
+		resolveEditorBorderColor("  ! git status", theme as any, "high" as any)("─"),
+		"[bash:─]",
+	);
+});
+
+test("installBorderStatus initializes autocomplete max visible from Pi settings on first install", async () => {
+	await withTempPiSettings({ autocompleteMaxVisible: 10 }, async ({ cwd }) => {
+		const pi = {
+			getThinkingLevel() {
+				return "off";
+			},
+		};
+
+		let editorFactory: any;
+		const ctx = {
+			cwd,
+			model: undefined,
+			getContextUsage() {
+				return undefined;
+			},
+			ui: {
+				setEditorComponent(factory: unknown) {
+					editorFactory = factory;
+				},
+				theme: {
+					name: "test",
+					getColorMode() {
+						return "truecolor";
+					},
+					fg(_token: string, text: string) {
+						return text;
+					},
+					getThinkingBorderColor() {
+						return (text: string) => text;
+					},
+					getBashModeBorderColor() {
+						return (text: string) => text;
+					},
+				},
+			},
+		};
+
+		const handle = installBorderStatus(pi as any, ctx as any);
+		const editor = editorFactory(fakeTui as any, fakeEditorTheme as any, fakeKeybindings as any);
+		assert.equal(
+			editor.getAutocompleteMaxVisible(),
+			10,
+			"border editor should inherit the user's autocomplete visible-item setting on first load",
+		);
+		handle.dispose();
+	});
+});
+
+test("border-status editor border color follows the active thinking level instead of a stale inherited default", () => {
+	const pi = {
+		getThinkingLevel() {
+			return "high";
+		},
+	};
+
+	let editorFactory: any;
+	const ctx = {
+		cwd: "/repo",
+		model: { id: "model", reasoning: true, contextWindow: 200000 },
+		getContextUsage() {
+			return { percent: 12.3, tokens: 9300, contextWindow: 200000 };
+		},
+		ui: {
+			setEditorComponent(factory: unknown) {
+				editorFactory = factory;
+			},
+			theme: {
+				name: "test",
+				getColorMode() {
+					return "truecolor";
+				},
+				fg(_token: string, text: string) {
+					return text;
+				},
+				getThinkingBorderColor(level: string) {
+					return (text: string) => `[thinking-${level}:${text}]`;
+				},
+				getBashModeBorderColor() {
+					return (text: string) => `[bash:${text}]`;
+				},
+			},
+		},
+	};
+
+	const handle = installBorderStatus(pi as any, ctx as any);
+	const editor = editorFactory(fakeTui as any, fakeEditorTheme as any, fakeKeybindings as any);
+	// Simulate Pi's setCustomEditorComponent copying a stale default-editor border
+	// colour into the custom editor after the factory returns.
+	editor.borderColor = (text: string) => `[stale:${text}]`;
+
+	const lines = editor.render(60);
+	assert.ok(lines[0].includes("[thinking-high:"), "top border should use high thinking colour");
+	assert.ok(
+		lines[lines.length - 1]!.includes("[thinking-high:"),
+		"bottom border should use high thinking colour",
+	);
+	assert.ok(
+		lines[lines.length - 1]!.includes("[thinking-high:high]"),
+		"thinking status label should use the active thinking-level colour",
+	);
+	assert.equal(
+		lines.some((line: string) => line.includes("[stale:")),
+		false,
+		"stale copied border colour must not leak into the rendered border",
+	);
+	handle.dispose();
 });
 
 // ─── Extension lifecycle ───────────────────────────────────────────────────────
