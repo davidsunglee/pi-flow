@@ -227,6 +227,7 @@ class WorkingCoordinator {
   private listeners = new Set<(snapshot: WorkingSnapshot) => void>();
   private runtimeRegistered = false;
   private commandRegistered = false;
+  private registeredPi: ExtensionAPI | undefined;
 
   constructor(settingsPath: string, packageDefaultPath: string) {
     this.settingsPath = settingsPath;
@@ -262,6 +263,19 @@ class WorkingCoordinator {
   }
 
   ensureRegistered(pi: ExtensionAPI, registerCommand: boolean): void {
+    if (this.registeredPi !== pi) {
+      if (this.registeredPi !== undefined) {
+        this.listeners.clear();
+        this.activeTurn = false;
+        this.thinking = false;
+        this.inflightToolCalls.clear();
+        this.borderOwnsIndicator = false;
+      }
+      this.registeredPi = pi;
+      this.runtimeRegistered = false;
+      this.commandRegistered = false;
+    }
+
     if (!this.runtimeRegistered) {
       this.runtimeRegistered = true;
 
@@ -478,15 +492,37 @@ class WorkingCoordinator {
   }
 }
 
+type WorkingCoordinatorRegistry = Map<
+  string,
+  { packageDefaultPath: string; coordinator: WorkingCoordinator }
+>;
+
+// Pi loads each extension entrypoint through an isolated jiti module cache, so
+// status/index.ts and working/index.ts can otherwise receive separate copies of
+// this module. Keep the coordinator registry on globalThis so the border-status
+// renderer and the host working indicator/message extensions coordinate through
+// the same runtime object.
+const WORKING_COORDINATOR_REGISTRY_KEY = Symbol.for(
+  "@aphotic/pi-flow-ux/working-coordinators-by-settings-path",
+);
+
+function getGlobalWorkingCoordinatorRegistry(): WorkingCoordinatorRegistry {
+  const globalState = globalThis as any;
+  const existing = globalState[WORKING_COORDINATOR_REGISTRY_KEY] as
+    | WorkingCoordinatorRegistry
+    | undefined;
+  if (existing) return existing;
+  const registry: WorkingCoordinatorRegistry = new Map();
+  globalState[WORKING_COORDINATOR_REGISTRY_KEY] = registry;
+  return registry;
+}
+
 // Keyed by user `settingsPath` so callers using distinct user settings files
 // each get their own coordinator. Rebinding the same `settingsPath` to a
 // different `packageDefaultPath` still throws — that case is almost always a
 // programming error (e.g. two host bundles disagreeing on where the packaged
 // baseline lives) and would silently mask the second baseline.
-const coordinatorsBySettingsPath = new Map<
-  string,
-  { packageDefaultPath: string; coordinator: WorkingCoordinator }
->();
+const coordinatorsBySettingsPath = getGlobalWorkingCoordinatorRegistry();
 
 export function getWorkingCoordinator(
   settingsPath: string = DEFAULT_SETTINGS_PATH,

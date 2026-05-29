@@ -180,6 +180,30 @@ test("coordinator.getSnapshot returns a defensive copy of settings", async () =>
   }
 });
 
+test("getWorkingCoordinator shares state across isolated module instances", async () => {
+  await withTmpFile(async (filePath, dir) => {
+    const packageDefaultPath = path.join(dir, "package-default-missing.json");
+    const cacheBust = encodeURIComponent(`${Date.now()}-${Math.random()}`);
+    const isolated = await import(`./working.ts?isolated=${cacheBust}`);
+
+    const primary = getWorkingCoordinator(filePath, packageDefaultPath);
+    const duplicate = isolated.getWorkingCoordinator(filePath, packageDefaultPath);
+
+    assert.equal(
+      duplicate,
+      primary,
+      "status and working extensions load through separate module instances but must share one coordinator",
+    );
+
+    primary.setBorderOwnsIndicator(true);
+    assert.equal(
+      duplicate.getSnapshot().borderOwned,
+      true,
+      "border ownership set by one module instance must be visible to the other",
+    );
+  });
+});
+
 test("coordinator tracks nested tool execution depth so toolUse only clears when the outermost call ends", async () => {
   resetWorkingCoordinatorForTests();
   try {
