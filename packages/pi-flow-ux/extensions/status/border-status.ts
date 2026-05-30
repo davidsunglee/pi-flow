@@ -11,16 +11,21 @@
  *   side rows:   │ …editor content…                            │
  *   bottom edge: ╰─ model thinking ──────  used/total context% ─╯
  *
- * Emphasized fields stay in lock-step with the footer; thinking uses Pi's
- * per-level thinking colour while lower-priority token counts remain
- * de-emphasized:
+ * Emphasized fields stay in lock-step with the footer; the lower-priority
+ * secondary status fields (thinking label and token counts) are de-emphasized to
+ * the muted token:
  *   - model              → "accent"      (footer modelName: accent / Nord nord8)
  *   - context %          → "accent"      (footer contextUsage: accent / Nord nord8)
  *   - cwd                → "success"     (emphasized path / Nord nord14)
  *   - "/" and ellipsis   → "borderMuted" (footer symbols: borderMuted / Nord nord3)
- *   - thinking           → getThinkingBorderColor(level) (matches editor/footer)
+ *   - thinking           → "muted"       (de-emphasized status label, like the token counts)
  *   - contextTokensUsed  → "muted"       (de-emphasized; own field, shares muted)
  *   - contextWindowTotal → "muted"       (de-emphasized; own field, shares muted)
+ *
+ * The editor border *stroke* (top/bottom dashes, corners, vertical edges) is a
+ * separate concern: it follows the active thinking/bash mode via
+ * resolveEditorBorderColor so it stays in sync with Pi's editor, while the
+ * thinking *status label* above is just a muted semantic status field.
  *
  * Because these tokens resolve per-render, theme switches update the border
  * colours automatically with no cached ANSI to invalidate.
@@ -55,9 +60,10 @@ import type { StatusRendererHandle } from "./status.ts";
 // ─── Colour routing ─────────────────────────────────────────────────────────
 
 /**
- * Semantic border fields. Most fields route through static theme tokens;
- * `thinking` routes through the active level's `getThinkingBorderColor()` so it
- * tracks Pi's editor/footer thinking colour after runtime placement switches.
+ * Semantic border status fields. Every field routes through a static theme token
+ * via {@link BORDER_TOKENS} (the thinking label is a muted semantic status
+ * field). The editor border *stroke* colour is resolved separately by
+ * {@link resolveEditorBorderColor} from the active thinking/bash mode.
  */
 export type BorderColorField =
 	| "model"
@@ -72,17 +78,16 @@ export type BorderColorField =
 export type BorderColorize = (field: BorderColorField, text: string) => string;
 
 /**
- * Static theme tokens for border fields that do not depend on runtime state.
- * The used-token and total-window fields are intentionally de-emphasized to the
- * same `muted` token while remaining distinct keys.
+ * Theme tokens for every border status field. The thinking label, used-token,
+ * and total-window fields are intentionally de-emphasized to the same `muted`
+ * token while remaining distinct semantic keys.
  */
-type StaticBorderColorField = Exclude<BorderColorField, "thinking">;
-
-export const BORDER_TOKENS: Record<StaticBorderColorField, ThemeColor> = {
+export const BORDER_TOKENS: Record<BorderColorField, ThemeColor> = {
 	model: "accent",
 	context: "accent",
 	symbol: "borderMuted",
 	cwd: "success",
+	thinking: "muted",
 	contextTokensUsed: "muted",
 	contextWindowTotal: "muted",
 };
@@ -678,9 +683,7 @@ export function installBorderStatus(
 				thinkingLevel,
 			);
 			const colorize: BorderColorize = (field, text) =>
-				field === "thinking"
-					? theme.getThinkingBorderColor(thinkingLevel)(text)
-					: theme.fg(BORDER_TOKENS[field], text);
+				theme.fg(BORDER_TOKENS[field], text);
 
 			const modelId = ctx.model?.id ?? "no-model";
 

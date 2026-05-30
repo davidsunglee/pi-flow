@@ -131,26 +131,29 @@ test("token window routes used/total counts through their own semantic fields an
 	);
 });
 
-test("border tokens map model/context to accent, cwd to success, symbol to borderMuted, and token counts to muted", () => {
+test("border tokens map model/context to accent, cwd to success, symbol to borderMuted, and muted secondary fields to muted", () => {
 	assert.equal(BORDER_TOKENS.model, "accent");
 	assert.equal(BORDER_TOKENS.context, "accent");
 	assert.equal(BORDER_TOKENS.cwd, "success");
 	assert.equal(BORDER_TOKENS.symbol, "borderMuted");
+	assert.equal(BORDER_TOKENS.thinking, "muted");
 	assert.equal(BORDER_TOKENS.contextTokensUsed, "muted");
 	assert.equal(BORDER_TOKENS.contextWindowTotal, "muted");
-	// Dynamic fields and removed status fields do not have static token entries.
+	// thinking is now a muted semantic status field with its own static token —
+	// the editor border *stroke* tracks the active thinking level separately.
 	assert.equal(
 		Object.prototype.hasOwnProperty.call(BORDER_TOKENS, "thinking"),
-		false,
-		"thinking is colored via getThinkingBorderColor(level), not a static token",
+		true,
+		"thinking is a muted semantic status field, covered by a static token",
 	);
 	assert.equal(
 		Object.prototype.hasOwnProperty.call(BORDER_TOKENS, "branch"),
 		false,
 		"there must be no branch token",
 	);
-	// The token-window fields remain distinct keys even though they share the token.
-	const secondaryKeys = ["contextTokensUsed", "contextWindowTotal"];
+	// The muted secondary fields remain distinct semantic keys even though they
+	// share the muted token.
+	const secondaryKeys = ["thinking", "contextTokensUsed", "contextWindowTotal"];
 	assert.equal(new Set(secondaryKeys).size, secondaryKeys.length);
 });
 
@@ -780,7 +783,7 @@ test("installBorderStatus initializes autocomplete max visible from Pi settings 
 	});
 });
 
-test("border-status editor border color follows the active thinking level instead of a stale inherited default", () => {
+test("border-status editor border stroke follows the active thinking level while the thinking label stays muted", () => {
 	const pi = {
 		getThinkingLevel() {
 			return "high";
@@ -803,8 +806,10 @@ test("border-status editor border color follows the active thinking level instea
 				getColorMode() {
 					return "truecolor";
 				},
-				fg(_token: string, text: string) {
-					return text;
+				// Tag the semantic token so we can tell the muted status label apart
+				// from the thinking-level border stroke colour.
+				fg(token: string, text: string) {
+					return `[fg-${token}:${text}]`;
 				},
 				getThinkingBorderColor(level: string) {
 					return (text: string) => `[thinking-${level}:${text}]`;
@@ -823,14 +828,24 @@ test("border-status editor border color follows the active thinking level instea
 	editor.borderColor = (text: string) => `[stale:${text}]`;
 
 	const lines = editor.render(60);
-	assert.ok(lines[0].includes("[thinking-high:"), "top border should use high thinking colour");
+	const bottom = lines[lines.length - 1]!;
+	// The top/bottom border *stroke* (dashes, corners) tracks the active thinking
+	// level via resolveEditorBorderColor.
+	assert.ok(lines[0].includes("[thinking-high:"), "top border stroke should use high thinking colour");
 	assert.ok(
-		lines[lines.length - 1]!.includes("[thinking-high:"),
-		"bottom border should use high thinking colour",
+		bottom.includes("[thinking-high:"),
+		"bottom border stroke should use high thinking colour",
 	);
+	// The thinking *status label* is a muted semantic status field, not the
+	// thinking-level colour.
 	assert.ok(
-		lines[lines.length - 1]!.includes("[thinking-high:high]"),
-		"thinking status label should use the active thinking-level colour",
+		bottom.includes("[fg-muted:high]"),
+		"thinking status label should use the muted semantic token",
+	);
+	assert.equal(
+		bottom.includes("[thinking-high:high]"),
+		false,
+		"thinking status label must not use the thinking-level border colour",
 	);
 	assert.equal(
 		lines.some((line: string) => line.includes("[stale:")),
