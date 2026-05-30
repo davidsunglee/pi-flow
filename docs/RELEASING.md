@@ -45,11 +45,9 @@ The release is blocked if:
 - the git status reveals unexpected local changes
 - the security-audit commands cannot be run or their results cannot be reviewed
 
-If `gitleaks` is unavailable, use an equivalent dedicated git-history secret scanner and record the exact tool and command. A simple `grep`/`rg` pattern scan is only a fallback and should be called out as less complete than a dedicated scanner.
-
 ## Version Bump
 
-Pi-Flow does not currently use Changesets or an automated versioning tool. Bump the root package and every publishable package to the same release version before publishing.
+pi-flow does not currently use Changesets or an automated versioning tool. Bump the root package and every publishable package to the same release version before publishing.
 
 For a release, set the target version and update every manifest from the repository root:
 
