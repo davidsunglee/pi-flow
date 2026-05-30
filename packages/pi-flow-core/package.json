@@ -1,6 +1,6 @@
 {
   "name": "@aphotic/pi-flow-core",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "description": "Workflow skills, bundled agent definitions, and helper runner for pi-flow.",
   "keywords": ["pi-package"],

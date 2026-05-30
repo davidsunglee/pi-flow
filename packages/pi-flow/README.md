@@ -11,7 +11,7 @@ The aggregate package for pi-flow workflow resources — a single install point 
 - **Workflow skills and bundled agents** via `@aphotic/pi-flow-core`
 - **Slash commands and the `idea` tool** via `@aphotic/pi-flow-core`
 - **Helper runner** (`pi-flow helper <id>`, `pi-flow template <id>`) via `@aphotic/pi-flow-core/bin`
-- **UX enhancements** — status placement extension (`/status`: border editor, footer, or off), working indicator/message, Nord theme, and packaged defaults via `@aphotic/pi-flow-ux`
+- **UX enhancements** — border status element and status placement extension (`/status`: border editor, footer, or off), working indicator/message, Nord theme, and packaged defaults via `@aphotic/pi-flow-ux`
 
 ## /flow:* commands and idea tool
 
@@ -19,7 +19,7 @@ See [`@aphotic/pi-flow-core`](https://github.com/davidsunglee/pi-flow/tree/main/
 
 After installing with `pi install npm:@aphotic/pi-flow`, run `/flow:setup` so `@aphotic/pi-mux-subagents` can discover the bundled agent definitions used by subagent-backed workflows.
 
-The aggregate install includes the UX layer (footer, working indicator, and Nord theme). If you want a headless install without those UX extras, install `@aphotic/pi-flow-core` directly instead.
+The aggregate install includes the UX layer (border status element/status placement, working indicator, and Nord theme). If you want a headless install without those UX extras, install `@aphotic/pi-flow-core` directly instead.
 
 ## Required companion
 

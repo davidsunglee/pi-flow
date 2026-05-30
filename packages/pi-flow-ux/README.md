@@ -1,12 +1,12 @@
 # @aphotic/pi-flow-ux
 
-Optional UX enhancements for pi-flow: a unified status placement extension (border editor, footer, or off), working indicator/message, Nord theme, and packaged defaults.
+Optional UX enhancements for pi-flow: a border status element through the unified status placement extension (border editor, footer, or off), working indicator/message, Nord theme, and packaged defaults.
 
 ## What this package provides
 
 This package contains optional UX polish that extends the core pi-flow experience:
 
-- **Status extension** — a single coordinator that draws session metadata in exactly one place: the editor border (default), a custom footer, or nowhere. Switch in-session with `/status`.
+- **Status extension and border status element** — a single coordinator that draws session metadata in exactly one place: the editor border (default), a custom footer, or nowhere. Switch in-session with `/status`.
 - **Working indicator** — animated indicator showing active, tool-use, and thinking states with Nord-tuned defaults
 - **Working message** — status messages corresponding to working states, customizable via configuration
 - **Nord theme** — a complete dark theme package tuned to the Nord color palette (https://www.nordtheme.com/)

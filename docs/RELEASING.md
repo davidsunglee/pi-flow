@@ -8,7 +8,7 @@ The workspace root is private and must not be published. The publishable package
 
 - `@aphotic/pi-ideas` — standalone idea-capture extension
 - `@aphotic/pi-flow-core` — workflow skills, agents, commands, and helper runner
-- `@aphotic/pi-flow-ux` — optional footer/working indicator/theme resources
+- `@aphotic/pi-flow-ux` — optional border status/status placement, working indicator/message, theme, and packaged defaults
 - `@aphotic/pi-flow` — aggregate install package that bundles the three packages above
 
 > **Important:** do not run `pnpm pack` or `pnpm publish` directly for `@aphotic/pi-flow`. The aggregate uses `bundledDependencies`, which fails under pnpm's isolated linker. Use the package's `pack:aggregate` and `publish:aggregate` scripts instead.
@@ -51,10 +51,10 @@ If `gitleaks` is unavailable, use an equivalent dedicated git-history secret sca
 
 Pi-Flow does not currently use Changesets or an automated versioning tool. Bump the root package and every publishable package to the same release version before publishing.
 
-For a `0.6.0` release, one safe option from the repository root is:
+For a release, set the target version and update every manifest from the repository root:
 
 ```bash
-VERSION=0.6.0 node - <<'NODE'
+VERSION=0.7.0 node - <<'NODE'
 const { readFileSync, writeFileSync } = require('node:fs');
 
 const version = process.env.VERSION;
@@ -116,9 +116,10 @@ Do not use `pnpm -r exec pnpm pack --dry-run` across the whole workspace; it wil
 After versioning and pre-publish verification pass, commit the release changes so the publish commands run from a clean tree:
 
 ```bash
+VERSION=0.7.0
 git status --short
-git add package.json packages/*/package.json docs/RELEASING.md
-git commit -m "Release 0.6.0"
+git add package.json packages/*/package.json docs/RELEASING.md docs/releases/
+git commit -m "Release $VERSION"
 ```
 
 If a later dry-run exposes a problem, fix it and amend or add a follow-up commit before publishing.
@@ -173,7 +174,7 @@ Notes:
 Verify every package is visible at the released version:
 
 ```bash
-VERSION=0.6.0
+VERSION=0.7.0
 npm view @aphotic/pi-ideas@"$VERSION" version
 npm view @aphotic/pi-flow-core@"$VERSION" version
 npm view @aphotic/pi-flow-ux@"$VERSION" version
@@ -183,7 +184,7 @@ npm view @aphotic/pi-flow@"$VERSION" version
 Test installation through Pi:
 
 ```bash
-pi install npm:@aphotic/pi-flow@0.6.0
+pi install npm:@aphotic/pi-flow@"$VERSION"
 ```
 
 If any verification step fails, investigate before declaring the release complete.
@@ -193,6 +194,7 @@ If any verification step fails, investigate before declaring the release complet
 Once the release is published and verified, tag the release commit and push:
 
 ```bash
-git tag v0.6.0
+VERSION=0.7.0
+git tag "v$VERSION"
 git push origin main --follow-tags
 ```

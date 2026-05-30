@@ -1,6 +1,6 @@
 {
   "name": "@aphotic/pi-flow",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "description": "Aggregate install package for pi-flow workflow resources.",
   "keywords": ["pi-package"],

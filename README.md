@@ -6,9 +6,10 @@
 
 | Package | Purpose | Install when... |
 | --- | --- | --- |
-| `@aphotic/pi-flow` | Aggregate package that forwards `@aphotic/pi-flow-core` and `@aphotic/pi-flow-ux` resources. | You want the default full Flow experience. |
+| `@aphotic/pi-flow` | Aggregate package that forwards the workflow, UX, and ideas resources from the bundled suite. | You want the default full Flow experience. |
 | `@aphotic/pi-flow-core` | Headless workflow package: skills, agents, helper runner, `/flow:*` commands, `idea` tool, `/flow:ideas` browser, and `/flow:setup`. | You want workflow automation without the UI extras. |
-| `@aphotic/pi-flow-ux` | Optional UX package: status placement extension (`/status`), working indicator/message, Nord theme, and packaged defaults. | You only want the UI layer or want to combine it manually. |
+| `@aphotic/pi-flow-ux` | Optional UX package: border status element and status placement extension (`/status`: border editor, footer, or off), working indicator/message, Nord theme, and packaged defaults. | You only want the UI layer or want to combine it manually. |
+| `@aphotic/pi-ideas` | Standalone configurable idea-capture package: `idea` tool, `/ideas` browser, and JSON-configurable work-menu actions backed by `docs/ideas/<8hex>.md`. | You want idea capture and browsing without the rest of pi-flow. |
 
 The repository root is the development workspace. The distributable package entry points live under `packages/`.
 
@@ -48,10 +49,18 @@ Then run `/flow:setup` for the same agent-discovery setup.
 
 ### UX-only install
 
-Install only the UI layer when you want the footer, working indicator, and Nord theme without workflow commands:
+Install only the UI layer when you want the border status element, footer/status placement controls, working indicator, and Nord theme without workflow commands:
 
 ```sh
 pi install npm:@aphotic/pi-flow-ux
+```
+
+### Ideas-only install
+
+Install only the standalone idea-capture layer when you want the `idea` tool and `/ideas` browser without workflow commands or UX extras:
+
+```sh
+pi install npm:@aphotic/pi-ideas
 ```
 
 ## Required companion
