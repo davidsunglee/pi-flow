@@ -159,3 +159,5 @@ __pycache__/
 
 # pnpm store
 .pnpm-store/
+
+.worktrees/
