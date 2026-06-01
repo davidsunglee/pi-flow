@@ -74,8 +74,7 @@ function getIndicatorGlyphs(shape: IndicatorShape): { glyphs: string[]; interval
   }
 }
 
-// Per-state activity-slot treatment, formerly read from working.json. These
-// are now fixed constants, independent of the Nord or any active theme:
+// Per-state activity-slot treatment. These are now fixed constants, independent of any active theme:
 //   active   → plain accent (no gleam, no rainbow)
 //   toolUse  → gleam
 //   thinking → gleam + rainbow
