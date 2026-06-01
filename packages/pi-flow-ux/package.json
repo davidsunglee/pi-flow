@@ -2,9 +2,9 @@
   "name": "@aphotic/pi-flow-ux",
   "version": "0.7.0",
   "type": "module",
-  "description": "Optional UX layer for pi-flow: status placement (border/footer/off), working indicator/message, Nord theme, and packaged defaults.",
+  "description": "Optional UX layer for pi-flow: an always-on border-status editor, a custom startup header, the Nord theme, and a single unified /tui configuration (tui.json).",
   "keywords": ["pi-package"],
-  "files": ["extensions", "themes", "working.json", "status.json", "LICENSE", "!**/.gitkeep", "!**/__tests__", "!**/*.test.mjs", "!**/*.test.ts", "!**/*.test.js"],
+  "files": ["extensions", "themes", "tui.json", "LICENSE", "!**/.gitkeep", "!**/__tests__", "!**/*.test.mjs", "!**/*.test.ts", "!**/*.test.js"],
   "scripts": {
     "test:node": "find __tests__ extensions \\( -name '*.test.mjs' -o -name '*.test.ts' \\) -print0 | xargs -0 node --experimental-strip-types --test",
     "test": "pnpm run test:node",
@@ -19,7 +19,7 @@
     "@earendil-works/pi-tui": "^0.75.0"
   },
   "pi": {
-    "extensions": ["extensions/status/index.ts", "extensions/working/index.ts"],
+    "extensions": ["extensions/index.ts"],
     "themes": ["themes"]
   },
   "license": "MIT",
