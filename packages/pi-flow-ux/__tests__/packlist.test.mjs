@@ -19,14 +19,15 @@ function getPacklist() {
 test('packlist includes required files', () => {
   const files = getPacklist();
   const required = [
-    'extensions/status/index.ts',
-    'extensions/status/status.ts',
-    'extensions/status/footer.ts',
-    'extensions/status/border-status.ts',
-    'extensions/working/index.ts',
+    'extensions/index.ts',
+    'extensions/editor.ts',
+    'extensions/footer.ts',
+    'extensions/working.ts',
+    'extensions/header.ts',
+    'extensions/effects.ts',
+    'extensions/working-messages.ts',
     'themes/nord.json',
-    'working.json',
-    'status.json',
+    'tui.json',
     'package.json',
     'LICENSE',
   ];
