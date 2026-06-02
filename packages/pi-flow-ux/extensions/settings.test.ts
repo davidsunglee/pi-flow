@@ -247,3 +247,49 @@ test("getTuiSettingsStore throws when a settingsPath is rebound to a different p
   assert.throws(() => getTuiSettingsStore("/tmp/a/tui.json", "/pkg/two/tui.json"));
   resetTuiSettingsStoreForTests();
 });
+
+test("store emit isolates throwing listeners", async () => {
+  resetTuiSettingsStoreForTests();
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tui-"));
+  try {
+    const store = getTuiSettingsStore(path.join(dir, "tui.json"), PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+    const order: string[] = [];
+    store.subscribe(() => { order.push("a"); throw new Error("boom"); });
+    store.subscribe(() => { order.push("b"); });
+    const { pi, emit } = makePi();
+    store.ensureRegistered(pi as any, { registerCommand: true });
+    await emit("session_start", { reason: "startup" });
+    assert.ok(order.includes("a") && order.includes("b"), "both listeners should run despite one throwing");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    resetTuiSettingsStoreForTests();
+  }
+});
+
+test("rebinding the store to a new pi clears listeners and reloads from disk", async () => {
+  resetTuiSettingsStoreForTests();
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tui-"));
+  try {
+    const userPath = path.join(dir, "tui.json");
+    await writeFile(userPath, JSON.stringify({ ...DEFAULT_TUI_SETTINGS, header: { logo: "rounded" } }), "utf8");
+    const store = getTuiSettingsStore(userPath, PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+
+    let firstCalls = 0;
+    store.subscribe(() => { firstCalls++; });
+    const first = makePi();
+    store.ensureRegistered(first.pi as any, { registerCommand: true });
+    await first.emit("session_start", { reason: "startup" });
+    assert.equal(store.get().header.logo, "rounded");
+    const callsAfterFirst = firstCalls;
+
+    const second = makePi();
+    store.ensureRegistered(second.pi as any, { registerCommand: true });
+    assert.equal(store.get().header.logo, "bracket"); // reset to default on rebind, before reload
+    await second.emit("session_start", { reason: "startup" });
+    assert.equal(store.get().header.logo, "rounded"); // reloaded from disk
+    assert.equal(firstCalls, callsAfterFirst, "old listener was cleared and must not fire after rebind");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    resetTuiSettingsStoreForTests();
+  }
+});

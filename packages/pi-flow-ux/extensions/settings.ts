@@ -170,7 +170,10 @@ class TuiSettingsStoreImpl implements TuiSettingsStore {
 
   ensureRegistered(pi: ExtensionAPI, opts: { registerCommand: boolean }): void {
     if (this.registeredPi !== pi) {
-      if (this.registeredPi !== undefined) this.listeners.clear();
+      if (this.registeredPi !== undefined) {
+        this.listeners.clear();
+        this.settings = cloneTui(DEFAULT_TUI_SETTINGS);
+      }
       this.registeredPi = pi;
       this.runtimeRegistered = false;
       this.commandRegistered = false;
