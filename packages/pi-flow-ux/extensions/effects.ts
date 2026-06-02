@@ -1,4 +1,5 @@
-import type { IndicatorShape, WorkingState } from "./working.ts";
+import type { IndicatorShape } from "./settings.ts";
+import type { WorkingState } from "./working.ts";
 
 export const PASTEL_RAINBOW_RGB: [number, number, number][] = [
   [255, 179, 186],

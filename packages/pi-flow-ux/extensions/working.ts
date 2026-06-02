@@ -1,143 +1,12 @@
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
-import { randomBytes } from "node:crypto";
-import type { ExtensionAPI, ExtensionContext, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 export type WorkingState = "active" | "toolUse" | "thinking";
-export type IndicatorShape = "dot" | "pulse" | "spinner" | "wave";
-
-export interface TuiSettings {
-  version: number;
-  working: { indicator: IndicatorShape };
-  header: Record<string, never>;
-  editor: Record<string, never>;
-  footer: Record<string, never>;
-}
 
 export interface WorkingSnapshot {
   visible: boolean;
   state: WorkingState;
-  settings: TuiSettings;
 }
 
-export const DEFAULT_INDICATOR: IndicatorShape = "wave";
-const VALID_INDICATOR_SHAPES: readonly IndicatorShape[] = ["dot", "pulse", "spinner", "wave"];
-
-export const DEFAULT_TUI_SETTINGS: TuiSettings = {
-  version: 1,
-  working: { indicator: DEFAULT_INDICATOR },
-  header: {},
-  editor: {},
-  footer: {},
-};
-
-export const DEFAULT_TUI_SETTINGS_PATH = path.join(os.homedir(), ".pi", "agent", "tui.json");
-// working.ts now sits at extensions/working.ts (one level under the package
-// root), so a single ".." reaches the packaged tui.json — NOT two like the old
-// extensions/working/working.ts layout.
-export const PACKAGE_DEFAULT_TUI_SETTINGS_PATH = path.join(import.meta.dirname, "..", "tui.json");
-
-function cloneTui(s: TuiSettings): TuiSettings { return structuredClone(s); }
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-export function isIndicatorShape(v: unknown): v is IndicatorShape {
-  return typeof v === "string" && (VALID_INDICATOR_SHAPES as readonly string[]).includes(v);
-}
-export function normalizeTuiSettings(value: unknown, fallback: TuiSettings = DEFAULT_TUI_SETTINGS): TuiSettings {
-  if (!isPlainObject(value)) return cloneTui(fallback);
-  const working = isPlainObject(value.working) ? value.working : {};
-  const indicator = isIndicatorShape(working.indicator) ? working.indicator : fallback.working.indicator;
-  return {
-    version: typeof value.version === "number" ? value.version : fallback.version,
-    working: { indicator },
-    header: {},
-    editor: {},
-    footer: {},
-  };
-}
-
-export async function loadSavedTuiSettings(filePath: string, fallback: TuiSettings = DEFAULT_TUI_SETTINGS): Promise<TuiSettings | undefined> {
-  let raw: string;
-  try {
-    raw = await fs.readFile(filePath, "utf8");
-  } catch {
-    return undefined;
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return undefined;
-  }
-
-  if (!isPlainObject(parsed)) return undefined;
-  return normalizeTuiSettings(parsed, fallback);
-}
-
-export async function loadPackagedDefaultTuiSettings(packagePath: string): Promise<TuiSettings | undefined> {
-  let raw: string;
-  try {
-    raw = await fs.readFile(packagePath, "utf8");
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw err;
-  }
-  const parsed: unknown = JSON.parse(raw);
-  if (!isPlainObject(parsed)) {
-    throw new Error(`${packagePath}: top-level JSON must be an object`);
-  }
-  return normalizeTuiSettings(parsed, DEFAULT_TUI_SETTINGS);
-}
-
-export async function saveTuiSettings(filePath: string, settings: TuiSettings): Promise<void> {
-  let source: Record<string, unknown> = {};
-  let raw: string | undefined;
-  try {
-    raw = await fs.readFile(filePath, "utf8");
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-  }
-
-  if (raw !== undefined) {
-    const parsed: unknown = JSON.parse(raw);
-    if (!isPlainObject(parsed)) {
-      throw new Error(`${filePath}: top-level JSON must be an object`);
-    }
-    source = { ...parsed };
-  }
-
-  const normalized = normalizeTuiSettings(settings);
-  const next = {
-    ...source,
-    version: normalized.version,
-    working: normalized.working,
-    header: normalized.header,
-    editor: normalized.editor,
-    footer: normalized.footer,
-  };
-
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  // Atomic write: stage to a sibling temp file, then rename into place so a
-  // crash mid-write cannot leave the config truncated/partially written.
-  const tmpPath = `${filePath}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
-  try {
-    await fs.writeFile(tmpPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
-    await fs.rename(tmpPath, filePath);
-  } catch (err) {
-    await fs.rm(tmpPath, { force: true }).catch(() => {});
-    throw err;
-  }
-}
-
-function getTuiUsage(): string {
-  return ["Usage: /tui", "       /tui working indicator=<dot|pulse|spinner|wave>"].join("\n");
-}
-function describeTuiSettings(s: TuiSettings): string {
-  return `TUI: working.indicator=${s.working.indicator}`;
-}
 function extractToolCallId(v: unknown): string | undefined {
   return typeof v === "string" && v.length > 0 ? v : undefined;
 }
@@ -157,9 +26,6 @@ function setHostWorkingRowVisible(ui: ExtensionContext["ui"], visible: boolean):
 }
 
 class WorkingCoordinator {
-  private readonly settingsPath: string;
-  private readonly packageDefaultPath: string;
-  private settings: TuiSettings = cloneTui(DEFAULT_TUI_SETTINGS);
   private activeTurn = false;
   private thinking = false;
   // Tracks the set of tool invocations that are currently in flight, keyed by
@@ -171,17 +37,11 @@ class WorkingCoordinator {
   private inflightToolCalls = new Set<string>();
   private listeners = new Set<(snapshot: WorkingSnapshot) => void>();
   private runtimeRegistered = false;
-  private commandRegistered = false;
   private registeredPi: ExtensionAPI | undefined;
   private uiCtx: ExtensionContext | undefined;
 
-  constructor(settingsPath: string, packageDefaultPath: string) {
-    this.settingsPath = settingsPath;
-    this.packageDefaultPath = packageDefaultPath;
-  }
-
   getSnapshot(): WorkingSnapshot {
-    return { visible: this.activeTurn, state: this.resolveState(), settings: cloneTui(this.settings) };
+    return { visible: this.activeTurn, state: this.resolveState() };
   }
 
   subscribe(listener: (snapshot: WorkingSnapshot) => void): () => void {
@@ -191,7 +51,7 @@ class WorkingCoordinator {
     };
   }
 
-  ensureRegistered(pi: ExtensionAPI, registerCommand: boolean): void {
+  ensureRegistered(pi: ExtensionAPI): void {
     if (this.registeredPi !== pi) {
       if (this.registeredPi !== undefined) {
         this.listeners.clear();
@@ -201,20 +61,13 @@ class WorkingCoordinator {
       }
       this.registeredPi = pi;
       this.runtimeRegistered = false;
-      this.commandRegistered = false;
     }
 
     if (!this.runtimeRegistered) {
       this.runtimeRegistered = true;
 
-      pi.on("session_start", async (_event, ctx) => {
+      pi.on("session_start", (_event, ctx) => {
         this.uiCtx = ctx;
-        const packaged = await loadPackagedDefaultTuiSettings(this.packageDefaultPath);
-        const baseline = packaged ?? cloneTui(DEFAULT_TUI_SETTINGS);
-        const user = await loadSavedTuiSettings(this.settingsPath, baseline);
-        this.settings = user ?? baseline;
-        // The editor border owns the activity surface, so suppress Pi's host
-        // working row entirely while pi-flow-ux is installed.
         if (ctx.hasUI) setHostWorkingRowVisible(ctx.ui, false);
         this.emit();
       });
@@ -295,14 +148,6 @@ class WorkingCoordinator {
         this.uiCtx = undefined;
       });
     }
-
-    if (registerCommand && !this.commandRegistered) {
-      this.commandRegistered = true;
-      pi.registerCommand("tui", {
-        description: "Configure the pi-flow-ux TUI (working indicator).",
-        handler: async (args, ctx) => { await this.handleCommand(args, ctx); },
-      });
-    }
   }
 
   private resolveState(): WorkingState {
@@ -335,44 +180,13 @@ class WorkingCoordinator {
       }
     }
   }
-
-  private async handleCommand(args: string, ctx: ExtensionCommandContext): Promise<void> {
-    const trimmed = args.trim();
-    if (!trimmed) { ctx.ui.notify(describeTuiSettings(this.settings), "info"); return; }
-    const parts = trimmed.split(/\s+/).filter(Boolean);
-    if (parts.length === 2 && parts[0] === "working" && parts[1]!.startsWith("indicator=")) {
-      const shape = parts[1]!.slice("indicator=".length);
-      if (!isIndicatorShape(shape)) { ctx.ui.notify(getTuiUsage(), "error"); return; }
-      this.settings = { ...this.settings, working: { ...this.settings.working, indicator: shape } };
-      this.emit();
-      await this.persistWithToast(ctx, `TUI updated: working.indicator=${shape}`);
-      return;
-    }
-    ctx.ui.notify(getTuiUsage(), "error");
-  }
-
-  private async persistWithToast(ctx: ExtensionCommandContext, msg: string): Promise<void> {
-    try { await saveTuiSettings(this.settingsPath, this.settings); ctx.ui.notify(msg, "info"); }
-    catch (err) { const r = err instanceof Error ? err.message : String(err); ctx.ui.notify(`${msg} but could not save: ${r}`, "error"); }
-  }
 }
 
-const coordinatorsBySettingsPath = new Map<string, { packageDefaultPath: string; coordinator: WorkingCoordinator }>();
+let workingCoordinator: WorkingCoordinator | undefined;
 
-export function getWorkingCoordinator(
-  settingsPath: string = DEFAULT_TUI_SETTINGS_PATH,
-  packageDefaultPath: string = PACKAGE_DEFAULT_TUI_SETTINGS_PATH,
-): WorkingCoordinator {
-  const existing = coordinatorsBySettingsPath.get(settingsPath);
-  if (existing) {
-    if (existing.packageDefaultPath !== packageDefaultPath) {
-      throw new Error(`getWorkingCoordinator: settingsPath=${settingsPath} already bound to packageDefaultPath=${existing.packageDefaultPath}, refusing to rebind to ${packageDefaultPath}`);
-    }
-    return existing.coordinator;
-  }
-  const coordinator = new WorkingCoordinator(settingsPath, packageDefaultPath);
-  coordinatorsBySettingsPath.set(settingsPath, { packageDefaultPath, coordinator });
-  return coordinator;
+export function getWorkingCoordinator(): WorkingCoordinator {
+  if (!workingCoordinator) workingCoordinator = new WorkingCoordinator();
+  return workingCoordinator;
 }
 
-export function resetWorkingCoordinatorForTests(): void { coordinatorsBySettingsPath.clear(); }
+export function resetWorkingCoordinatorForTests(): void { workingCoordinator = undefined; }
