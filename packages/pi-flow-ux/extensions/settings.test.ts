@@ -9,6 +9,7 @@ import {
   DEFAULT_LOGO_VARIANT,
   LOGO_VARIANTS_ORDER,
   PACKAGE_DEFAULT_TUI_SETTINGS_PATH,
+  isIndicatorShape,
   isLogoVariant,
   loadPackagedDefaultTuiSettings,
   loadSavedTuiSettings,
@@ -27,6 +28,13 @@ test("isLogoVariant accepts the four variants and rejects others", () => {
   assert.equal(isLogoVariant("circle"), false);
   assert.equal(isLogoVariant(42), false);
   assert.equal(isLogoVariant(undefined), false);
+});
+
+test("isIndicatorShape accepts the four shapes and rejects others", () => {
+  for (const s of ["dot", "pulse", "spinner", "wave"]) assert.ok(isIndicatorShape(s));
+  assert.equal(isIndicatorShape("blink"), false);
+  assert.equal(isIndicatorShape(7), false);
+  assert.equal(isIndicatorShape(undefined), false);
 });
 
 test("normalizeTuiSettings defaults header.logo to bracket for invalid input", () => {
@@ -93,6 +101,17 @@ test("saveTuiSettings preserves unrelated top-level keys", async () => {
     const written = JSON.parse(await readFile(p, "utf8"));
     assert.equal(written.custom, "keep-me");
     assert.equal(written.header.logo, "squared");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("saveTuiSettings throws when existing JSON is malformed", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tui-"));
+  try {
+    const p = path.join(dir, "tui.json");
+    await writeFile(p, "{ not json", "utf8");
+    await assert.rejects(() => saveTuiSettings(p, DEFAULT_TUI_SETTINGS));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

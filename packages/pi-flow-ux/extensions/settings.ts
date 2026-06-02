@@ -62,6 +62,8 @@ export function normalizeTuiSettings(value: unknown, fallback: TuiSettings = DEF
 
 export async function loadSavedTuiSettings(filePath: string, fallback: TuiSettings = DEFAULT_TUI_SETTINGS): Promise<TuiSettings | undefined> {
   let raw: string;
+  // Any read failure (missing file, EACCES/EPERM, etc.) is treated as "no saved
+  // settings" so the caller falls back to the packaged/built-in defaults.
   try {
     raw = await fs.readFile(filePath, "utf8");
   } catch {
