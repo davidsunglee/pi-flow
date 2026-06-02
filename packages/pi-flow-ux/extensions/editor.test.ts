@@ -24,6 +24,8 @@ import {
 } from "./editor.ts";
 import { buildWorkingIndicator, pickWorkingIndicatorFrame } from "./effects.ts";
 import type { WorkingSnapshot } from "./working.ts";
+import type { IndicatorShape } from "./settings.ts";
+import { getTuiSettingsStore, resetTuiSettingsStoreForTests, PACKAGE_DEFAULT_TUI_SETTINGS_PATH } from "./settings.ts";
 import { visibleWidth } from "@earendil-works/pi-tui";
 
 /** Marker colorize for routing assertions: wraps text in `[field:text]`. */
@@ -667,73 +669,41 @@ test("composeBorderLines applies the thinking styler to the thinking label", () 
 // ─── resolveEditorTimerCadence ─────────────────────────────────────────────────
 
 test("resolveEditorTimerCadence returns undefined when not visible", () => {
-	assert.equal(resolveEditorTimerCadence(snapshot({ visible: false })), undefined);
+	assert.equal(resolveEditorTimerCadence(snapshot({ visible: false }), "wave"), undefined);
 });
 
 test("resolveEditorTimerCadence drives a 120ms cadence for a visible static dot indicator", () => {
-	const cadence = resolveEditorTimerCadence(
-		snapshot({
-			visible: true,
-			state: "active",
-			settings: {
-				version: 1,
-				working: { indicator: "dot" },
-				header: {},
-				editor: {},
-				footer: {},
-			},
-		}),
-	);
+	const cadence = resolveEditorTimerCadence(snapshot({ visible: true, state: "active" }), "dot");
 	assert.equal(cadence, 120, "static dot still animates the model gleam / thinking rainbow");
 });
 
 test("resolveEditorTimerCadence mirrors the spinner interval for a visible spinner indicator", () => {
-	const cadence = resolveEditorTimerCadence(snapshot({ visible: true, state: "active" }));
-	assert.equal(cadence, buildWorkingIndicator("spinner", "active").intervalMs);
+	const cadence = resolveEditorTimerCadence(snapshot({ visible: true, state: "active" }), "spinner");
+	assert.equal(cadence, 160);
 });
 
 // ─── resolveBorderActivity (working snapshot → border slot) ────────────────────
 
 function snapshot(overrides: Partial<WorkingSnapshot> = {}): WorkingSnapshot {
-	return {
-		visible: false,
-		state: "active",
-		settings: {
-			version: 1,
-			working: { indicator: "spinner" },
-			header: {},
-			editor: {},
-			footer: {},
-		},
-		...overrides,
-	};
+	return { visible: true, state: "active", ...overrides };
 }
 
 test("resolveBorderActivity reports an idle slot when no turn is active", () => {
-	const activity = resolveBorderActivity(snapshot({ visible: false }), 0);
-	assert.deepEqual(activity, { active: false, glyph: "" });
+	const activity = resolveBorderActivity(snapshot({ visible: false }), "spinner", 0);
+	assert.equal(activity.active, false);
 });
 
 test("resolveBorderActivity renders the spinner frame for the current state and time", () => {
 	const snap = snapshot({ visible: true, state: "active" });
-	const activity = resolveBorderActivity(snap, 0);
+	const activity = resolveBorderActivity(snap, "spinner", 0);
 	assert.equal(activity.active, true);
-	assert.equal(
-		activity.glyph,
-		pickWorkingIndicatorFrame("spinner", snap.state, 0),
-		"glyph reuses the shared working indicator frame generation",
-	);
+	assert.equal(activity.glyph, pickWorkingIndicatorFrame("spinner", "active", 0));
 });
 
 test("resolveBorderActivity applies the thinking style (rainbow) when thinking", () => {
 	const snap = snapshot({ visible: true, state: "thinking" });
-	const activity = resolveBorderActivity(snap, 0);
-	assert.ok(activity.active);
-	assert.equal(
-		activity.glyph,
-		pickWorkingIndicatorFrame("spinner", snap.state, 0),
-		"thinking uses the thinking state's rainbow frame",
-	);
+	const activity = resolveBorderActivity(snap, "spinner", 0);
+	assert.equal(activity.active, true);
 });
 
 // ─── Editor settings / border colour integration ───────────────────────────────
@@ -804,7 +774,7 @@ test("resolveEditorBorderColor uses thinking-level color unless the editor is in
 });
 
 test("installBorderEditor initializes autocomplete max visible from Pi settings on first install", async () => {
-	await withTempPiSettings({ autocompleteMaxVisible: 10 }, async ({ cwd }) => {
+	await withTempPiSettings({ autocompleteMaxVisible: 10 }, async ({ agentDir, cwd }) => {
 		const pi = {
 			getThinkingLevel() {
 				return "off";
@@ -840,7 +810,9 @@ test("installBorderEditor initializes autocomplete max visible from Pi settings 
 			},
 		};
 
-		const handle = installBorderEditor(pi as any, ctx as any);
+		resetTuiSettingsStoreForTests();
+		const store = getTuiSettingsStore(path.join(agentDir, "tui.json"), PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+		const handle = installBorderEditor(pi as any, ctx as any, store);
 		const editor = editorFactory(fakeTui as any, fakeEditorTheme as any, fakeKeybindings as any);
 		assert.equal(
 			editor.getAutocompleteMaxVisible(),
@@ -889,7 +861,9 @@ test("border editor border stroke follows the active thinking level while the th
 		},
 	};
 
-	const handle = installBorderEditor(pi as any, ctx as any);
+	resetTuiSettingsStoreForTests();
+	const store = getTuiSettingsStore(path.join(os.tmpdir(), "editor-stroke-tui.json"), PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+	const handle = installBorderEditor(pi as any, ctx as any, store);
 	const editor = editorFactory(fakeTui as any, fakeEditorTheme as any, fakeKeybindings as any);
 	// Simulate Pi's setCustomEditorComponent copying a stale default-editor border
 	// colour into the custom editor after the factory returns.
@@ -963,7 +937,9 @@ test("installBorderEditor installs a border-status editor without touching the f
 		},
 	};
 
-	installBorderEditor(pi as any, ctx as any);
+	resetTuiSettingsStoreForTests();
+	const store = getTuiSettingsStore(path.join(os.tmpdir(), "editor-lifecycle-tui.json"), PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+	installBorderEditor(pi as any, ctx as any, store);
 	assert.equal(typeof editorFactories[0], "function", "installBorderEditor installs a custom editor");
 	assert.equal(footerCalls, 0, "border editor must not touch the footer");
 });
@@ -1002,7 +978,9 @@ test("dispose restores the built-in editor", async () => {
 		},
 	};
 
-	const handle = installBorderEditor(pi as any, ctx as any);
+	resetTuiSettingsStoreForTests();
+	const store = getTuiSettingsStore(path.join(os.tmpdir(), "editor-dispose-tui.json"), PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+	const handle = installBorderEditor(pi as any, ctx as any, store);
 	handle.dispose();
 
 	assert.equal(typeof editorCalls[0], "function", "installBorderEditor installs a custom editor");

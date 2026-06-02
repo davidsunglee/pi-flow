@@ -59,6 +59,7 @@ import {
 	gleamText,
 	rainbowText,
 } from "./effects.ts";
+import { type IndicatorShape, type TuiSettingsStore } from "./settings.ts";
 import {
 	getWorkingCoordinator,
 	type WorkingSnapshot,
@@ -401,16 +402,13 @@ const ACTIVITY_SLOT_WIDTH = 2;
  */
 export function resolveBorderActivity(
 	snapshot: WorkingSnapshot,
+	indicator: IndicatorShape,
 	nowMs: number,
 ): BorderActivity {
 	if (!snapshot.visible) return { active: false, glyph: "" };
 	return {
 		active: true,
-		glyph: pickWorkingIndicatorFrame(
-			snapshot.settings.working.indicator,
-			snapshot.state,
-			nowMs,
-		),
+		glyph: pickWorkingIndicatorFrame(indicator, snapshot.state, nowMs),
 	};
 }
 
@@ -610,9 +608,9 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 // The editor redraws on a timer whenever activity is visible — even for static
 // indicators like `dot` — so the model-gleam and thinking-rainbow animate.
 // Exported so the cadence policy is unit-testable without a live editor.
-export function resolveEditorTimerCadence(snapshot: WorkingSnapshot): number | undefined {
+export function resolveEditorTimerCadence(snapshot: WorkingSnapshot, indicator: IndicatorShape): number | undefined {
 	if (!snapshot.visible) return undefined;
-	const { intervalMs } = buildWorkingIndicator(snapshot.settings.working.indicator, snapshot.state);
+	const { intervalMs } = buildWorkingIndicator(indicator, snapshot.state);
 	return intervalMs ?? 120;
 }
 
@@ -628,6 +626,7 @@ export function resolveEditorTimerCadence(snapshot: WorkingSnapshot): number | u
 export function installBorderEditor(
 	pi: ExtensionAPI,
 	ctx: ExtensionContext,
+	store: TuiSettingsStore,
 ): EditorHandle {
 	const working = getWorkingCoordinator();
 	let editor: BorderStatusEditor | undefined;
@@ -648,7 +647,7 @@ export function installBorderEditor(
 	// snapshot and wall clock inside render().
 	function syncAnimation(snapshot: WorkingSnapshot): void {
 		editor?.requestRedraw();
-		const cadence = resolveEditorTimerCadence(snapshot);
+		const cadence = resolveEditorTimerCadence(snapshot, store.get().working.indicator);
 		if (cadence === undefined) {
 			stopAnimation();
 			return;
@@ -659,7 +658,8 @@ export function installBorderEditor(
 		animationTimer = setInterval(() => editor?.requestRedraw(), cadence);
 	}
 
-	const unsubscribe = working.subscribe(syncAnimation);
+	const unsubscribeWorking = working.subscribe(syncAnimation);
+	const unsubscribeSettings = store.subscribe(() => syncAnimation(working.getSnapshot()));
 
 	class BorderStatusEditor extends CustomEditor {
 		constructor(
@@ -719,7 +719,7 @@ export function installBorderEditor(
 				borderColor,
 				modelStyler,
 				thinkingStyler,
-				activity: resolveBorderActivity(snapshot, nowMs),
+				activity: resolveBorderActivity(snapshot, store.get().working.indicator, nowMs),
 			});
 		}
 	}
@@ -732,7 +732,8 @@ export function installBorderEditor(
 	return {
 		dispose() {
 			stopAnimation();
-			unsubscribe();
+			unsubscribeWorking();
+			unsubscribeSettings();
 			ctx.ui.setEditorComponent(undefined);
 		},
 	};
