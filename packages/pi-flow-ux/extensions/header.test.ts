@@ -133,7 +133,7 @@ describe("installHeader", () => {
   });
 
   it("factory calls tui.requestRender when the store emits", () => {
-    let storedListener: (() => void) | undefined;
+    let storedListener: ((s: TuiSettings) => void) | undefined;
     const store: TuiSettingsStore = {
       get: () => ({ ...DEFAULT_TUI_SETTINGS, header: { logo: "squared" as const } }),
       subscribe: (fn) => { storedListener = fn; return () => {}; },
@@ -144,7 +144,7 @@ describe("installHeader", () => {
     const ctx = { hasUI: true, ui: { setHeader: (f: any) => f(tui, {}) } } as any;
     installHeader(ctx, "startup", store);
     assert.ok(storedListener, "subscribe should have been called");
-    storedListener!();
+    storedListener!({ ...DEFAULT_TUI_SETTINGS, header: { logo: "squared" } });
     assert.equal(renders, 1);
   });
 });

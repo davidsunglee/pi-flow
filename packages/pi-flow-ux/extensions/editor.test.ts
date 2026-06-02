@@ -24,7 +24,7 @@ import {
 } from "./editor.ts";
 import { buildWorkingIndicator, pickWorkingIndicatorFrame } from "./effects.ts";
 import type { WorkingSnapshot } from "./working.ts";
-import { getTuiSettingsStore, resetTuiSettingsStoreForTests, PACKAGE_DEFAULT_TUI_SETTINGS_PATH } from "./settings.ts";
+import { getTuiSettingsStore, resetTuiSettingsStoreForTests, PACKAGE_DEFAULT_TUI_SETTINGS_PATH, DEFAULT_TUI_SETTINGS, type TuiSettings, type TuiSettingsStore } from "./settings.ts";
 import { visibleWidth } from "@earendil-works/pi-tui";
 
 /** Marker colorize for routing assertions: wraps text in `[field:text]`. */
@@ -1000,4 +1000,50 @@ test("dispose restores the built-in editor", async () => {
 	} finally {
 		await rm(storeDir, { recursive: true, force: true });
 	}
+});
+
+test("border editor requests a redraw when the settings store emits", () => {
+	let storedListener: ((s: TuiSettings) => void) | undefined;
+	const store: TuiSettingsStore = {
+		get: () => ({ ...DEFAULT_TUI_SETTINGS }),
+		subscribe: (fn) => { storedListener = fn; return () => {}; },
+		ensureRegistered: () => {},
+	};
+
+	const pi = { getThinkingLevel() { return "off"; } };
+
+	let renderCount = 0;
+	const trackingTui = {
+		terminal: { rows: 24 },
+		requestRender() { renderCount++; },
+	};
+
+	let editorFactory: any;
+	const ctx = {
+		cwd: "/repo",
+		model: undefined,
+		getContextUsage() { return undefined; },
+		ui: {
+			setEditorComponent(factory: unknown) { editorFactory = factory; },
+			theme: {
+				name: "test",
+				getColorMode() { return "truecolor"; },
+				fg(_t: string, text: string) { return text; },
+				getThinkingBorderColor() { return (text: string) => text; },
+				getBashModeBorderColor() { return (text: string) => text; },
+			},
+		},
+	};
+
+	const handle = installBorderEditor(pi as any, ctx as any, store);
+
+	// Drive the factory so `editor` is set inside installBorderEditor.
+	editorFactory(trackingTui as any, fakeEditorTheme as any, fakeKeybindings as any);
+
+	assert.ok(storedListener, "store.subscribe should have been called");
+	const before = renderCount;
+	storedListener!({ ...DEFAULT_TUI_SETTINGS });
+	assert.ok(renderCount > before, "store emit should trigger tui.requestRender via editor.requestRedraw");
+
+	handle.dispose();
 });
