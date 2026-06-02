@@ -1,5 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { VERSION } from "@earendil-works/pi-coding-agent";
+import type { TUI } from "@earendil-works/pi-tui";
+import { type LogoVariant, DEFAULT_LOGO_VARIANT, type TuiSettingsStore } from "./settings.ts";
 
 export type SessionStartReason = "startup" | "reload" | "new" | "resume" | "fork";
 
@@ -14,16 +16,6 @@ const STARTUP_REASON_LABELS: Record<SessionStartReason, string> = {
 export function humanizeStartupReason(reason: string): string {
   return STARTUP_REASON_LABELS[reason as SessionStartReason] ?? "session started";
 }
-
-// Hand-rolled pi gradient wordmark — fallback for pi-powerline's header art,
-// which is not vendored in this repo. Swap PI_LOGO_ART for the ported art if
-// it becomes available; applyLogoGradient is theme-independent regardless.
-const PI_LOGO_ART: string[] = [
-  "████████",
-  " ██  ██ ",
-  " ██  ██ ",
-  " ██  ██ ",
-];
 
 // Gradient stops (R,G,B) interpolated left→right across the logo columns.
 const LOGO_GRADIENT_STOPS: [number, number, number][] = [
@@ -59,9 +51,19 @@ export function applyLogoGradient(lines: string[]): string[] {
   );
 }
 
-export function buildHeaderLines(version: string, reason: string): string[] {
+// Lettered "pi" wordmarks. Declared in canonical order: bracket, sidebar,
+// rounded, squared. applyLogoGradient colors non-space chars by column.
+export const LOGO_VARIANTS: Record<LogoVariant, string[]> = {
+  bracket: ["[ pi ]"],
+  sidebar: ["▌ pi ▐"],
+  rounded: ["╭────╮", "│ pi │", "╰────╯"],
+  squared: ["┏━━━━┓", "┃ pi ┃", "┗━━━━┛"],
+};
+
+export function buildHeaderLines(version: string, reason: string, variant: LogoVariant = DEFAULT_LOGO_VARIANT): string[] {
+  const art = LOGO_VARIANTS[variant] ?? LOGO_VARIANTS[DEFAULT_LOGO_VARIANT];
   return [
-    ...applyLogoGradient(PI_LOGO_ART),
+    ...applyLogoGradient(art),
     "",
     `version ${version}`,
     humanizeStartupReason(reason),
@@ -70,9 +72,23 @@ export function buildHeaderLines(version: string, reason: string): string[] {
 
 export interface HeaderHandle { dispose(): void; }
 
-export function installHeader(ctx: ExtensionContext, reason: string): HeaderHandle {
+export function installHeader(ctx: ExtensionContext, reason: string, store: TuiSettingsStore): HeaderHandle {
   if (!ctx.hasUI) return { dispose() {} };
-  const lines = buildHeaderLines(VERSION, reason);
-  ctx.ui.setHeader(() => ({ render: (_width: number) => lines, invalidate() {} }));
-  return { dispose() { ctx.ui.setHeader(undefined); } };
+  let unsubscribe: (() => void) | undefined;
+  ctx.ui.setHeader((tui: TUI) => {
+    unsubscribe?.();
+    unsubscribe = store.subscribe(() => tui.requestRender());
+    return {
+      render: (_width: number) => buildHeaderLines(VERSION, reason, store.get().header.logo),
+      invalidate() {},
+      dispose() { unsubscribe?.(); unsubscribe = undefined; },
+    };
+  });
+  return {
+    dispose() {
+      unsubscribe?.();
+      unsubscribe = undefined;
+      ctx.ui.setHeader(undefined);
+    },
+  };
 }

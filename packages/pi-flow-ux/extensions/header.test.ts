@@ -1,4 +1,4 @@
-import { describe, it, before } from "node:test";
+import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import {
@@ -6,8 +6,20 @@ import {
   applyLogoGradient,
   buildHeaderLines,
   installHeader,
+  LOGO_VARIANTS,
   type SessionStartReason,
 } from "./header.ts";
+import type { LogoVariant, TuiSettingsStore, TuiSettings } from "./settings.ts";
+import { DEFAULT_TUI_SETTINGS } from "./settings.ts";
+
+function fakeStore(logo: LogoVariant): TuiSettingsStore {
+  const settings: TuiSettings = { ...DEFAULT_TUI_SETTINGS, header: { logo } };
+  return {
+    get: () => settings,
+    subscribe: () => () => {},
+    ensureRegistered: () => {},
+  };
+}
 
 describe("humanizeStartupReason", () => {
   const cases: [SessionStartReason, string][] = [
@@ -51,28 +63,31 @@ describe("applyLogoGradient", () => {
 });
 
 describe("buildHeaderLines", () => {
-  let lines: string[];
-
-  before(() => {
-    lines = buildHeaderLines("0.78.0", "startup");
+  it("default variant (bracket) renders the bracket wordmark with gradient", () => {
+    const lines = buildHeaderLines("0.78.0", "startup");
+    const logoRows = lines.length - 3; // minus blank, version, reason
+    assert.equal(logoRows, LOGO_VARIANTS.bracket.length);
+    assert.match(lines[0]!, /\x1b\[38;2;\d+;\d+;\d+m/);
   });
 
-  it("first lines (the logo) contain truecolor escapes", () => {
-    // Logo has 4 lines
-    const logoLines = lines.slice(0, 4);
-    const hasEscape = logoLines.some((l) => /\x1b\[38;2;\d+;\d+;\d+m/.test(l));
-    assert.ok(hasEscape, "Expected at least one logo line with truecolor escapes");
+  it("renders each variant with the correct row count and gradient", () => {
+    for (const variant of Object.keys(LOGO_VARIANTS) as LogoVariant[]) {
+      const lines = buildHeaderLines("0.78.0", "startup", variant);
+      const logoRows = lines.slice(0, LOGO_VARIANTS[variant].length);
+      assert.equal(logoRows.length, LOGO_VARIANTS[variant].length);
+      assert.ok(logoRows.some((l) => /\x1b\[38;2;\d+;\d+;\d+m/.test(l)), `${variant} should have gradient escapes`);
+    }
   });
 
-  it("contains an empty blank separator line", () => {
-    assert.ok(lines.includes(""), "Expected a blank separator line");
+  it("unknown variant falls back to bracket", () => {
+    const lines = buildHeaderLines("0.78.0", "startup", "nope" as LogoVariant);
+    assert.equal(lines.length - 3, LOGO_VARIANTS.bracket.length);
   });
 
-  it("contains the version line", () => {
-    assert.ok(lines.includes("version 0.78.0"), "Expected 'version 0.78.0' line");
-  });
-
-  it("last line equals humanizeStartupReason('startup')", () => {
+  it("contains a blank separator, the version line, and the humanized reason", () => {
+    const lines = buildHeaderLines("0.78.0", "startup");
+    assert.ok(lines.includes(""));
+    assert.ok(lines.includes("version 0.78.0"));
     assert.equal(lines[lines.length - 1], humanizeStartupReason("startup"));
   });
 });
@@ -80,45 +95,37 @@ describe("buildHeaderLines", () => {
 describe("installHeader", () => {
   it("does not call setHeader when hasUI is false", () => {
     let callCount = 0;
-    const ctx = {
-      hasUI: false,
-      ui: {
-        setHeader: () => { callCount++; },
-      },
-    } as any;
-    const handle = installHeader(ctx, "startup");
-    assert.equal(callCount, 0, "setHeader should not be called when hasUI is false");
-    assert.ok(handle, "Should return a handle");
+    const ctx = { hasUI: false, ui: { setHeader: () => { callCount++; } } } as any;
+    const handle = installHeader(ctx, "startup", fakeStore("bracket"));
+    assert.equal(callCount, 0);
     assert.equal(typeof handle.dispose, "function");
   });
 
-  it("calls setHeader once when hasUI is true", () => {
-    let callCount = 0;
-    let setHeaderArg: unknown;
-    const ctx = {
-      hasUI: true,
-      ui: {
-        setHeader: (arg: unknown) => { callCount++; setHeaderArg = arg; },
-      },
-    } as any;
-    const handle = installHeader(ctx, "startup");
-    assert.equal(callCount, 1, "setHeader should be called once when hasUI is true");
-    assert.equal(typeof setHeaderArg, "function", "setHeader should be called with a function");
-    assert.ok(handle, "Should return a handle");
+  it("calls setHeader once with a factory when hasUI is true", () => {
+    let callCount = 0; let arg: unknown;
+    const ctx = { hasUI: true, ui: { setHeader: (a: unknown) => { callCount++; arg = a; } } } as any;
+    const handle = installHeader(ctx, "startup", fakeStore("rounded"));
+    assert.equal(callCount, 1);
+    assert.equal(typeof arg, "function");
     assert.equal(typeof handle.dispose, "function");
+  });
+
+  it("factory renders the store's variant and subscribes for re-render", () => {
+    let factory: any;
+    const tui = { requestRender: () => {} } as any;
+    const ctx = { hasUI: true, ui: { setHeader: (f: any) => { factory = f; } } } as any;
+    installHeader(ctx, "startup", fakeStore("squared"));
+    const component = factory(tui, {});
+    const out = component.render(80);
+    assert.ok(out.slice(0, LOGO_VARIANTS.squared.length).some((l: string) => /\x1b\[38;2;/.test(l)));
   });
 
   it("dispose calls setHeader(undefined)", () => {
-    const setHeaderCalls: unknown[] = [];
-    const ctx = {
-      hasUI: true,
-      ui: {
-        setHeader: (arg: unknown) => { setHeaderCalls.push(arg); },
-      },
-    } as any;
-    const handle = installHeader(ctx, "startup");
+    const calls: unknown[] = [];
+    const ctx = { hasUI: true, ui: { setHeader: (a: unknown) => { calls.push(a); } } } as any;
+    const handle = installHeader(ctx, "startup", fakeStore("bracket"));
     handle.dispose();
-    assert.equal(setHeaderCalls.length, 2);
-    assert.equal(setHeaderCalls[1], undefined);
+    assert.equal(calls.length, 2);
+    assert.equal(calls[1], undefined);
   });
 });
