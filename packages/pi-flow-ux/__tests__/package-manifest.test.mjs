@@ -22,16 +22,18 @@ const EXCLUDED_EXTENSIONS = [
 ];
 
 const EXPECTED_EXTENSION_ENTRIES = [
-  'extensions/status/index.ts',
-  'extensions/working/index.ts',
+  'extensions/index.ts',
 ];
 
-// The footer and border-status renderers are now internal implementation
-// modules behind the status coordinator; they must NOT be registered as
+// Internal modules imported by index.ts must NOT be registered as
 // independent extensions in the manifest.
 const FORBIDDEN_EXTENSION_ENTRIES = [
-  'extensions/status/footer.ts',
-  'extensions/status/border-status.ts',
+  'extensions/editor.ts',
+  'extensions/footer.ts',
+  'extensions/working.ts',
+  'extensions/header.ts',
+  'extensions/effects.ts',
+  'extensions/working-messages.ts',
 ];
 
 // Mirror of the glob helper used in aggregate-forwarding.test.mjs and
@@ -74,7 +76,7 @@ test('package.json identifies @aphotic/pi-flow-ux as a pi-package', () => {
   );
 });
 
-test('pi.extensions manifest lists status and working/index entries that resolve on disk', () => {
+test('pi.extensions manifest lists the single entrypoint that resolves on disk', () => {
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
   const entries = pkg.pi?.extensions;
   assert.ok(Array.isArray(entries), 'pi.extensions must be an array');
@@ -89,22 +91,23 @@ test('pi.extensions manifest lists status and working/index entries that resolve
   }
 });
 
-test('pi.extensions does not register footer or border-status as independent extensions', () => {
+test('pi.extensions does not register internal modules as independent extensions', () => {
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
   const entries = pkg.pi?.extensions || [];
   for (const forbidden of FORBIDDEN_EXTENSION_ENTRIES) {
     assert.ok(
       !entries.includes(forbidden),
-      `pi.extensions must not load ${forbidden} independently; it is a renderer behind the status coordinator`
+      `pi.extensions must not load ${forbidden} independently; it is an internal module imported by index.ts`
     );
   }
 });
 
-test('packaged status.json default exists at package root with placement "border"', () => {
-  const statusPath = pkgPath('status.json');
-  assert.ok(existsSync(statusPath), 'status.json must exist at the package root');
-  const raw = JSON.parse(readFileSync(statusPath, 'utf8'));
-  assert.equal(raw.placement, 'border', 'packaged status.json must default to placement "border"');
+test('packaged tui.json default exists at package root with version 1 and working.indicator "wave"', () => {
+  const tuiPath = pkgPath('tui.json');
+  assert.ok(existsSync(tuiPath), 'tui.json must exist at the package root');
+  const raw = JSON.parse(readFileSync(tuiPath, 'utf8'));
+  assert.equal(raw.version, 1, 'packaged tui.json must have version 1');
+  assert.equal(raw.working?.indicator, 'wave', 'packaged tui.json must default to working.indicator "wave"');
 });
 
 test('pi.themes manifest resolves to themes/nord.json', () => {
@@ -135,11 +138,11 @@ test('pi.themes manifest resolves to themes/nord.json', () => {
   assert.ok(nordCovered, `pi.themes must cover themes/nord.json; entries=${JSON.stringify(themeEntries)}`);
 });
 
-test('packaged working.json default exists at package root with Nord-tuned defaults', () => {
-  const workingPath = pkgPath('working.json');
-  assert.ok(existsSync(workingPath), 'working.json must exist at the package root');
-  const raw = JSON.parse(readFileSync(workingPath, 'utf8'));
-  assert.equal(raw.indicatorShape, 'wave', 'packaged working.json must default to indicatorShape "wave"');
+test('packaged tui.json working.indicator defaults to "wave"', () => {
+  const tuiPath = pkgPath('tui.json');
+  assert.ok(existsSync(tuiPath), 'tui.json must exist at the package root');
+  const raw = JSON.parse(readFileSync(tuiPath, 'utf8'));
+  assert.equal(raw.working?.indicator, 'wave', 'packaged tui.json must default to working.indicator "wave"');
 });
 
 test('excluded personal extensions are absent from the UX package', () => {
@@ -172,10 +175,10 @@ test('peer dependencies cover @earendil-works/pi-coding-agent and pi-tui', () =>
   }
 });
 
-test('files array ships extensions, themes, and working.json', () => {
+test('files array ships extensions, themes, and tui.json', () => {
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
   const files = pkg.files || [];
-  for (const entry of ['extensions', 'themes', 'working.json', 'status.json']) {
+  for (const entry of ['extensions', 'themes', 'tui.json']) {
     assert.ok(files.includes(entry), `files array must include "${entry}"`);
   }
 });

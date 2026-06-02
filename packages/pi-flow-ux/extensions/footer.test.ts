@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { installBlankFooter } from "./blank-footer.ts";
+import { installBlankFooter } from "./footer.ts";
 
 test("installBlankFooter installs a footer that renders no lines", () => {
 	const footerCalls: unknown[] = [];
@@ -13,7 +13,7 @@ test("installBlankFooter installs a footer that renders no lines", () => {
 		},
 	};
 
-	installBlankFooter({} as any, ctx as any);
+	installBlankFooter(ctx as any);
 
 	assert.equal(
 		typeof footerCalls[0],
@@ -35,7 +35,7 @@ test("installBlankFooter dispose restores the built-in/default footer", () => {
 		},
 	};
 
-	const handle = installBlankFooter({} as any, ctx as any);
+	const handle = installBlankFooter(ctx as any);
 	handle.dispose();
 
 	assert.equal(

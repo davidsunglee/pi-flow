@@ -1,15 +1,22 @@
 /**
  * Border-status editor extension
  *
- * Draws key session metadata into the editor's top and bottom border lines,
- * following pi's `border-status-editor.ts` example pattern (extend CustomEditor,
- * override render(width), rewrite the top/bottom border rows and frame the
- * interior rows with vertical edges to close the rectangle).
+ * The always-on border surface for pi-flow-ux. It draws key session metadata
+ * into the editor's top and bottom border lines, following pi's
+ * `border-status-editor.ts` example pattern (extend CustomEditor, override
+ * render(width), rewrite the top/bottom border rows and frame the interior rows
+ * with vertical edges to close the rectangle).
  *
  * Layout (closed rectangle; the cwd alone sits on the top edge):
  *   top edge:    ╭───────────────────────────────────  ~/path ─╮
  *   side rows:   │ …editor content…                            │
  *   bottom edge: ╰─ model thinking ──────  used/total context% ─╯
+ *
+ * This editor owns the compact activity indicator: it reads the working
+ * snapshot to draw the lower-left activity slot, applies hardcoded effects to
+ * the model name (gleam while active) and thinking label (rainbow while
+ * thinking), and runs a redraw timer whenever activity is visible so those
+ * effects animate.
  *
  * Emphasized fields stay in lock-step with the footer; the lower-priority
  * secondary status fields (thinking label and token counts) are de-emphasized to
@@ -30,10 +37,9 @@
  * Because these tokens resolve per-render, theme switches update the border
  * colours automatically with no cached ANSI to invalidate.
  *
- * This internal status renderer installs only a custom editor (via
- * setEditorComponent) and never touches the footer. The status coordinator
- * pairs it with the blank-footer renderer so the border remains the only
- * visible status surface.
+ * This editor installs only a custom editor (via setEditorComponent) and never
+ * touches the footer; a separate blank-footer renderer keeps the border the
+ * only visible status surface.
  */
 
 import {
@@ -50,12 +56,18 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import {
 	buildWorkingIndicator,
 	pickWorkingIndicatorFrame,
-} from "../working/effects.ts";
+	gleamText,
+	rainbowText,
+} from "./effects.ts";
 import {
 	getWorkingCoordinator,
 	type WorkingSnapshot,
-} from "../working/working.ts";
-import type { StatusRendererHandle } from "./status.ts";
+} from "./working.ts";
+
+/** Handle returned by {@link installBorderEditor} to remove the editor. */
+export interface EditorHandle {
+	dispose(): void;
+}
 
 // ─── Colour routing ─────────────────────────────────────────────────────────
 
@@ -100,7 +112,7 @@ type TextColorizer = (text: string) => string;
  * Pi updates only the currently active editor when thinking/bash mode changes;
  * a custom editor installed after that can inherit a stale default-editor
  * border colour. Resolving from the live editor text and thinking level at
- * render time keeps runtime /status switches in sync with the host behaviour.
+ * render time keeps the border in sync with the host behaviour.
  */
 export function resolveEditorBorderColor(
 	editorText: string,
@@ -137,8 +149,8 @@ function getBorderEditorOptions(cwd: string): {
 
 /**
  * Resolve the thinking-level label, hiding it entirely when reasoning is toggled
- * off. Self-contained so border-status carries no dependency on the footer
- * extension (which is slated for removal).
+ * off. Self-contained so the editor carries no dependency on the footer
+ * extension.
  */
 export function getThinkingLabel(
 	thinkingLevel: string | null | undefined,
@@ -392,12 +404,11 @@ export function resolveBorderActivity(
 	nowMs: number,
 ): BorderActivity {
 	if (!snapshot.visible) return { active: false, glyph: "" };
-	const style = snapshot.settings[snapshot.state];
 	return {
 		active: true,
 		glyph: pickWorkingIndicatorFrame(
-			snapshot.settings.indicatorShape,
-			style,
+			snapshot.settings.working.indicator,
+			snapshot.state,
 			nowMs,
 		),
 	};
@@ -425,6 +436,10 @@ export interface ComposeBorderLinesOptions {
 	 * border fill while idle). When omitted, no slot is reserved.
 	 */
 	activity?: BorderActivity;
+	/** When present, styles the model id (e.g. gleam) instead of the static model token. */
+	modelStyler?: (text: string) => string;
+	/** When present, styles the thinking label (e.g. rainbow) instead of the static thinking token. */
+	thinkingStyler?: (text: string) => string;
 }
 
 const ANSI_ESCAPE_RE =
@@ -490,10 +505,14 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 		activitySlotWidth: p.activity ? ACTIVITY_SLOT_WIDTH : 0,
 	});
 
-	// Bottom-left: optional activity slot, then model + optional thinking.
-	let bottomLeft = colorize("model", p.modelId);
+	// Bottom-left: optional activity slot, then model + optional thinking. Width
+	// math (above) still uses the plain p.modelId / p.thinkingLabel, so the
+	// stylers below do not affect the priority dropper.
+	const modelText = p.modelStyler ? p.modelStyler(p.modelId) : colorize("model", p.modelId);
+	let bottomLeft = modelText;
 	if (flags.showThinking) {
-		bottomLeft += " " + colorize("thinking", p.thinkingLabel);
+		const thinkingText = p.thinkingStyler ? p.thinkingStyler(p.thinkingLabel) : colorize("thinking", p.thinkingLabel);
+		bottomLeft += " " + thinkingText;
 	}
 
 	// Compose the bottom-left status text together with its surrounding block
@@ -588,37 +607,28 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 
 // ─── Renderer install ──────────────────────────────────────────────────────────
 
-/**
- * Frame cadence for the border activity slot, or `undefined` when the current
- * indicator is static (a single frame) and needs no animation timer. The
- * cadence mirrors the working indicator's own per-shape timing.
- */
-function borderActivityCadenceMs(snapshot: WorkingSnapshot): number | undefined {
-	const style = snapshot.settings[snapshot.state];
-	const { frames, intervalMs } = buildWorkingIndicator(
-		snapshot.settings.indicatorShape,
-		style,
-	);
-	if (!frames || frames.length <= 1) return undefined;
+// The editor redraws on a timer whenever activity is visible — even for static
+// indicators like `dot` — so the model-gleam and thinking-rainbow animate.
+// Exported so the cadence policy is unit-testable without a live editor.
+export function resolveEditorTimerCadence(snapshot: WorkingSnapshot): number | undefined {
+	if (!snapshot.visible) return undefined;
+	const { intervalMs } = buildWorkingIndicator(snapshot.settings.working.indicator, snapshot.state);
 	return intervalMs ?? 120;
 }
 
 /**
- * Install the border-status editor into the active session and return a handle
- * the status coordinator uses to remove it. The border editor is one of the
- * mutually-exclusive status placements; the coordinator owns the session
- * lifecycle, so this module no longer registers its own session handlers.
+ * Install the always-on border editor into the active session and return a
+ * handle the entrypoint uses to remove it.
  *
- * While installed, the border owns the compact working indicator: it flags the
- * shared working coordinator so the host loader-row indicator/message
- * extensions stand down, consumes the working snapshot to draw the activity
- * slot, and drives a modest animation timer so the slot animates independently
- * of the host's own loader.
+ * The editor owns the compact working indicator: it consumes the working
+ * snapshot to draw the activity slot and applies hardcoded effects to the model
+ * name and thinking label, and drives a redraw timer whenever activity is
+ * visible so those effects animate independently of the host's own loader.
  */
-export function installBorderStatus(
+export function installBorderEditor(
 	pi: ExtensionAPI,
 	ctx: ExtensionContext,
-): StatusRendererHandle {
+): EditorHandle {
 	const working = getWorkingCoordinator();
 	let editor: BorderStatusEditor | undefined;
 	let animationTimer: ReturnType<typeof setInterval> | undefined;
@@ -638,9 +648,7 @@ export function installBorderStatus(
 	// snapshot and wall clock inside render().
 	function syncAnimation(snapshot: WorkingSnapshot): void {
 		editor?.requestRedraw();
-		const cadence = snapshot.visible
-			? borderActivityCadenceMs(snapshot)
-			: undefined;
+		const cadence = resolveEditorTimerCadence(snapshot);
 		if (cadence === undefined) {
 			stopAnimation();
 			return;
@@ -652,7 +660,6 @@ export function installBorderStatus(
 	}
 
 	const unsubscribe = working.subscribe(syncAnimation);
-	working.setBorderOwnsIndicator(true);
 
 	class BorderStatusEditor extends CustomEditor {
 		constructor(
@@ -695,6 +702,10 @@ export function installBorderStatus(
 			const contextWindow =
 				usage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
 
+			const snapshot = working.getSnapshot();
+			const nowMs = Date.now();
+			const modelStyler = snapshot.visible ? (t: string) => gleamText(t, nowMs) : undefined;
+			const thinkingStyler = snapshot.visible && snapshot.state === "thinking" ? (t: string) => rainbowText(t, nowMs) : undefined;
 			return composeBorderLines({
 				lines,
 				width,
@@ -706,7 +717,9 @@ export function installBorderStatus(
 				cwd: ctx.cwd,
 				colorize,
 				borderColor,
-				activity: resolveBorderActivity(working.getSnapshot(), Date.now()),
+				modelStyler,
+				thinkingStyler,
+				activity: resolveBorderActivity(snapshot, nowMs),
 			});
 		}
 	}
@@ -720,7 +733,6 @@ export function installBorderStatus(
 		dispose() {
 			stopAnimation();
 			unsubscribe();
-			working.setBorderOwnsIndicator(false);
 			ctx.ui.setEditorComponent(undefined);
 		},
 	};

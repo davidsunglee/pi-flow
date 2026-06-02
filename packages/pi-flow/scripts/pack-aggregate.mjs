@@ -49,11 +49,9 @@ export const BUNDLED_PACKAGES = [
 export const REQUIRED_BUNDLED_PATHS = [
   'node_modules/@aphotic/pi-flow-core/extensions/commands.ts',
   'node_modules/@aphotic/pi-flow-core/ideas.json',
-  'node_modules/@aphotic/pi-flow-ux/extensions/status/index.ts',
-  'node_modules/@aphotic/pi-flow-ux/extensions/working/index.ts',
+  'node_modules/@aphotic/pi-flow-ux/extensions/index.ts',
   'node_modules/@aphotic/pi-flow-ux/themes/nord.json',
-  'node_modules/@aphotic/pi-flow-ux/working.json',
-  'node_modules/@aphotic/pi-flow-ux/status.json',
+  'node_modules/@aphotic/pi-flow-ux/tui.json',
   'node_modules/@aphotic/pi-ideas/extensions/idea.ts',
   // pi-ideas's runtime dependency must travel with the bundle so the idea tool
   // (loaded via pi-flow-core) resolves without a separate install.

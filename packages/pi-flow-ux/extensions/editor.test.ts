@@ -16,13 +16,14 @@ import {
 	formatContextTokenWindow,
 	formatCwd,
 	getThinkingLabel,
-	installBorderStatus,
+	installBorderEditor,
 	resolveBorderActivity,
 	resolveEditorBorderColor,
+	resolveEditorTimerCadence,
 	type BorderFieldWidths,
-} from "./border-status.ts";
-import { pickWorkingIndicatorFrame } from "../working/effects.ts";
-import type { WorkingSnapshot } from "../working/working.ts";
+} from "./editor.ts";
+import { buildWorkingIndicator, pickWorkingIndicatorFrame } from "./effects.ts";
+import type { WorkingSnapshot } from "./working.ts";
 import { visibleWidth } from "@earendil-works/pi-tui";
 
 /** Marker colorize for routing assertions: wraps text in `[field:text]`. */
@@ -58,27 +59,27 @@ function bw(
 
 // ─── Footer independence ───────────────────────────────────────────────────────
 
-test("border-status does not import from the footer extension", () => {
+test("editor does not import from the footer extension", () => {
 	const source = readFileSync(
-		fileURLToPath(new URL("./border-status.ts", import.meta.url)),
+		fileURLToPath(new URL("./editor.ts", import.meta.url)),
 		"utf8",
 	);
 	assert.ok(
 		!/from\s+["']\.\/footer(\.ts)?["']/.test(source),
-		"border-status.ts must be self-contained and not import from ./footer",
+		"editor.ts must be self-contained and not import from ./footer",
 	);
 });
 
 // ─── No git branch in the border ─────────────────────────────────────────────
 
-test("border-status carries no git branch tracking", () => {
+test("editor carries no git branch tracking", () => {
 	const source = readFileSync(
-		fileURLToPath(new URL("./border-status.ts", import.meta.url)),
+		fileURLToPath(new URL("./editor.ts", import.meta.url)),
 		"utf8",
 	);
 	assert.ok(
 		!/branch/i.test(source),
-		"border-status.ts must not reference the git branch anywhere",
+		"editor.ts must not reference the git branch anywhere",
 	);
 });
 
@@ -624,18 +625,85 @@ test("composeBorderLines keeps every line within the requested width at extremel
 	}
 });
 
+// ─── Effect stylers (model gleam / thinking rainbow) ───────────────────────────
+
+test("composeBorderLines applies the model styler to the model id", () => {
+	const out = composeBorderLines({
+		lines: baseLines(),
+		width: 160,
+		modelId: "gpt-5.5",
+		thinkingLabel: "",
+		contextPercent: 12.3,
+		contextTokens: 9300,
+		contextWindow: 200000,
+		cwd: "/repo",
+		colorize: idColorize,
+		borderColor: idBorder,
+		modelStyler: (t) => `<g>${t}</g>`,
+	});
+	const bottom = out[2];
+	assert.ok(bottom.includes("<g>gpt-5.5</g>"), `model styler should wrap the model id: ${bottom}`);
+	assert.equal(visibleWidth(bottom), 160, "styler markers do not change the laid-out width");
+});
+
+test("composeBorderLines applies the thinking styler to the thinking label", () => {
+	const out = composeBorderLines({
+		lines: baseLines(),
+		width: 160,
+		modelId: "gpt-5.5",
+		thinkingLabel: "xhigh",
+		contextPercent: 12.3,
+		contextTokens: 9300,
+		contextWindow: 200000,
+		cwd: "/repo",
+		colorize: idColorize,
+		borderColor: idBorder,
+		thinkingStyler: (t) => `<r>${t}</r>`,
+	});
+	const bottom = out[2];
+	assert.ok(bottom.includes("<r>xhigh</r>"), `thinking styler should wrap the thinking label: ${bottom}`);
+});
+
+// ─── resolveEditorTimerCadence ─────────────────────────────────────────────────
+
+test("resolveEditorTimerCadence returns undefined when not visible", () => {
+	assert.equal(resolveEditorTimerCadence(snapshot({ visible: false })), undefined);
+});
+
+test("resolveEditorTimerCadence drives a 120ms cadence for a visible static dot indicator", () => {
+	const cadence = resolveEditorTimerCadence(
+		snapshot({
+			visible: true,
+			state: "active",
+			settings: {
+				version: 1,
+				working: { indicator: "dot" },
+				header: {},
+				editor: {},
+				footer: {},
+			},
+		}),
+	);
+	assert.equal(cadence, 120, "static dot still animates the model gleam / thinking rainbow");
+});
+
+test("resolveEditorTimerCadence mirrors the spinner interval for a visible spinner indicator", () => {
+	const cadence = resolveEditorTimerCadence(snapshot({ visible: true, state: "active" }));
+	assert.equal(cadence, buildWorkingIndicator("spinner", "active").intervalMs);
+});
+
 // ─── resolveBorderActivity (working snapshot → border slot) ────────────────────
 
 function snapshot(overrides: Partial<WorkingSnapshot> = {}): WorkingSnapshot {
 	return {
 		visible: false,
 		state: "active",
-		borderOwned: true,
 		settings: {
-			indicatorShape: "spinner",
-			active: { color: "#81A1C1", gleam: false, rainbow: false },
-			toolUse: { color: "#81A1C1", gleam: true, rainbow: false },
-			thinking: { color: "#81A1C1", gleam: true, rainbow: true },
+			version: 1,
+			working: { indicator: "spinner" },
+			header: {},
+			editor: {},
+			footer: {},
 		},
 		...overrides,
 	};
@@ -652,7 +720,7 @@ test("resolveBorderActivity renders the spinner frame for the current state and 
 	assert.equal(activity.active, true);
 	assert.equal(
 		activity.glyph,
-		pickWorkingIndicatorFrame("spinner", snap.settings.active, 0),
+		pickWorkingIndicatorFrame("spinner", snap.state, 0),
 		"glyph reuses the shared working indicator frame generation",
 	);
 });
@@ -663,8 +731,8 @@ test("resolveBorderActivity applies the thinking style (rainbow) when thinking",
 	assert.ok(activity.active);
 	assert.equal(
 		activity.glyph,
-		pickWorkingIndicatorFrame("spinner", snap.settings.thinking, 0),
-		"thinking uses the thinking style's rainbow frame",
+		pickWorkingIndicatorFrame("spinner", snap.state, 0),
+		"thinking uses the thinking state's rainbow frame",
 	);
 });
 
@@ -735,7 +803,7 @@ test("resolveEditorBorderColor uses thinking-level color unless the editor is in
 	);
 });
 
-test("installBorderStatus initializes autocomplete max visible from Pi settings on first install", async () => {
+test("installBorderEditor initializes autocomplete max visible from Pi settings on first install", async () => {
 	await withTempPiSettings({ autocompleteMaxVisible: 10 }, async ({ cwd }) => {
 		const pi = {
 			getThinkingLevel() {
@@ -772,7 +840,7 @@ test("installBorderStatus initializes autocomplete max visible from Pi settings 
 			},
 		};
 
-		const handle = installBorderStatus(pi as any, ctx as any);
+		const handle = installBorderEditor(pi as any, ctx as any);
 		const editor = editorFactory(fakeTui as any, fakeEditorTheme as any, fakeKeybindings as any);
 		assert.equal(
 			editor.getAutocompleteMaxVisible(),
@@ -783,7 +851,7 @@ test("installBorderStatus initializes autocomplete max visible from Pi settings 
 	});
 });
 
-test("border-status editor border stroke follows the active thinking level while the thinking label stays muted", () => {
+test("border editor border stroke follows the active thinking level while the thinking label stays muted", () => {
 	const pi = {
 		getThinkingLevel() {
 			return "high";
@@ -821,7 +889,7 @@ test("border-status editor border stroke follows the active thinking level while
 		},
 	};
 
-	const handle = installBorderStatus(pi as any, ctx as any);
+	const handle = installBorderEditor(pi as any, ctx as any);
 	const editor = editorFactory(fakeTui as any, fakeEditorTheme as any, fakeKeybindings as any);
 	// Simulate Pi's setCustomEditorComponent copying a stale default-editor border
 	// colour into the custom editor after the factory returns.
@@ -837,7 +905,8 @@ test("border-status editor border stroke follows the active thinking level while
 		"bottom border stroke should use high thinking colour",
 	);
 	// The thinking *status label* is a muted semantic status field, not the
-	// thinking-level colour.
+	// thinking-level colour. (Idle snapshot → no rainbow styler, so the static
+	// muted token is used.)
 	assert.ok(
 		bottom.includes("[fg-muted:high]"),
 		"thinking status label should use the muted semantic token",
@@ -857,7 +926,7 @@ test("border-status editor border stroke follows the active thinking level while
 
 // ─── Extension lifecycle ───────────────────────────────────────────────────────
 
-test("installBorderStatus installs a border-status editor without touching the footer", async () => {
+test("installBorderEditor installs a border-status editor without touching the footer", async () => {
 	const pi = {
 		getThinkingLevel() {
 			return "off";
@@ -894,9 +963,9 @@ test("installBorderStatus installs a border-status editor without touching the f
 		},
 	};
 
-	installBorderStatus(pi as any, ctx as any);
-	assert.equal(typeof editorFactories[0], "function", "installBorderStatus installs a custom editor");
-	assert.equal(footerCalls, 0, "border-status must not touch the footer");
+	installBorderEditor(pi as any, ctx as any);
+	assert.equal(typeof editorFactories[0], "function", "installBorderEditor installs a custom editor");
+	assert.equal(footerCalls, 0, "border editor must not touch the footer");
 });
 
 test("dispose restores the built-in editor", async () => {
@@ -933,9 +1002,9 @@ test("dispose restores the built-in editor", async () => {
 		},
 	};
 
-	const handle = installBorderStatus(pi as any, ctx as any);
+	const handle = installBorderEditor(pi as any, ctx as any);
 	handle.dispose();
 
-	assert.equal(typeof editorCalls[0], "function", "installBorderStatus installs a custom editor");
+	assert.equal(typeof editorCalls[0], "function", "installBorderEditor installs a custom editor");
 	assert.equal(editorCalls[1], undefined, "dispose restores the built-in editor");
 });

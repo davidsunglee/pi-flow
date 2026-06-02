@@ -46,58 +46,50 @@ async function loadResources() {
   }
 }
 
-test('pi loader discovers the status extension and registers the /status command', async () => {
+test('pi loader discovers extensions/index.ts and registers the /tui command', async () => {
   const { extensions } = await loadResources();
   assert.deepEqual(
     extensions.errors,
     [],
     `extension loader must not report errors; got ${JSON.stringify(extensions.errors)}`
   );
-  const status = extensions.extensions.find(e => e.resolvedPath === pkgPath('extensions/status/index.ts'));
+  const uxIndex = extensions.extensions.find(e => e.resolvedPath === pkgPath('extensions/index.ts'));
   assert.ok(
-    status,
-    `pi loader must discover extensions/status/index.ts; loaded paths=${JSON.stringify(
+    uxIndex,
+    `pi loader must discover extensions/index.ts; loaded paths=${JSON.stringify(
       extensions.extensions.map(e => e.resolvedPath)
     )}`
   );
   assert.ok(
-    status.commands.has('status'),
-    `status extension must register the /status command; got commands=${JSON.stringify([
-      ...status.commands.keys(),
+    uxIndex.commands.has('tui'),
+    `index extension must register the /tui command; got commands=${JSON.stringify([
+      ...uxIndex.commands.keys(),
     ])}`
+  );
+  assert.ok(
+    !uxIndex.commands.has('status'),
+    `index extension must not register /status; got commands=${JSON.stringify([...uxIndex.commands.keys()])}`
+  );
+  assert.ok(
+    !uxIndex.commands.has('working'),
+    `index extension must not register /working; got commands=${JSON.stringify([...uxIndex.commands.keys()])}`
   );
 });
 
-test('pi loader does not load footer or border-status as independent extensions', async () => {
+test('pi loader does not load internal modules as independent extensions', async () => {
   const { extensions } = await loadResources();
   const loadedPaths = extensions.extensions.map(e => e.resolvedPath);
-  assert.ok(
-    !loadedPaths.includes(pkgPath('extensions/status/footer.ts')),
-    'footer.ts must not be loaded as an independent extension'
-  );
-  assert.ok(
-    !loadedPaths.includes(pkgPath('extensions/status/border-status.ts')),
-    'border-status.ts must not be loaded as an independent extension'
-  );
-});
-
-test('pi loader discovers the working extension and registers the /working command', async () => {
-  const { extensions } = await loadResources();
-  const working = extensions.extensions.find(
-    e => e.resolvedPath === pkgPath('extensions/working/index.ts')
-  );
-  assert.ok(
-    working,
-    `pi loader must discover extensions/working/index.ts; loaded paths=${JSON.stringify(
-      extensions.extensions.map(e => e.resolvedPath)
-    )}`
-  );
-  assert.ok(
-    working.commands.has('working'),
-    `working extension must register the /working command; got commands=${JSON.stringify([
-      ...working.commands.keys(),
-    ])}`
-  );
+  for (const internal of [
+    pkgPath('extensions/editor.ts'),
+    pkgPath('extensions/footer.ts'),
+    pkgPath('extensions/working.ts'),
+    pkgPath('extensions/header.ts'),
+  ]) {
+    assert.ok(
+      !loadedPaths.includes(internal),
+      `${internal} must not be loaded as an independent extension (it is imported by index.ts)`
+    );
+  }
 });
 
 test('pi loader discovers the nord theme from pi-flow-ux/themes', async () => {

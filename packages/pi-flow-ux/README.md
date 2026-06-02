@@ -1,16 +1,15 @@
 # @aphotic/pi-flow-ux
 
-Optional UX enhancements for pi-flow: a border status element through the unified status placement extension (border editor, footer, or off), working indicator/message, Nord theme, and packaged defaults.
+Optional UX layer for pi-flow: an always-on border-status editor, a custom startup header, the Nord theme, and a single unified `/tui` configuration (`tui.json`).
 
 ## What this package provides
 
 This package contains optional UX polish that extends the core pi-flow experience:
 
-- **Status extension and border status element** — a single coordinator that draws session metadata in exactly one place: the editor border (default), a custom footer, or nowhere. Switch in-session with `/status`.
-- **Working indicator** — animated indicator showing active, tool-use, and thinking states with Nord-tuned defaults
-- **Working message** — status messages corresponding to working states, customizable via configuration
+- **Border-status editor** — an always-on editor border that draws session metadata (activity, model, thinking level, context usage, and working directory)
+- **Custom startup header** — a gradient pi logo with version and humanized startup reason, installed at session start
 - **Nord theme** — a complete dark theme package tuned to the Nord color palette (https://www.nordtheme.com/)
-- **Packaged defaults** — curated Nord-tuned settings for the working indicator/message and a packaged status placement default, both with user override support
+- **Unified TUI configuration** — a single `tui.json` config file and `/tui` command for all user-facing TUI settings
 
 ## Standalone install and use
 
@@ -47,63 +46,75 @@ Or reference the package in your Pi `settings.json` using one of the supported s
 
 After Pi loads the package, the following resources become available:
 
-- **Extensions:** status placement coordinator (defaulting to the border editor), working indicator, working message
+- **Extensions:** the unified UX entrypoint (`extensions/index.ts`), which wires the border editor, custom header, and working coordinator
 - **Themes:** `nord` theme
-- **Config defaults:** packaged `working.json` and `status.json` settings (described below)
+- **Config defaults:** packaged `tui.json` (described below)
 
-## Status extension
+## Border status
 
-The status extension is a single coordinator that owns where session metadata is drawn. Exactly one placement is active at a time, so the placements are mutually exclusive:
+The border-status editor is always on. It draws session metadata directly into the editor border lines:
 
-- **`border`** (default) — draws metadata into the editor's top and bottom border lines, and blanks out Pi's built-in footer so the border is the only status surface (see below).
-- **`footer`** — draws metadata in a custom footer below the editor.
-- **`off`** — installs neither; Pi's built-in/default footer is left in place.
-
-The border and footer renderers are internal implementation details of the coordinator; they are no longer loaded as independent extensions.
-
-Working-state placement follows the status placement:
-
-- **`border`** — a compact working indicator is embedded in the editor's bottom border, immediately to the left of the model name (see [Border placement details](#border-placement-details)). The host loader-row spinner and the working **message** stand down so they don't compete; full working messages are intentionally kept out of the border.
-- **`footer`** — the full working indicator and working message remain in their usual location with all current effects (gleam, rainbow, per-state styling).
-- **`off`** — unchanged; the working indicator and message behave exactly as configured, independent of any border/footer customization.
-
-### The `/status` command
-
-- `/status` — reports the current placement and the accepted values (`border|footer|off`).
-- `/status border`, `/status footer`, `/status off` — switch the placement immediately in the current session and persist your choice to `~/.pi/agent/status.json`.
-
-The selected placement persists across Pi reloads and sessions.
-
-### Border placement details
-
-When `border` is active:
-
-- **Lower-left border:** a fixed-width working-activity slot, then the model id, plus the thinking level when reasoning is enabled.
+- **Lower-left border:** a fixed-width activity slot, then the model id, plus the thinking level when reasoning is enabled.
 - **Lower-right border:** the `used/total` context-window token counts followed by the context percentage used, with the percentage as the rightmost value (e.g. `9.3k/200k 12.3%`).
-- **Upper-right border:** the working directory (with `~` home substitution).
+- **Upper-right border:** the working directory (with `~` home substitution and tail truncation when long).
 
-The activity slot sits just left of the model name and reuses the working indicator's own frames, so the configured spinner/pulse/wave shape and the gleam/rainbow styling for the active, tool-use, and thinking states all carry over. While Pi is working the slot animates; when idle it is filled with border dashes so the border stays continuous and the model name never shifts column. Only single-width glyphs are used, the slot keeps a constant visible width across every frame, and at narrow widths it follows the same priority/drop rules as the other optional fields.
+At narrow widths, optional fields degrade in priority order: the `used/total` token-window detail first, then the thinking level. The model id and context percentage are never dropped; the working directory is tail-truncated rather than dropped.
 
+Because the border already carries model, context, and project metadata, Pi's built-in footer and host working row are suppressed while this package is installed.
+
+## Custom header
+
+On `session_start` (when a UI is present), the package installs a custom header consisting of:
+
+- A gradient pi logo wordmark
+- A `version <VERSION>` line
+- A humanized startup-reason line (`fresh start`, `reloaded`, `new session`, `resumed session`, or `forked session`)
+
+The header is installed via `ctx.ui.setHeader` and disposed on `session_shutdown`.
+
+## TUI configuration
+
+All user-facing TUI options are configured through a single `tui.json` file and the `/tui` command.
+
+### Canonical shape
+
+```json
+{
+  "version": 1,
+  "working": { "indicator": "wave" },
+  "header": {},
+  "editor": {},
+  "footer": {}
+}
 ```
-border active:  ╰─ ⠋ claude-sonnet-4-5 xhigh ───── 42k/200k 21.0% ─╯
-border idle:    ╰─── claude-sonnet-4-5 xhigh ───── 42k/200k 21.0% ─╯
-```
 
-Because the border already carries the model, context, and project metadata, border placement also suppresses Pi's built-in footer (it installs a footer that renders nothing) so the same information isn't duplicated below the editor. Switching to `footer` or `off` restores the normal footer behavior automatically.
+### Working indicator
 
-Colors resolve from theme tokens per render: the model id and the emphasized context percentage use `accent`, the working directory uses `success`, and separators/ellipsis use `borderMuted`. The secondary values — the thinking level, the current context-token count, and the total context-window count — are each de-emphasized to the same muted gray. They remain conceptually separate fields (so any one can be re-colored later), even though they currently all resolve to the `muted` token. Because tokens resolve per render, theme switches update immediately with no stale cached ANSI. At narrow widths the optional fields degrade in priority order: the `used/total` token-window detail first, then the thinking level. The model id and context percentage are always kept (truncated only as a last resort) and the working directory is tail-truncated rather than dropped.
+The `working.indicator` field controls the animation shape used in the activity slot. Valid values:
 
-### Status configuration
+- `dot` — static dot
+- `pulse` — pulsing dot
+- `spinner` — braille spinner
+- `wave` — braille wave (default)
 
-Status placement follows the same three-tier convention as the working settings (see below), with a `{ "placement": "border" | "footer" | "off" }` schema:
+### Configuration resolution order
 
-1. **User override:** `~/.pi/agent/status.json` — takes precedence over all other tiers.
-2. **Packaged default:** `node_modules/@aphotic/pi-flow-ux/status.json` — ships with `placement: "border"`.
-3. **Code default:** hardcoded `placement: "border"`, used when both files are missing.
+1. **User override:** `~/.pi/agent/tui.json` — takes precedence over all other tiers.
+2. **Packaged default:** `node_modules/@aphotic/pi-flow-ux/tui.json` — ships with `working.indicator: "wave"`.
+3. **Code default:** hardcoded `working.indicator: "wave"`, used when both files are missing.
 
-Failure semantics match `working.json`: a missing or malformed user file falls back to the packaged default; a missing packaged file falls back to the code default; malformed packaged JSON throws on startup so a broken release surfaces loudly. `/status` mutations persist only to `~/.pi/agent/status.json` (written atomically) and never modify the packaged default.
+### Failure semantics
 
-There is no project-specific status config layer; status placement is user-global only.
+- **Missing or malformed user file → packaged default.** No `~/.pi/agent/tui.json`, or invalid JSON in it, falls back to the packaged default.
+- **Missing packaged file → code default.** A missing packaged `tui.json` falls back to hardcoded code defaults.
+- **Malformed packaged JSON → throws.** Invalid packaged JSON throws on startup so a broken release surfaces immediately.
+
+### The `/tui` command
+
+- `/tui` — reports current settings (e.g. `TUI: working.indicator=wave`).
+- `/tui working indicator=<dot|pulse|spinner|wave>` — updates the indicator and persists the change atomically to `~/.pi/agent/tui.json`.
+
+The user file is written in the canonical shape above. Any unrecognized top-level keys already in the user file are preserved.
 
 ## Aggregate install and use
 
@@ -120,12 +131,10 @@ The aggregate forwards UX resources automatically through its `pi` manifest:
 
 ```json
 {
-  "extensions": ["node_modules/@aphotic/pi-flow-ux/extensions/status/index.ts", "node_modules/@aphotic/pi-flow-ux/extensions/working/index.ts"],
+  "extensions": ["node_modules/@aphotic/pi-flow-ux/extensions/index.ts"],
   "themes": ["node_modules/@aphotic/pi-flow-ux/themes/nord.json"]
 }
 ```
-
-Both the direct `@aphotic/pi-flow-ux` install and the aggregate `@aphotic/pi-flow` install default to the same unified status behavior (`placement: "border"`), and the packaged `status.json` ships with both.
 
 ## Nord theme activation
 
@@ -140,67 +149,6 @@ The Nord theme is discoverable by Pi after the package is loaded. To activate it
 Pi has no `pi theme` subcommand — theme selection is always via the `theme` setting (interactively through `/settings`, or by editing `settings.json` directly). See the Pi themes docs for details.
 
 Pi discovers the theme by scanning the `node_modules/@aphotic/pi-flow-ux/themes/` directory for theme definitions named `nord.json`.
-
-## Working indicator and message configuration
-
-The working indicator and message are configured through a three-tier system with code defaults, packaged defaults, and user overrides.
-
-### Configuration tiers (precedence, highest to lowest)
-
-1. **User override:** `~/.pi/agent/working.json` — user-level configuration that takes precedence over all other tiers
-2. **Packaged default:** `node_modules/@aphotic/pi-flow-ux/working.json` (or equivalent from your installed @aphotic/pi-flow-ux version) — curated Nord-tuned defaults, applied when user settings are absent or fields are missing
-3. **Code default:** hardcoded defaults in the extension, used when both the user and packaged files are missing
-
-### Failure semantics
-
-- **Missing user file → packaged default.** No `~/.pi/agent/working.json` is fine; packaged defaults apply.
-- **Malformed user JSON → packaged default.** Invalid user JSON falls back to packaged defaults until the user file is corrected or removed.
-- **Missing packaged file → code default.** A missing packaged `working.json` (e.g., during local development) falls back to hardcoded code defaults.
-- **Malformed packaged JSON → fail loudly.** Invalid packaged JSON throws on startup rather than silently degrading to code defaults, so a broken release surfaces immediately instead of masking corruption.
-
-### User override path: `~/.pi/agent/working.json`
-
-Place a `working.json` file at `~/.pi/agent/working.json` to customize the working indicator and message behavior. Only fields you provide override the packaged defaults; missing fields fall back to the packaged tier.
-
-Example partial user override:
-
-```json
-{
-  "indicatorShape": "spinner",
-  "active": {
-    "color": "#ffffff"
-  }
-}
-```
-
-This overrides only `indicatorShape` and the `active.color`. All other settings come from the packaged defaults.
-
-### Packaged defaults: `working.json`
-
-The `working.json` file in this package (`packages/pi-flow-ux/working.json`) is tuned for the Nord theme and includes:
-
-- `indicatorShape` — animation shape (`dot`, `pulse`, `spinner`, or `wave`; defaults to `wave`)
-- `active` — settings for the active state (color, gleam, rainbow effects)
-- `toolUse` — settings for tool-use state (color, gleam, rainbow effects)
-- `thinking` — settings for thinking state (color, gleam, rainbow effects)
-
-### Persistence and `/working` mutations
-
-When the working indicator or message extension mutates settings (via a `/working` command or API), the changes are persisted to the user path `~/.pi/agent/working.json`, creating it if necessary. The packaged defaults are never modified.
-
-If user settings become malformed (invalid JSON), the extension falls back to the packaged defaults until the user file is corrected or removed.
-
-### Example: override active color only
-
-```json
-{
-  "active": {
-    "color": "#ff6b6b"
-  }
-}
-```
-
-Saved to `~/.pi/agent/working.json`, this overrides the active color while all other settings (shape, tool-use, thinking, gleam/rainbow effects) come from the packaged defaults.
 
 ## Minimal/headless use
 
