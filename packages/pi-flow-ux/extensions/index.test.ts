@@ -2,6 +2,7 @@ import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
 
 import { resetWorkingCoordinatorForTests } from "./working.ts";
+import { resetTuiSettingsStoreForTests } from "./settings.ts";
 import indexExtension from "./index.ts";
 
 type EventHandler = (event: any, ctx: any) => void | Promise<void>;
@@ -75,15 +76,17 @@ function makeCtx() {
   function getCalls(method: string) {
     return calls.filter((c) => c.method === method);
   }
-  return { ctx, getCalls };
+  return { ctx, calls, getCalls };
 }
 
 before(() => {
   resetWorkingCoordinatorForTests();
+  resetTuiSettingsStoreForTests();
 });
 
 after(() => {
   resetWorkingCoordinatorForTests();
+  resetTuiSettingsStoreForTests();
 });
 
 test("registers /tui command but not /status or /working", () => {
@@ -145,4 +148,17 @@ test("session_shutdown disposes all handles and restores host working row", asyn
   const workingVisibleCalls = getCalls("setWorkingVisible");
   const lastVisible = workingVisibleCalls[workingVisibleCalls.length - 1];
   assert.equal(lastVisible?.arg, true, "setWorkingVisible(true) should be called on shutdown to restore host row");
+});
+
+test("registers the /tui command and installs a header on session_start", async () => {
+  resetWorkingCoordinatorForTests();
+  resetTuiSettingsStoreForTests();
+  const { pi, emit, commands } = makePi();
+  const { ctx, calls } = makeCtx();
+  indexExtension(pi as any);
+  await emit("session_start", { reason: "startup" }, ctx);
+  assert.ok(commands.has("tui"), "tui command should be registered");
+  assert.ok(calls.some((c) => c.method === "setHeader" && typeof c.arg === "function"), "header should be installed");
+  resetWorkingCoordinatorForTests();
+  resetTuiSettingsStoreForTests();
 });
