@@ -76,7 +76,7 @@ function makeCtx() {
   function getCalls(method: string) {
     return calls.filter((c) => c.method === method);
   }
-  return { ctx, calls, getCalls };
+  return { ctx, getCalls };
 }
 
 before(() => {
@@ -99,6 +99,7 @@ test("registers /tui command but not /status or /working", () => {
 
 test("session_start suppresses the host working row and installs footer, editor, and header", async () => {
   resetWorkingCoordinatorForTests();
+  resetTuiSettingsStoreForTests();
   const { pi, emit } = makePi();
   indexExtension(pi as any);
   const { ctx, getCalls } = makeCtx();
@@ -126,6 +127,7 @@ test("session_start suppresses the host working row and installs footer, editor,
 
 test("session_shutdown disposes all handles and restores host working row", async () => {
   resetWorkingCoordinatorForTests();
+  resetTuiSettingsStoreForTests();
   const { pi, emit } = makePi();
   indexExtension(pi as any);
   const { ctx, getCalls } = makeCtx();
@@ -151,14 +153,10 @@ test("session_shutdown disposes all handles and restores host working row", asyn
 });
 
 test("registers the /tui command and installs a header on session_start", async () => {
-  resetWorkingCoordinatorForTests();
-  resetTuiSettingsStoreForTests();
   const { pi, emit, commands } = makePi();
-  const { ctx, calls } = makeCtx();
+  const { ctx, getCalls } = makeCtx();
   indexExtension(pi as any);
   await emit("session_start", { reason: "startup" }, ctx);
   assert.ok(commands.has("tui"), "tui command should be registered");
-  assert.ok(calls.some((c) => c.method === "setHeader" && typeof c.arg === "function"), "header should be installed");
-  resetWorkingCoordinatorForTests();
-  resetTuiSettingsStoreForTests();
+  assert.ok(getCalls("setHeader").some((c) => typeof c.arg === "function"), "header should be installed");
 });
