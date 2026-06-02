@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
+import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 
 export type IndicatorShape = "dot" | "pulse" | "spinner" | "wave";
 export type LogoVariant = "bracket" | "sidebar" | "rounded" | "squared";
@@ -128,3 +129,123 @@ export async function saveTuiSettings(filePath: string, settings: TuiSettings): 
     throw err;
   }
 }
+
+function getTuiUsage(): string {
+  return [
+    "Usage: /tui",
+    "       /tui working indicator=<dot|pulse|spinner|wave>",
+    "       /tui header logo=<bracket|sidebar|rounded|squared>",
+  ].join("\n");
+}
+function describeTuiSettings(s: TuiSettings): string {
+  return `TUI: working.indicator=${s.working.indicator} header.logo=${s.header.logo}`;
+}
+
+export interface TuiSettingsStore {
+  get(): TuiSettings;
+  subscribe(listener: (settings: TuiSettings) => void): () => void;
+  ensureRegistered(pi: ExtensionAPI, opts: { registerCommand: boolean }): void;
+}
+
+class TuiSettingsStoreImpl implements TuiSettingsStore {
+  private readonly settingsPath: string;
+  private readonly packageDefaultPath: string;
+  private settings: TuiSettings = cloneTui(DEFAULT_TUI_SETTINGS);
+  private listeners = new Set<(settings: TuiSettings) => void>();
+  private registeredPi: ExtensionAPI | undefined;
+  private runtimeRegistered = false;
+  private commandRegistered = false;
+
+  constructor(settingsPath: string, packageDefaultPath: string) {
+    this.settingsPath = settingsPath;
+    this.packageDefaultPath = packageDefaultPath;
+  }
+
+  get(): TuiSettings { return cloneTui(this.settings); }
+
+  subscribe(listener: (settings: TuiSettings) => void): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
+
+  ensureRegistered(pi: ExtensionAPI, opts: { registerCommand: boolean }): void {
+    if (this.registeredPi !== pi) {
+      if (this.registeredPi !== undefined) this.listeners.clear();
+      this.registeredPi = pi;
+      this.runtimeRegistered = false;
+      this.commandRegistered = false;
+    }
+    if (!this.runtimeRegistered) {
+      this.runtimeRegistered = true;
+      pi.on("session_start", async () => {
+        const packaged = await loadPackagedDefaultTuiSettings(this.packageDefaultPath);
+        const baseline = packaged ?? cloneTui(DEFAULT_TUI_SETTINGS);
+        const user = await loadSavedTuiSettings(this.settingsPath, baseline);
+        this.settings = user ?? baseline;
+        this.emit();
+      });
+    }
+    if (opts.registerCommand && !this.commandRegistered) {
+      this.commandRegistered = true;
+      pi.registerCommand("tui", {
+        description: "Configure the pi-flow-ux TUI (working indicator, header logo).",
+        handler: async (args: string, ctx: ExtensionCommandContext) => { await this.handleCommand(args, ctx); },
+      });
+    }
+  }
+
+  private emit(): void {
+    const snapshot = this.get();
+    for (const listener of [...this.listeners]) {
+      try { listener(snapshot); } catch { /* best-effort UI work */ }
+    }
+  }
+
+  private async handleCommand(args: string, ctx: ExtensionCommandContext): Promise<void> {
+    const trimmed = args.trim();
+    if (!trimmed) { ctx.ui.notify(describeTuiSettings(this.settings), "info"); return; }
+    const parts = trimmed.split(/\s+/).filter(Boolean);
+    if (parts.length === 2 && parts[0] === "working" && parts[1]!.startsWith("indicator=")) {
+      const shape = parts[1]!.slice("indicator=".length);
+      if (!isIndicatorShape(shape)) { ctx.ui.notify(getTuiUsage(), "error"); return; }
+      this.settings = { ...this.settings, working: { ...this.settings.working, indicator: shape } };
+      this.emit();
+      await this.persistWithToast(ctx, `TUI updated: working.indicator=${shape}`);
+      return;
+    }
+    if (parts.length === 2 && parts[0] === "header" && parts[1]!.startsWith("logo=")) {
+      const variant = parts[1]!.slice("logo=".length);
+      if (!isLogoVariant(variant)) { ctx.ui.notify(getTuiUsage(), "error"); return; }
+      this.settings = { ...this.settings, header: { ...this.settings.header, logo: variant } };
+      this.emit();
+      await this.persistWithToast(ctx, `TUI updated: header.logo=${variant}`);
+      return;
+    }
+    ctx.ui.notify(getTuiUsage(), "error");
+  }
+
+  private async persistWithToast(ctx: ExtensionCommandContext, msg: string): Promise<void> {
+    try { await saveTuiSettings(this.settingsPath, this.settings); ctx.ui.notify(msg, "info"); }
+    catch (err) { const r = err instanceof Error ? err.message : String(err); ctx.ui.notify(`${msg} but could not save: ${r}`, "error"); }
+  }
+}
+
+const storesBySettingsPath = new Map<string, { packageDefaultPath: string; store: TuiSettingsStoreImpl }>();
+
+export function getTuiSettingsStore(
+  settingsPath: string = DEFAULT_TUI_SETTINGS_PATH,
+  packageDefaultPath: string = PACKAGE_DEFAULT_TUI_SETTINGS_PATH,
+): TuiSettingsStore {
+  const existing = storesBySettingsPath.get(settingsPath);
+  if (existing) {
+    if (existing.packageDefaultPath !== packageDefaultPath) {
+      throw new Error(`getTuiSettingsStore: settingsPath=${settingsPath} already bound to packageDefaultPath=${existing.packageDefaultPath}, refusing to rebind to ${packageDefaultPath}`);
+    }
+    return existing.store;
+  }
+  const store = new TuiSettingsStoreImpl(settingsPath, packageDefaultPath);
+  storesBySettingsPath.set(settingsPath, { packageDefaultPath, store });
+  return store;
+}
+
+export function resetTuiSettingsStoreForTests(): void { storesBySettingsPath.clear(); }

@@ -15,6 +15,8 @@ import {
   loadSavedTuiSettings,
   normalizeTuiSettings,
   saveTuiSettings,
+  getTuiSettingsStore,
+  resetTuiSettingsStoreForTests,
 } from "./settings.ts";
 
 test("LOGO_VARIANTS_ORDER is the canonical order with bracket default first", () => {
@@ -121,4 +123,127 @@ test("PACKAGE_DEFAULT_TUI_SETTINGS_PATH resolves to the packaged tui.json and in
   assert.ok(PACKAGE_DEFAULT_TUI_SETTINGS_PATH.endsWith(path.join("pi-flow-ux", "tui.json")));
   const packaged = await loadPackagedDefaultTuiSettings(PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
   assert.equal(packaged?.header.logo, "bracket");
+});
+
+function makePi() {
+  const handlers = new Map<string, ((event: any, ctx: any) => any)[]>();
+  const commands = new Map<string, any>();
+  const pi = {
+    on(event: string, handler: (event: any, ctx: any) => any) {
+      const list = handlers.get(event) ?? [];
+      list.push(handler);
+      handlers.set(event, list);
+    },
+    registerCommand(name: string, opts: any) { commands.set(name, opts); },
+  };
+  async function emit(event: string, payload: any = {}, ctx: any = {}) {
+    for (const h of handlers.get(event) ?? []) await h(payload, ctx);
+  }
+  return { pi, emit, commands };
+}
+function makeCmdCtx() {
+  const notices: { msg: string; level: string }[] = [];
+  return { ctx: { ui: { notify: (msg: string, level: string) => notices.push({ msg, level }) } }, notices };
+}
+
+test("store loads packaged + user settings on session_start and emits", async () => {
+  resetTuiSettingsStoreForTests();
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tui-"));
+  try {
+    const userPath = path.join(dir, "tui.json");
+    await writeFile(userPath, JSON.stringify({ ...DEFAULT_TUI_SETTINGS, header: { logo: "rounded" } }), "utf8");
+    const store = getTuiSettingsStore(userPath, PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+    const seen: string[] = [];
+    store.subscribe((s) => seen.push(s.header.logo));
+    const { pi, emit } = makePi();
+    store.ensureRegistered(pi as any, { registerCommand: true });
+    await emit("session_start", { reason: "startup" });
+    assert.equal(store.get().header.logo, "rounded");
+    assert.ok(seen.includes("rounded"));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    resetTuiSettingsStoreForTests();
+  }
+});
+
+test("/tui header logo=squared persists and toasts", async () => {
+  resetTuiSettingsStoreForTests();
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tui-"));
+  try {
+    const userPath = path.join(dir, "tui.json");
+    const store = getTuiSettingsStore(userPath, PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+    const { pi, emit, commands } = makePi();
+    store.ensureRegistered(pi as any, { registerCommand: true });
+    await emit("session_start", { reason: "startup" });
+    const { ctx, notices } = makeCmdCtx();
+    await commands.get("tui").handler("header logo=squared", ctx);
+    assert.equal(store.get().header.logo, "squared");
+    const written = JSON.parse(await readFile(userPath, "utf8"));
+    assert.equal(written.header.logo, "squared");
+    assert.ok(notices.some((n) => n.level === "info" && /header\.logo=squared/.test(n.msg)));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    resetTuiSettingsStoreForTests();
+  }
+});
+
+test("/tui header logo=bogus is rejected with usage error and no change", async () => {
+  resetTuiSettingsStoreForTests();
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tui-"));
+  try {
+    const store = getTuiSettingsStore(path.join(dir, "tui.json"), PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+    const { pi, emit, commands } = makePi();
+    store.ensureRegistered(pi as any, { registerCommand: true });
+    await emit("session_start", { reason: "startup" });
+    const { ctx, notices } = makeCmdCtx();
+    await commands.get("tui").handler("header logo=bogus", ctx);
+    assert.equal(store.get().header.logo, "bracket");
+    assert.ok(notices.some((n) => n.level === "error"));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    resetTuiSettingsStoreForTests();
+  }
+});
+
+test("bare /tui reports current settings including header.logo", async () => {
+  resetTuiSettingsStoreForTests();
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tui-"));
+  try {
+    const store = getTuiSettingsStore(path.join(dir, "tui.json"), PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+    const { pi, emit, commands } = makePi();
+    store.ensureRegistered(pi as any, { registerCommand: true });
+    await emit("session_start", { reason: "startup" });
+    const { ctx, notices } = makeCmdCtx();
+    await commands.get("tui").handler("", ctx);
+    assert.ok(notices.some((n) => /header\.logo=bracket/.test(n.msg) && /working\.indicator=/.test(n.msg)));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    resetTuiSettingsStoreForTests();
+  }
+});
+
+test("/tui working indicator=dot still persists and toasts", async () => {
+  resetTuiSettingsStoreForTests();
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tui-"));
+  try {
+    const userPath = path.join(dir, "tui.json");
+    const store = getTuiSettingsStore(userPath, PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+    const { pi, emit, commands } = makePi();
+    store.ensureRegistered(pi as any, { registerCommand: true });
+    await emit("session_start", { reason: "startup" });
+    const { ctx, notices } = makeCmdCtx();
+    await commands.get("tui").handler("working indicator=dot", ctx);
+    assert.equal(store.get().working.indicator, "dot");
+    assert.ok(notices.some((n) => n.level === "info" && /working\.indicator=dot/.test(n.msg)));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    resetTuiSettingsStoreForTests();
+  }
+});
+
+test("getTuiSettingsStore throws when a settingsPath is rebound to a different packageDefaultPath", () => {
+  resetTuiSettingsStoreForTests();
+  getTuiSettingsStore("/tmp/a/tui.json", "/pkg/one/tui.json");
+  assert.throws(() => getTuiSettingsStore("/tmp/a/tui.json", "/pkg/two/tui.json"));
+  resetTuiSettingsStoreForTests();
 });
