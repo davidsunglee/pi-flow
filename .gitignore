@@ -161,3 +161,6 @@ __pycache__/
 .pnpm-store/
 
 .worktrees/
+
+# Superpowers visual brainstorm scratch dir
+.superpowers/
