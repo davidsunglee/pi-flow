@@ -6,15 +6,15 @@ import { type LogoVariant, DEFAULT_LOGO_VARIANT, type TuiSettingsStore } from ".
 export type SessionStartReason = "startup" | "reload" | "new" | "resume" | "fork";
 
 const STARTUP_REASON_LABELS: Record<SessionStartReason, string> = {
-  startup: "fresh start",
-  reload: "reloaded",
-  new: "new session",
-  resume: "resumed session",
-  fork: "forked session",
+  startup: "hello",
+  reload: "session reloaded",
+  new: "a fresh start",
+  resume: "session resumed",
+  fork: "session forked",
 };
 
 export function humanizeStartupReason(reason: string): string {
-  return STARTUP_REASON_LABELS[reason as SessionStartReason] ?? "session started";
+  return STARTUP_REASON_LABELS[reason as SessionStartReason] ?? "hello";
 }
 
 // Gradient stops (R,G,B) interpolated left→right across the logo columns.

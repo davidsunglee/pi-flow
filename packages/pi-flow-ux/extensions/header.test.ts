@@ -23,11 +23,11 @@ function fakeStore(logo: LogoVariant): TuiSettingsStore {
 
 describe("humanizeStartupReason", () => {
   const cases: [SessionStartReason, string][] = [
-    ["startup", "fresh start"],
-    ["reload", "reloaded"],
-    ["new", "new session"],
-    ["resume", "resumed session"],
-    ["fork", "forked session"],
+    ["startup", "hello"],
+    ["reload", "session reloaded"],
+    ["new", "a fresh start"],
+    ["resume", "session resumed"],
+    ["fork", "session forked"],
   ];
   for (const [reason, label] of cases) {
     it(`maps "${reason}" to "${label}"`, () => {
@@ -35,8 +35,8 @@ describe("humanizeStartupReason", () => {
     });
   }
   it("returns fallback for unknown token", () => {
-    assert.equal(humanizeStartupReason("unknown-token"), "session started");
-    assert.equal(humanizeStartupReason(""), "session started");
+    assert.equal(humanizeStartupReason("unknown-token"), "hello");
+    assert.equal(humanizeStartupReason(""), "hello");
   });
 });
 

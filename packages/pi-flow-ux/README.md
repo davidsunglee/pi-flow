@@ -68,7 +68,7 @@ On `session_start` (when a UI is present), the package installs a custom header 
 
 - A gradient pi logo wordmark
 - A `version <VERSION>` line
-- A humanized startup-reason line (`fresh start`, `reloaded`, `new session`, `resumed session`, or `forked session`)
+- A humanized session-reason line (`hello`, `session reloaded`, `a fresh start`, `session resumed`, or `session forked`)
 
 The header is installed via `ctx.ui.setHeader` and disposed on `session_shutdown`.
 
