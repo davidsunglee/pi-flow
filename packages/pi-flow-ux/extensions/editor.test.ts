@@ -24,7 +24,6 @@ import {
 } from "./editor.ts";
 import { buildWorkingIndicator, pickWorkingIndicatorFrame } from "./effects.ts";
 import type { WorkingSnapshot } from "./working.ts";
-import type { IndicatorShape } from "./settings.ts";
 import { getTuiSettingsStore, resetTuiSettingsStoreForTests, PACKAGE_DEFAULT_TUI_SETTINGS_PATH } from "./settings.ts";
 import { visibleWidth } from "@earendil-works/pi-tui";
 
@@ -704,6 +703,7 @@ test("resolveBorderActivity applies the thinking style (rainbow) when thinking",
 	const snap = snapshot({ visible: true, state: "thinking" });
 	const activity = resolveBorderActivity(snap, "spinner", 0);
 	assert.equal(activity.active, true);
+	assert.equal(activity.glyph, pickWorkingIndicatorFrame("spinner", "thinking", 0));
 });
 
 // ─── Editor settings / border colour integration ───────────────────────────────
@@ -823,166 +823,181 @@ test("installBorderEditor initializes autocomplete max visible from Pi settings 
 	});
 });
 
-test("border editor border stroke follows the active thinking level while the thinking label stays muted", () => {
-	const pi = {
-		getThinkingLevel() {
-			return "high";
-		},
-	};
-
-	let editorFactory: any;
-	const ctx = {
-		cwd: "/repo",
-		model: { id: "model", reasoning: true, contextWindow: 200000 },
-		getContextUsage() {
-			return { percent: 12.3, tokens: 9300, contextWindow: 200000 };
-		},
-		ui: {
-			setEditorComponent(factory: unknown) {
-				editorFactory = factory;
+test("border editor border stroke follows the active thinking level while the thinking label stays muted", async () => {
+	const storeDir = await mkdtemp(path.join(os.tmpdir(), "editor-tui-"));
+	try {
+		const pi = {
+			getThinkingLevel() {
+				return "high";
 			},
-			theme: {
-				name: "test",
-				getColorMode() {
-					return "truecolor";
+		};
+
+		let editorFactory: any;
+		const ctx = {
+			cwd: "/repo",
+			model: { id: "model", reasoning: true, contextWindow: 200000 },
+			getContextUsage() {
+				return { percent: 12.3, tokens: 9300, contextWindow: 200000 };
+			},
+			ui: {
+				setEditorComponent(factory: unknown) {
+					editorFactory = factory;
 				},
-				// Tag the semantic token so we can tell the muted status label apart
-				// from the thinking-level border stroke colour.
-				fg(token: string, text: string) {
-					return `[fg-${token}:${text}]`;
-				},
-				getThinkingBorderColor(level: string) {
-					return (text: string) => `[thinking-${level}:${text}]`;
-				},
-				getBashModeBorderColor() {
-					return (text: string) => `[bash:${text}]`;
+				theme: {
+					name: "test",
+					getColorMode() {
+						return "truecolor";
+					},
+					// Tag the semantic token so we can tell the muted status label apart
+					// from the thinking-level border stroke colour.
+					fg(token: string, text: string) {
+						return `[fg-${token}:${text}]`;
+					},
+					getThinkingBorderColor(level: string) {
+						return (text: string) => `[thinking-${level}:${text}]`;
+					},
+					getBashModeBorderColor() {
+						return (text: string) => `[bash:${text}]`;
+					},
 				},
 			},
-		},
-	};
+		};
 
-	resetTuiSettingsStoreForTests();
-	const store = getTuiSettingsStore(path.join(os.tmpdir(), "editor-stroke-tui.json"), PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
-	const handle = installBorderEditor(pi as any, ctx as any, store);
-	const editor = editorFactory(fakeTui as any, fakeEditorTheme as any, fakeKeybindings as any);
-	// Simulate Pi's setCustomEditorComponent copying a stale default-editor border
-	// colour into the custom editor after the factory returns.
-	editor.borderColor = (text: string) => `[stale:${text}]`;
+		resetTuiSettingsStoreForTests();
+		const store = getTuiSettingsStore(path.join(storeDir, "tui.json"), PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+		const handle = installBorderEditor(pi as any, ctx as any, store);
+		const editor = editorFactory(fakeTui as any, fakeEditorTheme as any, fakeKeybindings as any);
+		// Simulate Pi's setCustomEditorComponent copying a stale default-editor border
+		// colour into the custom editor after the factory returns.
+		editor.borderColor = (text: string) => `[stale:${text}]`;
 
-	const lines = editor.render(60);
-	const bottom = lines[lines.length - 1]!;
-	// The top/bottom border *stroke* (dashes, corners) tracks the active thinking
-	// level via resolveEditorBorderColor.
-	assert.ok(lines[0].includes("[thinking-high:"), "top border stroke should use high thinking colour");
-	assert.ok(
-		bottom.includes("[thinking-high:"),
-		"bottom border stroke should use high thinking colour",
-	);
-	// The thinking *status label* is a muted semantic status field, not the
-	// thinking-level colour. (Idle snapshot → no rainbow styler, so the static
-	// muted token is used.)
-	assert.ok(
-		bottom.includes("[fg-muted:high]"),
-		"thinking status label should use the muted semantic token",
-	);
-	assert.equal(
-		bottom.includes("[thinking-high:high]"),
-		false,
-		"thinking status label must not use the thinking-level border colour",
-	);
-	assert.equal(
-		lines.some((line: string) => line.includes("[stale:")),
-		false,
-		"stale copied border colour must not leak into the rendered border",
-	);
-	handle.dispose();
+		const lines = editor.render(60);
+		const bottom = lines[lines.length - 1]!;
+		// The top/bottom border *stroke* (dashes, corners) tracks the active thinking
+		// level via resolveEditorBorderColor.
+		assert.ok(lines[0].includes("[thinking-high:"), "top border stroke should use high thinking colour");
+		assert.ok(
+			bottom.includes("[thinking-high:"),
+			"bottom border stroke should use high thinking colour",
+		);
+		// The thinking *status label* is a muted semantic status field, not the
+		// thinking-level colour. (Idle snapshot → no rainbow styler, so the static
+		// muted token is used.)
+		assert.ok(
+			bottom.includes("[fg-muted:high]"),
+			"thinking status label should use the muted semantic token",
+		);
+		assert.equal(
+			bottom.includes("[thinking-high:high]"),
+			false,
+			"thinking status label must not use the thinking-level border colour",
+		);
+		assert.equal(
+			lines.some((line: string) => line.includes("[stale:")),
+			false,
+			"stale copied border colour must not leak into the rendered border",
+		);
+		handle.dispose();
+	} finally {
+		await rm(storeDir, { recursive: true, force: true });
+	}
 });
 
 // ─── Extension lifecycle ───────────────────────────────────────────────────────
 
 test("installBorderEditor installs a border-status editor without touching the footer", async () => {
-	const pi = {
-		getThinkingLevel() {
-			return "off";
-		},
-	};
+	const storeDir = await mkdtemp(path.join(os.tmpdir(), "editor-tui-"));
+	try {
+		const pi = {
+			getThinkingLevel() {
+				return "off";
+			},
+		};
 
-	const editorFactories: unknown[] = [];
-	let footerCalls = 0;
-	const ctx = {
-		cwd: "/repo",
-		model: undefined,
-		getContextUsage() {
-			return undefined;
-		},
-		ui: {
-			setEditorComponent(factory: unknown) {
-				editorFactories.push(factory);
+		const editorFactories: unknown[] = [];
+		let footerCalls = 0;
+		const ctx = {
+			cwd: "/repo",
+			model: undefined,
+			getContextUsage() {
+				return undefined;
 			},
-			setFooter() {
-				footerCalls++;
+			ui: {
+				setEditorComponent(factory: unknown) {
+					editorFactories.push(factory);
+				},
+				setFooter() {
+					footerCalls++;
+				},
+				theme: {
+					name: "test",
+					getColorMode() {
+						return "truecolor";
+					},
+					fg(_token: string, text: string) {
+						return text;
+					},
+					getThinkingBorderColor() {
+						return (text: string) => text;
+					},
+				},
 			},
-			theme: {
-				name: "test",
-				getColorMode() {
-					return "truecolor";
-				},
-				fg(_token: string, text: string) {
-					return text;
-				},
-				getThinkingBorderColor() {
-					return (text: string) => text;
-				},
-			},
-		},
-	};
+		};
 
-	resetTuiSettingsStoreForTests();
-	const store = getTuiSettingsStore(path.join(os.tmpdir(), "editor-lifecycle-tui.json"), PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
-	installBorderEditor(pi as any, ctx as any, store);
-	assert.equal(typeof editorFactories[0], "function", "installBorderEditor installs a custom editor");
-	assert.equal(footerCalls, 0, "border editor must not touch the footer");
+		resetTuiSettingsStoreForTests();
+		const store = getTuiSettingsStore(path.join(storeDir, "tui.json"), PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+		installBorderEditor(pi as any, ctx as any, store);
+		assert.equal(typeof editorFactories[0], "function", "installBorderEditor installs a custom editor");
+		assert.equal(footerCalls, 0, "border editor must not touch the footer");
+	} finally {
+		await rm(storeDir, { recursive: true, force: true });
+	}
 });
 
 test("dispose restores the built-in editor", async () => {
-	const pi = {
-		getThinkingLevel() {
-			return "off";
-		},
-	};
-
-	const editorCalls: unknown[] = [];
-	const ctx = {
-		cwd: "/repo",
-		model: undefined,
-		getContextUsage() {
-			return undefined;
-		},
-		ui: {
-			setEditorComponent(factory: unknown) {
-				editorCalls.push(factory);
+	const storeDir = await mkdtemp(path.join(os.tmpdir(), "editor-tui-"));
+	try {
+		const pi = {
+			getThinkingLevel() {
+				return "off";
 			},
-			setFooter() {},
-			theme: {
-				name: "test",
-				getColorMode() {
-					return "truecolor";
+		};
+
+		const editorCalls: unknown[] = [];
+		const ctx = {
+			cwd: "/repo",
+			model: undefined,
+			getContextUsage() {
+				return undefined;
+			},
+			ui: {
+				setEditorComponent(factory: unknown) {
+					editorCalls.push(factory);
 				},
-				fg(_t: string, text: string) {
-					return text;
-				},
-				getThinkingBorderColor() {
-					return (text: string) => text;
+				setFooter() {},
+				theme: {
+					name: "test",
+					getColorMode() {
+						return "truecolor";
+					},
+					fg(_t: string, text: string) {
+						return text;
+					},
+					getThinkingBorderColor() {
+						return (text: string) => text;
+					},
 				},
 			},
-		},
-	};
+		};
 
-	resetTuiSettingsStoreForTests();
-	const store = getTuiSettingsStore(path.join(os.tmpdir(), "editor-dispose-tui.json"), PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
-	const handle = installBorderEditor(pi as any, ctx as any, store);
-	handle.dispose();
+		resetTuiSettingsStoreForTests();
+		const store = getTuiSettingsStore(path.join(storeDir, "tui.json"), PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+		const handle = installBorderEditor(pi as any, ctx as any, store);
+		handle.dispose();
 
-	assert.equal(typeof editorCalls[0], "function", "installBorderEditor installs a custom editor");
-	assert.equal(editorCalls[1], undefined, "dispose restores the built-in editor");
+		assert.equal(typeof editorCalls[0], "function", "installBorderEditor installs a custom editor");
+		assert.equal(editorCalls[1], undefined, "dispose restores the built-in editor");
+	} finally {
+		await rm(storeDir, { recursive: true, force: true });
+	}
 });
