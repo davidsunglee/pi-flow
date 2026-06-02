@@ -84,6 +84,9 @@ export function installHeader(ctx: ExtensionContext, reason: string, store: TuiS
       dispose() { unsubscribe?.(); unsubscribe = undefined; },
     };
   });
+  // Both this handle's dispose() and the component's own dispose() (invoked by
+  // the TUI on setHeader swap-out) share the `unsubscribe` closure; whichever
+  // fires first cleans up and nulls it, so the other is a harmless no-op.
   return {
     dispose() {
       unsubscribe?.();

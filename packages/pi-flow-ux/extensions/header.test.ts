@@ -73,9 +73,12 @@ describe("buildHeaderLines", () => {
   it("renders each variant with the correct row count and gradient", () => {
     for (const variant of Object.keys(LOGO_VARIANTS) as LogoVariant[]) {
       const lines = buildHeaderLines("0.78.0", "startup", variant);
-      const logoRows = lines.slice(0, LOGO_VARIANTS[variant].length);
-      assert.equal(logoRows.length, LOGO_VARIANTS[variant].length);
-      assert.ok(logoRows.some((l) => /\x1b\[38;2;\d+;\d+;\d+m/.test(l)), `${variant} should have gradient escapes`);
+      const expectedLogoRows = LOGO_VARIANTS[variant].length;
+      assert.equal(lines.length - 3, expectedLogoRows, `${variant}: wrong total line count`);
+      assert.ok(
+        lines.slice(0, expectedLogoRows).some((l) => /\x1b\[38;2;\d+;\d+;\d+m/.test(l)),
+        `${variant} should have gradient escapes`,
+      );
     }
   });
 
@@ -127,5 +130,21 @@ describe("installHeader", () => {
     handle.dispose();
     assert.equal(calls.length, 2);
     assert.equal(calls[1], undefined);
+  });
+
+  it("factory calls tui.requestRender when the store emits", () => {
+    let storedListener: (() => void) | undefined;
+    const store: TuiSettingsStore = {
+      get: () => ({ ...DEFAULT_TUI_SETTINGS, header: { logo: "squared" as const } }),
+      subscribe: (fn) => { storedListener = fn; return () => {}; },
+      ensureRegistered: () => {},
+    };
+    let renders = 0;
+    const tui = { requestRender: () => { renders++; } } as any;
+    const ctx = { hasUI: true, ui: { setHeader: (f: any) => f(tui, {}) } } as any;
+    installHeader(ctx, "startup", store);
+    assert.ok(storedListener, "subscribe should have been called");
+    storedListener!();
+    assert.equal(renders, 1);
   });
 });
