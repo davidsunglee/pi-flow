@@ -51,8 +51,8 @@ export function applyLogoGradient(lines: string[]): string[] {
   );
 }
 
-// Lettered "pi" wordmarks. Declared in canonical order: bracket, sidebar,
-// rounded, squared. applyLogoGradient colors non-space chars by column.
+// Lettered "pi" wordmarks: bracket, sidebar, rounded, squared.
+// applyLogoGradient colors non-space chars by column.
 export const LOGO_VARIANTS: Record<LogoVariant, string[]> = {
   bracket: ["[ pi ]"],
   sidebar: ["▌ pi ▐"],

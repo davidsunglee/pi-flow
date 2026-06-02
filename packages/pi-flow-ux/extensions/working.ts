@@ -12,12 +12,9 @@ function extractToolCallId(v: unknown): string | undefined {
 }
 
 // Suppress / restore Pi's host working ("loader") row. setWorkingVisible is the
-// documented mechanism — confirmed in @earendil-works/pi-coding-agent@0.75.3 at
-// dist/core/extensions/types.d.ts:82-83 ("Show or hide the built-in interactive
-// working loader row during streaming"). The spec's confirmed-API list named
-// only setWorkingIndicator, so we guard for setWorkingVisible at runtime and
-// fall back to hiding the indicator frames, which the same API supports
-// (setWorkingIndicator({ frames: [] }) — "hide the indicator entirely", line 92).
+// documented mechanism. The API list named only setWorkingIndicator, so we guard
+// for setWorkingVisible at runtime and fall back to hiding the indicator frames,
+// which the same API supports (setWorkingIndicator({ frames: [] })
 function setHostWorkingRowVisible(ui: ExtensionContext["ui"], visible: boolean): void {
   if (typeof ui.setWorkingVisible === "function") { ui.setWorkingVisible(visible); return; }
   if (typeof ui.setWorkingIndicator === "function") {

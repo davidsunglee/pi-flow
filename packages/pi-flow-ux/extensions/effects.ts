@@ -75,14 +75,16 @@ function getIndicatorGlyphs(shape: IndicatorShape): { glyphs: string[]; interval
   }
 }
 
-// Per-state activity-slot treatment. These are now fixed constants, independent of any active theme:
-//   active   → plain accent (no gleam, no rainbow)
-//   toolUse  → gleam
-//   thinking → gleam + rainbow
+// Per-state activity-slot treatment. These are fixed constants, independent of
+// any active theme, and kept state-aligned with the model/thinking effects so a
+// single primary effect reads per state:
+//   active   → plain accent (the model name gleams instead)
+//   toolUse  → gleam (the activity glyph carries the gleam; the model is static)
+//   thinking → rainbow only (matches the rainbow thinking label; no gleam)
 export const STATE_EFFECTS: Record<WorkingState, { gleam: boolean; rainbow: boolean }> = {
   active: { gleam: false, rainbow: false },
   toolUse: { gleam: true, rainbow: false },
-  thinking: { gleam: true, rainbow: true },
+  thinking: { gleam: false, rainbow: true },
 };
 
 function styleIndicatorFrame(glyph: string, index: number, total: number, state: WorkingState): string {
@@ -117,7 +119,7 @@ export function pickWorkingIndicatorFrame(indicator: IndicatorShape, state: Work
   return frames[index]!;
 }
 
-// Gleam the model name while any activity is visible (no rainbow on the model).
+// Apply gleam styling to text; callers decide which state should use it.
 export function gleamText(text: string, nowMs: number): string {
   if (text.length === 0) return text;
   const shinePos = Math.floor(Math.max(0, nowMs) / GLEAM_FRAME_MS) % text.length;

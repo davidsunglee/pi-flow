@@ -16,8 +16,8 @@ describe("STATE_EFFECTS", () => {
   it("toolUse has gleam=true rainbow=false", () => {
     assert.deepEqual(STATE_EFFECTS.toolUse, { gleam: true, rainbow: false });
   });
-  it("thinking has gleam=true rainbow=true", () => {
-    assert.deepEqual(STATE_EFFECTS.thinking, { gleam: true, rainbow: true });
+  it("thinking has gleam=false rainbow=true", () => {
+    assert.deepEqual(STATE_EFFECTS.thinking, { gleam: false, rainbow: true });
   });
 });
 
@@ -76,6 +76,14 @@ describe("thinking glyph uses rainbow", () => {
   it("first spinner frame at nowMs=0 contains the first PASTEL_RAINBOW_RGB stop", () => {
     const frame = pickWorkingIndicatorFrame("spinner", "thinking", 0);
     assert.ok(frame.includes("38;2;255;179;186"), `Expected first rainbow stop in: ${frame}`);
+  });
+  it("is rainbow-only: no bold/gleam on any spinner frame", () => {
+    const { frames, intervalMs } = buildWorkingIndicator("spinner", "thinking");
+    const interval = intervalMs!;
+    for (let i = 0; i < frames.length; i++) {
+      const frame = pickWorkingIndicatorFrame("spinner", "thinking", interval * i);
+      assert.doesNotMatch(frame, /\x1b\[1;38;2;/, `frame ${i} should not gleam: ${frame}`);
+    }
   });
 });
 

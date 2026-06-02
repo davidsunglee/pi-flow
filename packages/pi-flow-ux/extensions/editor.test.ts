@@ -19,6 +19,7 @@ import {
 	installBorderEditor,
 	resolveBorderActivity,
 	resolveEditorBorderColor,
+	resolveEditorEffectStylers,
 	resolveEditorTimerCadence,
 	type BorderFieldWidths,
 } from "./editor.ts";
@@ -663,6 +664,47 @@ test("composeBorderLines applies the thinking styler to the thinking label", () 
 	});
 	const bottom = out[2];
 	assert.ok(bottom.includes("<r>xhigh</r>"), `thinking styler should wrap the thinking label: ${bottom}`);
+});
+
+// ─── resolveEditorEffectStylers (state-aligned model/thinking effects) ──────────
+
+/** Apply the resolved model styler to a model id, or return it plain. */
+function styledModel(snap: WorkingSnapshot, nowMs = 0): string {
+	const { modelStyler } = resolveEditorEffectStylers(snap, nowMs);
+	return modelStyler ? modelStyler("claude") : "claude";
+}
+
+/** Apply the resolved thinking styler to a label, or return it plain. */
+function styledThinking(snap: WorkingSnapshot, nowMs = 0): string {
+	const { thinkingStyler } = resolveEditorEffectStylers(snap, nowMs);
+	return thinkingStyler ? thinkingStyler("xhigh") : "xhigh";
+}
+
+test("resolveEditorEffectStylers gleams the model only in the active state", () => {
+	assert.match(styledModel(snapshot({ state: "active" })), /\x1b\[1;38;2;/, "active model should gleam (bold truecolor)");
+});
+
+test("resolveEditorEffectStylers does not gleam the model during toolUse", () => {
+	assert.equal(styledModel(snapshot({ state: "toolUse" })), "claude", "toolUse model should stay static");
+});
+
+test("resolveEditorEffectStylers does not gleam the model during thinking", () => {
+	assert.equal(styledModel(snapshot({ state: "thinking" })), "claude", "thinking model should stay static");
+});
+
+test("resolveEditorEffectStylers applies no model styler while idle", () => {
+	assert.equal(styledModel(snapshot({ visible: false })), "claude", "idle model should stay static");
+});
+
+test("resolveEditorEffectStylers rainbows the thinking label only while thinking", () => {
+	assert.match(styledThinking(snapshot({ state: "thinking" })), /\x1b\[38;2;255;179;186m/, "thinking label should rainbow");
+	assert.doesNotMatch(styledThinking(snapshot({ state: "thinking" })), /\x1b\[1;38/, "thinking rainbow should not be bold");
+});
+
+test("resolveEditorEffectStylers leaves the thinking label static in active and toolUse", () => {
+	assert.equal(styledThinking(snapshot({ state: "active" })), "xhigh");
+	assert.equal(styledThinking(snapshot({ state: "toolUse" })), "xhigh");
+	assert.equal(styledThinking(snapshot({ visible: false })), "xhigh");
 });
 
 // ─── resolveEditorTimerCadence ─────────────────────────────────────────────────

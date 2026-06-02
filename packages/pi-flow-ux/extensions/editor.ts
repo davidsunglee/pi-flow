@@ -8,8 +8,8 @@
  * with vertical edges to close the rectangle).
  *
  * Layout (closed rectangle; the cwd alone sits on the top edge):
- *   top edge:    ╭───────────────────────────────────  ~/path ─╮
- *   side rows:   │ …editor content…                            │
+ *   top edge:    ╭────────────────────────────────────  ~/path ─╮
+ *   side rows:   │ …editor content…                             │
  *   bottom edge: ╰─ model thinking ──────  used/total context% ─╯
  *
  * This editor owns the compact activity indicator: it reads the working
@@ -603,6 +603,39 @@ export function composeBorderLines(p: ComposeBorderLinesOptions): string[] {
 	return out;
 }
 
+// ─── Effect stylers (state-aligned model gleam / thinking rainbow) ─────────────
+
+/** Optional per-render text stylers for the model id and thinking label. */
+export interface EditorEffectStylers {
+	modelStyler?: (text: string) => string;
+	thinkingStyler?: (text: string) => string;
+}
+
+/**
+ * Resolve the per-state effect stylers, keeping the working state exclusive so a
+ * single primary effect reads per state (never gleam + rainbow at once):
+ *   - active   → model name gleams; thinking label static
+ *   - toolUse  → model + thinking static (the activity glyph carries the gleam)
+ *   - thinking → thinking label rainbows; model static
+ *   - idle     → no stylers
+ *
+ * In particular the model is gleamed only in the `active` state, never during
+ * `toolUse` or `thinking`. Pure so the mapping is unit-testable without a live
+ * editor; `nowMs` selects the animation frame from a wall-clock timestamp.
+ */
+export function resolveEditorEffectStylers(
+	snapshot: WorkingSnapshot,
+	nowMs: number,
+): EditorEffectStylers {
+	if (!snapshot.visible) return {};
+	return {
+		modelStyler:
+			snapshot.state === "active" ? (t: string) => gleamText(t, nowMs) : undefined,
+		thinkingStyler:
+			snapshot.state === "thinking" ? (t: string) => rainbowText(t, nowMs) : undefined,
+	};
+}
+
 // ─── Renderer install ──────────────────────────────────────────────────────────
 
 // The editor redraws on a timer whenever activity is visible — even for static
@@ -704,8 +737,7 @@ export function installBorderEditor(
 
 			const snapshot = working.getSnapshot();
 			const nowMs = Date.now();
-			const modelStyler = snapshot.visible ? (t: string) => gleamText(t, nowMs) : undefined;
-			const thinkingStyler = snapshot.visible && snapshot.state === "thinking" ? (t: string) => rainbowText(t, nowMs) : undefined;
+			const { modelStyler, thinkingStyler } = resolveEditorEffectStylers(snapshot, nowMs);
 			return composeBorderLines({
 				lines,
 				width,
