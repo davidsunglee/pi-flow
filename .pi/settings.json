@@ -9,6 +9,5 @@
     },
     "../packages/pi-flow"
   ],
-  "header-info": false,
   "quietStartup": true
 }

@@ -64,7 +64,6 @@ export function buildHeaderLines(version: string, reason: string, variant: LogoV
   const art = LOGO_VARIANTS[variant] ?? LOGO_VARIANTS[DEFAULT_LOGO_VARIANT];
   return [
     ...applyLogoGradient(art),
-    "",
     `version ${version}`,
     humanizeStartupReason(reason),
   ];

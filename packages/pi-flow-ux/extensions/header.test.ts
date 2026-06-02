@@ -65,7 +65,7 @@ describe("applyLogoGradient", () => {
 describe("buildHeaderLines", () => {
   it("default variant (bracket) renders the bracket wordmark with gradient", () => {
     const lines = buildHeaderLines("0.78.0", "startup");
-    const logoRows = lines.length - 3; // minus blank, version, reason
+    const logoRows = lines.length - 2; // minus version, reason
     assert.equal(logoRows, LOGO_VARIANTS.bracket.length);
     assert.match(lines[0]!, /\x1b\[38;2;\d+;\d+;\d+m/);
   });
@@ -74,7 +74,7 @@ describe("buildHeaderLines", () => {
     for (const variant of Object.keys(LOGO_VARIANTS) as LogoVariant[]) {
       const lines = buildHeaderLines("0.78.0", "startup", variant);
       const expectedLogoRows = LOGO_VARIANTS[variant].length;
-      assert.equal(lines.length - 3, expectedLogoRows, `${variant}: wrong total line count`);
+      assert.equal(lines.length - 2, expectedLogoRows, `${variant}: wrong total line count`);
       assert.ok(
         lines.slice(0, expectedLogoRows).some((l) => /\x1b\[38;2;\d+;\d+;\d+m/.test(l)),
         `${variant} should have gradient escapes`,
@@ -84,14 +84,14 @@ describe("buildHeaderLines", () => {
 
   it("unknown variant falls back to bracket", () => {
     const lines = buildHeaderLines("0.78.0", "startup", "nope" as LogoVariant);
-    assert.equal(lines.length - 3, LOGO_VARIANTS.bracket.length);
+    assert.equal(lines.length - 2, LOGO_VARIANTS.bracket.length);
   });
 
-  it("contains a blank separator, the version line, and the humanized reason", () => {
+  it("places the version immediately after the logo", () => {
     const lines = buildHeaderLines("0.78.0", "startup");
-    assert.ok(lines.includes(""));
-    assert.ok(lines.includes("version 0.78.0"));
-    assert.equal(lines[lines.length - 1], humanizeStartupReason("startup"));
+    const expectedLogoRows = LOGO_VARIANTS.bracket.length;
+    assert.equal(lines[expectedLogoRows], "version 0.78.0");
+    assert.equal(lines[expectedLogoRows + 1], humanizeStartupReason("startup"));
   });
 });
 
