@@ -10,35 +10,20 @@ type EventHandler = (event: any, ctx: any) => void | Promise<void>;
 
 function makePi() {
   const handlers = new Map<string, EventHandler[]>();
-  const commands = new Map<string, any>();
   const pi = {
     on(event: string, handler: EventHandler) {
       const list = handlers.get(event) ?? [];
       list.push(handler);
       handlers.set(event, list);
     },
-    registerCommand(name: string, opts: any) {
-      commands.set(name, opts);
-    },
+    registerCommand(_name: string, _opts: any) {},
   };
   async function emit(event: string, payload: any = {}, ctx: any = {}) {
     for (const handler of handlers.get(event) ?? []) {
       await handler(payload, ctx);
     }
   }
-  return { pi, emit, commands };
-}
-
-function makeSessionCtx() {
-  return {
-    hasUI: true,
-    ui: {
-      setWorkingVisible() {},
-      setWorkingIndicator() {},
-      setStatus() {},
-      notify() {},
-    },
-  };
+  return { pi, emit };
 }
 
 // ---- Host working-row suppression tests ----

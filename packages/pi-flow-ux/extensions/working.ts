@@ -38,6 +38,8 @@ class WorkingCoordinator {
   private listeners = new Set<(snapshot: WorkingSnapshot) => void>();
   private runtimeRegistered = false;
   private registeredPi: ExtensionAPI | undefined;
+  // Retained across the session lifetime so session_shutdown can restore the host
+  // working row (shutdown receives no ctx argument from the Pi API).
   private uiCtx: ExtensionContext | undefined;
 
   getSnapshot(): WorkingSnapshot {
