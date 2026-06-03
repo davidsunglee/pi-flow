@@ -7,7 +7,23 @@ import {
   gleamText,
   rainbowText,
   STATE_EFFECTS,
+  PASTEL_RAINBOW_RGB,
+  THINKING_RAINBOW_FRAME_MS,
 } from "./effects.ts";
+
+function truecolorRgb(text: string): [number, number, number] {
+  const match = /\x1b\[(?:1;)?38;2;(\d+);(\d+);(\d+)m/.exec(text);
+  assert.ok(match, `expected a truecolor escape in: ${JSON.stringify(text)}`);
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+function truecolorRgbs(text: string): [number, number, number][] {
+  return [...text.matchAll(/\x1b\[(?:1;)?38;2;(\d+);(\d+);(\d+)m/g)].map((m) => [
+    Number(m[1]),
+    Number(m[2]),
+    Number(m[3]),
+  ]);
+}
 
 describe("STATE_EFFECTS", () => {
   it("active has gleam=false rainbow=false", () => {
@@ -72,11 +88,31 @@ describe("toolUse glyph gleams at mid frame", () => {
   });
 });
 
-describe("thinking glyph uses rainbow", () => {
-  it("first spinner frame at nowMs=0 contains the first PASTEL_RAINBOW_RGB stop", () => {
-    const frame = pickWorkingIndicatorFrame("spinner", "thinking", 0);
-    assert.ok(frame.includes("38;2;255;179;186"), `Expected first rainbow stop in: ${frame}`);
+describe("thinking glyph uses animated rainbow", () => {
+  it("cycles a static dot glyph through the base palette at consistent brightness", () => {
+    const first = truecolorRgb(pickWorkingIndicatorFrame("dot", "thinking", 0));
+    const second = truecolorRgb(pickWorkingIndicatorFrame(
+      "dot",
+      "thinking",
+      THINKING_RAINBOW_FRAME_MS,
+    ));
+    const lastForward = truecolorRgb(pickWorkingIndicatorFrame(
+      "dot",
+      "thinking",
+      THINKING_RAINBOW_FRAME_MS * (PASTEL_RAINBOW_RGB.length - 1),
+    ));
+    const firstAgain = truecolorRgb(pickWorkingIndicatorFrame(
+      "dot",
+      "thinking",
+      THINKING_RAINBOW_FRAME_MS * ((PASTEL_RAINBOW_RGB.length - 1) * 2),
+    ));
+
+    assert.deepEqual(first, PASTEL_RAINBOW_RGB[0]);
+    assert.deepEqual(second, PASTEL_RAINBOW_RGB[1]);
+    assert.deepEqual(lastForward, PASTEL_RAINBOW_RGB[PASTEL_RAINBOW_RGB.length - 1]);
+    assert.deepEqual(firstAgain, PASTEL_RAINBOW_RGB[0]);
   });
+
   it("is rainbow-only: no bold/gleam on any spinner frame", () => {
     const { frames, intervalMs } = buildWorkingIndicator("spinner", "thinking");
     const interval = intervalMs!;
@@ -99,10 +135,31 @@ describe("gleamText", () => {
 });
 
 describe("rainbowText", () => {
-  it('rainbowText("xhigh", 0) uses first PASTEL_RAINBOW_RGB stop for first char', () => {
+  it('rainbowText("xhigh", 0) uses one animated color across all letters', () => {
     const result = rainbowText("xhigh", 0);
-    assert.match(result, /\x1b\[38;2;255;179;186m/);
+    const rgbs = truecolorRgbs(result);
+    assert.ok(rgbs.length >= 1, "text should include a truecolor escape");
+    assert.equal(new Set(rgbs.map((rgb) => rgb.join(","))).size, 1);
   });
+
+  it('rainbowText("xhigh", nowMs) cycles through the base palette at consistent brightness', () => {
+    const first = truecolorRgb(rainbowText("xhigh", 0));
+    const second = truecolorRgb(rainbowText("xhigh", THINKING_RAINBOW_FRAME_MS));
+    const lastForward = truecolorRgb(rainbowText(
+      "xhigh",
+      THINKING_RAINBOW_FRAME_MS * (PASTEL_RAINBOW_RGB.length - 1),
+    ));
+    const firstAgain = truecolorRgb(rainbowText(
+      "xhigh",
+      THINKING_RAINBOW_FRAME_MS * ((PASTEL_RAINBOW_RGB.length - 1) * 2),
+    ));
+
+    assert.deepEqual(first, PASTEL_RAINBOW_RGB[0]);
+    assert.deepEqual(second, PASTEL_RAINBOW_RGB[1]);
+    assert.deepEqual(lastForward, PASTEL_RAINBOW_RGB[PASTEL_RAINBOW_RGB.length - 1]);
+    assert.deepEqual(firstAgain, PASTEL_RAINBOW_RGB[0]);
+  });
+
   it('rainbowText("xhigh", 0) is not bold', () => {
     const result = rainbowText("xhigh", 0);
     assert.doesNotMatch(result, /\x1b\[1;38/);

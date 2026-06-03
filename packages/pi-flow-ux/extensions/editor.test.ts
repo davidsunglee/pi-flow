@@ -697,7 +697,7 @@ test("resolveEditorEffectStylers applies no model styler while idle", () => {
 });
 
 test("resolveEditorEffectStylers rainbows the thinking label only while thinking", () => {
-	assert.match(styledThinking(snapshot({ state: "thinking" })), /\x1b\[38;2;255;179;186m/, "thinking label should rainbow");
+	assert.match(styledThinking(snapshot({ state: "thinking" })), /\x1b\[38;2;\d+;\d+;\d+m/, "thinking label should rainbow");
 	assert.doesNotMatch(styledThinking(snapshot({ state: "thinking" })), /\x1b\[1;38/, "thinking rainbow should not be bold");
 });
 

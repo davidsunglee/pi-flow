@@ -24,6 +24,7 @@ export const DEFAULT_INDICATOR_INTERVAL_MS = 120;
 
 export const DEFAULT_WORKING_RGB: [number, number, number] = [129, 161, 193];
 const GLEAM_FRAME_MS = 120;
+export const THINKING_RAINBOW_FRAME_MS = 120;
 
 export interface IndicatorFrames { frames: string[]; intervalMs?: number; }
 
@@ -49,17 +50,19 @@ function colorizeGleam(text: string, rgb: [number, number, number], shinePos: nu
   );
 }
 
-function colorizeRainbow(text: string, shinePos: number, gleam: boolean): string {
-  return (
-    [...text]
-      .map((char, index) => {
-        const base = PASTEL_RAINBOW_RGB[index % PASTEL_RAINBOW_RGB.length]!;
-        const dist = Math.abs(index - shinePos);
-        const factor = gleam && dist === 0 ? 0.7 : gleam && dist === 1 ? 0.35 : 0;
-        return `${color(brighten(base, factor), gleam && dist <= 1)}${char}`;
-      })
-      .join("") + RESET
-  );
+function thinkingRainbowColor(nowMs: number): [number, number, number] {
+  const maxIndex = PASTEL_RAINBOW_RGB.length - 1;
+  if (maxIndex <= 0) return PASTEL_RAINBOW_RGB[0] ?? DEFAULT_WORKING_RGB;
+
+  const cycleSteps = maxIndex * 2;
+  const phase = Math.floor(Math.max(0, nowMs) / THINKING_RAINBOW_FRAME_MS) % cycleSteps;
+  const paletteIndex = phase <= maxIndex ? phase : cycleSteps - phase;
+  return PASTEL_RAINBOW_RGB[paletteIndex]!;
+}
+
+function colorizeRainbow(text: string, nowMs: number): string {
+  const frameColor = color(thinkingRainbowColor(nowMs));
+  return [...text].map((char) => `${frameColor}${char}`).join("") + RESET;
 }
 
 function getIndicatorGlyphs(shape: IndicatorShape): { glyphs: string[]; intervalMs?: number } {
@@ -87,13 +90,10 @@ export const STATE_EFFECTS: Record<WorkingState, { gleam: boolean; rainbow: bool
   thinking: { gleam: false, rainbow: true },
 };
 
-function styleIndicatorFrame(glyph: string, index: number, total: number, state: WorkingState): string {
+function styleIndicatorFrame(glyph: string, index: number, total: number, state: WorkingState, nowMs = 0): string {
   const { gleam, rainbow } = STATE_EFFECTS[state];
   if (rainbow) {
-    const base = PASTEL_RAINBOW_RGB[index % PASTEL_RAINBOW_RGB.length]!;
-    const mid = Math.floor(total / 2);
-    const factor = gleam && Math.abs(index - mid) <= 1 ? (index === mid ? 0.4 : 0.2) : 0;
-    return `${color(brighten(base, factor), gleam && Math.abs(index - mid) <= 1)}${glyph}${RESET}`;
+    return `${color(thinkingRainbowColor(nowMs))}${glyph}${RESET}`;
   }
   const base = DEFAULT_WORKING_RGB;
   if (!gleam) return `${color(base)}${glyph}${RESET}`;
@@ -112,11 +112,11 @@ export function buildWorkingIndicator(indicator: IndicatorShape, state: WorkingS
 }
 
 export function pickWorkingIndicatorFrame(indicator: IndicatorShape, state: WorkingState, nowMs: number): string {
-  const { frames, intervalMs } = buildWorkingIndicator(indicator, state);
-  if (frames.length === 0) return "";
+  const { glyphs, intervalMs } = getIndicatorGlyphs(indicator);
+  if (glyphs.length === 0) return "";
   const interval = intervalMs ?? DEFAULT_INDICATOR_INTERVAL_MS;
-  const index = Math.floor(Math.max(0, nowMs) / interval) % frames.length;
-  return frames[index]!;
+  const index = Math.floor(Math.max(0, nowMs) / interval) % glyphs.length;
+  return styleIndicatorFrame(glyphs[index]!, index, glyphs.length, state, nowMs);
 }
 
 // Apply gleam styling to text; callers decide which state should use it.
@@ -126,9 +126,8 @@ export function gleamText(text: string, nowMs: number): string {
   return colorizeGleam(text, DEFAULT_WORKING_RGB, shinePos);
 }
 
-// Rainbow the thinking-level text only while thinking (no gleam on the thinking text).
+// Animate the thinking-level text through the rainbow palette at consistent brightness.
 export function rainbowText(text: string, nowMs: number): string {
   if (text.length === 0) return text;
-  const shinePos = Math.floor(Math.max(0, nowMs) / GLEAM_FRAME_MS) % text.length;
-  return colorizeRainbow(text, shinePos, false);
+  return colorizeRainbow(text, nowMs);
 }
