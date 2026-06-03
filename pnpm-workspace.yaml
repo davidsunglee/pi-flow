@@ -6,4 +6,4 @@ allowBuilds:
   protobufjs: false
 autoInstallPeers: false
 minimumReleaseAgeExclude:
-  - '@aphotic/pi-mux-subagents@0.1.0'
+  - '@aphotic/pi-mux-subagents'

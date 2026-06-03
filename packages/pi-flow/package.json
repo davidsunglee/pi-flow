@@ -8,7 +8,7 @@
   "files": ["bin"],
   "dependencies": { "@aphotic/pi-flow-core": "workspace:*", "@aphotic/pi-flow-ux": "workspace:*", "@aphotic/pi-ideas": "workspace:*" },
   "bundledDependencies": ["@aphotic/pi-flow-core", "@aphotic/pi-flow-ux", "@aphotic/pi-ideas"],
-  "peerDependencies": { "@aphotic/pi-mux-subagents": "^0.1.0" },
+  "peerDependencies": { "@aphotic/pi-mux-subagents": ">=0.1.0" },
   "scripts": {
     "test:node": "find __tests__ -name '*.test.mjs' -print0 | xargs -0 node --test --test-reporter tap",
     "test": "pnpm run test:node",

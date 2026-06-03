@@ -15,13 +15,13 @@
     "typebox": "^1.0.0"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "^0.75.0",
-    "@earendil-works/pi-tui": "^0.75.0",
+    "@earendil-works/pi-coding-agent": ">=0.78.0",
+    "@earendil-works/pi-tui": ">=0.78.0",
     "typebox": "^1.0.0"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^0.75.0",
-    "@earendil-works/pi-tui": "^0.75.0",
+    "@earendil-works/pi-coding-agent": "^0.78.0",
+    "@earendil-works/pi-tui": "^0.78.0",
     "typebox": "^1.0.0"
   },
   "pi": {
