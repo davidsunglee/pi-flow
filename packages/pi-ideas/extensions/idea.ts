@@ -14,11 +14,8 @@ import {
   type KeybindingsManager,
 } from "@earendil-works/pi-coding-agent";
 import {
-  Container,
-  Input,
   SelectList,
   Markdown,
-  Spacer,
   Text,
   type Component,
   type TUI,
@@ -49,7 +46,6 @@ import {
   resolveIdeasConfig,
   substituteIdea,
   shortcutToKeyId,
-  type IdeasConfig,
   type WorkMenuAction,
   type ResolveIdeasConfigOptions,
 } from "./config.ts";
@@ -928,10 +924,7 @@ class IdeaDetailOverlayComponent implements Component {
         // (line-counter digits widen the wrapped footer at narrow widths).
         viewHeight = Math.max(0, contentBudget - renderHeaderRows.length - 1);
         footerRows = buildFooterRows(Math.max(1, viewHeight));
-        let cappedFooter = footerRows.slice(
-          0,
-          Math.max(0, contentBudget - renderHeaderRows.length),
-        );
+        let cappedFooter: string[];
         for (let i = 0; i < 4; i++) {
           const headerFooterBudget = Math.max(0, contentBudget - renderHeaderRows.length);
           cappedFooter = footerRows.slice(0, Math.min(footerRows.length, headerFooterBudget));
@@ -1069,7 +1062,6 @@ export function registerIdea(pi: ExtensionAPI, options: ResolveIdeasConfigOption
       await ctx.ui.custom<void>((tui, theme, keybindings, done) => {
         rootTui = tui;
         let activeComponent: Component & { invalidate(): void };
-        let selector: IdeaSelectorComponent;
 
         const closeAndPrefill = (text: string) => {
           // Defer setEditorText until AFTER the custom UI closes. Pi's
@@ -1089,8 +1081,6 @@ export function registerIdea(pi: ExtensionAPI, options: ResolveIdeasConfigOption
           activeComponent = c;
           tui.requestRender();
         };
-
-        let openActionMenu: (idea: IdeaListEntry) => void;
 
         const openWorkSubmenu = (idea: IdeaListEntry) => {
           const work = new IdeaWorkSubmenuComponent(idea, config.actions, {
@@ -1180,7 +1170,7 @@ export function registerIdea(pi: ExtensionAPI, options: ResolveIdeasConfigOption
           });
         };
 
-        openActionMenu = (idea: IdeaListEntry) => {
+        const openActionMenu = (idea: IdeaListEntry) => {
           const menu = new IdeaActionMenuComponent(idea, {
             dispatchAction: (name) => {
               if (name === "view") {
@@ -1244,7 +1234,7 @@ export function registerIdea(pi: ExtensionAPI, options: ResolveIdeasConfigOption
           keybindings,
         };
 
-        selector = new IdeaSelectorComponent(mutableEntries, query, selectorHost, config.actions);
+        const selector = new IdeaSelectorComponent(mutableEntries, query, selectorHost, config.actions);
         activeComponent = selector;
 
         return {

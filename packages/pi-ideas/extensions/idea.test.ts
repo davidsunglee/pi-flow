@@ -1508,7 +1508,7 @@ test("IdeaDetailOverlayComponent uses border token for top and bottom borders", 
     body: "body line",
   };
 
-  const overlay = new _internalsForTest.IdeaDetailOverlayComponent(idea, host, { maxVisibleLines: 5 });
+  const overlay = new IdeaDetailOverlayComponent(idea, host, { maxVisibleLines: 5 });
   const lines = overlay.render(80);
 
   // Top/bottom border must use border token; corner glyphs are allowed.
@@ -1884,7 +1884,7 @@ test("IdeaDetailOverlayComponent: rapid Down past bottom keeps rendered line cou
   const initialBorder = initial[initial.length - 1];
 
   h.setBinding("tui.select.down");
-  let lastLines = initial;
+  let lastLines: string[];
   for (let i = 0; i < 100; i++) {
     overlay.handleInput!("\x1b[B");
     lastLines = overlay.render(width);

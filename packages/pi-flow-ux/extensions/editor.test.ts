@@ -23,7 +23,7 @@ import {
 	resolveEditorTimerCadence,
 	type BorderFieldWidths,
 } from "./editor.ts";
-import { buildWorkingIndicator, pickWorkingIndicatorFrame } from "./effects.ts";
+import { pickWorkingIndicatorFrame } from "./effects.ts";
 import type { WorkingSnapshot } from "./working.ts";
 import { getTuiSettingsStore, resetTuiSettingsStoreForTests, PACKAGE_DEFAULT_TUI_SETTINGS_PATH, DEFAULT_TUI_SETTINGS, type TuiSettings, type TuiSettingsStore } from "./settings.ts";
 import { visibleWidth } from "@earendil-works/pi-tui";

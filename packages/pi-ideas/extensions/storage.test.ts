@@ -17,7 +17,6 @@ import {
   deleteIdea,
   getIdeaDir,
   type IdeaArtifact,
-  type IdeaListEntry,
 } from "./storage.ts";
 
 function makeTmpDir(): string {

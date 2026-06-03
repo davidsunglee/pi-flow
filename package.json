@@ -12,11 +12,12 @@
     "node": ">=20"
   },
   "scripts": {
+    "lint": "eslint \"__tests__/**/*.mjs\" \"packages/**/*.{ts,mjs,js}\"",
     "test": "pnpm run test:root && pnpm -r --workspace-concurrency=1 run test",
     "test:root": "node --test __tests__/*.test.mjs",
     "test:helpers": "pnpm --filter @aphotic/pi-flow-core run test:helpers",
     "test:node": "pnpm run test:root && pnpm -r --workspace-concurrency=1 run test:node",
-    "check": "pnpm run test:root && pnpm -r --workspace-concurrency=1 run check"
+    "check": "pnpm run lint && pnpm run test:root && pnpm -r --workspace-concurrency=1 run check"
   },
   "pi": {
     "skills": [
@@ -30,5 +31,11 @@
       "packages/pi-flow-ux/themes/nord.json"
     ]
   },
-  "version": "0.7.0"
+  "version": "0.7.0",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.4.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.60.1"
+  }
 }
