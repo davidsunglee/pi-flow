@@ -28,7 +28,7 @@ function fakeStore(logo: LogoVariant, details: HeaderDetails = "compact"): TuiSe
 }
 
 function fakeResources(snapshot?: ResourceSnapshot): HeaderResources & { notify(): void } {
-  let stored = snapshot;
+  const stored = snapshot;
   const listeners = new Set<() => void>();
   return {
     get: () => stored,

@@ -1,5 +1,8 @@
 import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 import { resetWorkingCoordinatorForTests } from "./working.ts";
 import { resetTuiSettingsStoreForTests } from "./settings.ts";
@@ -10,6 +13,8 @@ type EventHandler = (event: any, ctx: any) => void | Promise<void>;
 function makePi() {
   const handlers = new Map<string, EventHandler[]>();
   const commands = new Map<string, any>();
+  const messages: unknown[] = [];
+  const renderers = new Map<string, unknown>();
   const pi = {
     on(event: string, handler: EventHandler) {
       const list = handlers.get(event) ?? [];
@@ -22,25 +27,37 @@ function makePi() {
     getThinkingLevel() {
       return "off";
     },
+    getCommands() {
+      return [];
+    },
+    sendMessage(msg: unknown) {
+      messages.push(msg);
+    },
+    registerMessageRenderer(type: string, renderer: unknown) {
+      renderers.set(type, renderer);
+    },
   };
   async function emit(event: string, payload: any = {}, ctx: any = {}) {
     for (const handler of handlers.get(event) ?? []) {
       await handler(payload, ctx);
     }
   }
-  return { pi, emit, commands };
+  return { pi, emit, commands, messages, renderers };
 }
 
-function makeCtx() {
+function makeCtx(cwd?: string) {
   const calls: { method: string; arg: unknown }[] = [];
   const ctx = {
     hasUI: true,
-    cwd: "/test/repo",
+    cwd: cwd ?? "/test/repo",
     model: undefined as any,
     getContextUsage() {
       return undefined;
     },
     ui: {
+      getAllThemes() {
+        return [];
+      },
       setFooter(arg: unknown) {
         calls.push({ method: "setFooter", arg });
       },
@@ -159,4 +176,45 @@ test("registers the /tui command and installs a header on session_start", async 
   await emit("session_start", { reason: "startup" }, ctx);
   assert.ok(commands.has("tui"), "tui command should be registered");
   assert.ok(getCalls("setHeader").some((c) => typeof c.arg === "function"), "header should be installed");
+});
+
+test("registers the pi-flow-ux:header-details message renderer at factory time", () => {
+  resetWorkingCoordinatorForTests();
+  resetTuiSettingsStoreForTests();
+  const { pi, renderers } = makePi();
+  indexExtension(pi as any);
+  assert.ok(renderers.has("pi-flow-ux:header-details"), "renderer should be registered for pi-flow-ux:header-details");
+  assert.equal(typeof renderers.get("pi-flow-ux:header-details"), "function", "registered renderer should be a function");
+});
+
+test("bare /tui header details flows end-to-end into a displayed custom chat message", async () => {
+  resetWorkingCoordinatorForTests();
+  resetTuiSettingsStoreForTests();
+  const { pi, emit, commands, messages } = makePi();
+  indexExtension(pi as any);
+
+  // Use a fresh temp dir as cwd so DefaultPackageManager resolution is empty and fast.
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pi-flow-test-"));
+  try {
+    const { ctx } = makeCtx(tmpDir);
+
+    // Trigger session_start so the /tui command handler has the showHeaderDetails callback wired.
+    await emit("session_start", { reason: "startup" }, ctx);
+
+    // Build a command context matching the session ctx shape.
+    const cmdCtx = {
+      cwd: tmpDir,
+      ui: ctx.ui,
+    };
+
+    // Invoke the /tui handler with "header details".
+    await commands.get("tui").handler("header details", cmdCtx);
+
+    assert.equal(messages.length, 1, "exactly one sendMessage call expected");
+    const msg = messages[0] as Record<string, unknown>;
+    assert.equal(msg["customType"], "pi-flow-ux:header-details", "customType should be pi-flow-ux:header-details");
+    assert.equal(msg["display"], true, "display should be true");
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
 });

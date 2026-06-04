@@ -3,7 +3,7 @@ import { VERSION } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { type LogoVariant, DEFAULT_LOGO_VARIANT, type TuiSettingsStore, type HeaderDetails } from "./settings.ts";
-import { HEADER_MARGIN, CATEGORY_ORDER, type ResourceSnapshot, type ResourceItem, type HeaderResources } from "./header-data.ts";
+import { HEADER_MARGIN, CATEGORY_ORDER, type ResourceSnapshot, type HeaderResources } from "./header-data.ts";
 import { BORDER_TOKENS } from "./editor.ts";
 
 export type SessionStartReason = "startup" | "reload" | "new" | "resume" | "fork";
