@@ -8,9 +8,12 @@ import {
   DEFAULT_TUI_SETTINGS,
   DEFAULT_LOGO_VARIANT,
   LOGO_VARIANTS_ORDER,
+  DEFAULT_HEADER_DETAILS,
+  HEADER_DETAILS_ORDER,
   PACKAGE_DEFAULT_TUI_SETTINGS_PATH,
   isIndicatorShape,
   isLogoVariant,
+  isHeaderDetails,
   loadPackagedDefaultTuiSettings,
   loadSavedTuiSettings,
   normalizeTuiSettings,
@@ -288,6 +291,160 @@ test("rebinding the store to a new pi clears listeners and reloads from disk", a
     await second.emit("session_start", { reason: "startup" });
     assert.equal(store.get().header.logo, "rounded"); // reloaded from disk
     assert.equal(firstCalls, callsAfterFirst, "old listener was cleared and must not fire after rebind");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    resetTuiSettingsStoreForTests();
+  }
+});
+
+test("HEADER_DETAILS_ORDER is ['none', 'compact'] with compact as default", () => {
+  assert.deepEqual([...HEADER_DETAILS_ORDER], ["none", "compact"]);
+  assert.equal(DEFAULT_HEADER_DETAILS, "compact");
+});
+
+test("isHeaderDetails accepts none/compact and rejects full/bogus/42/undefined", () => {
+  assert.ok(isHeaderDetails("none"));
+  assert.ok(isHeaderDetails("compact"));
+  assert.equal(isHeaderDetails("full"), false);
+  assert.equal(isHeaderDetails("bogus"), false);
+  assert.equal(isHeaderDetails(42), false);
+  assert.equal(isHeaderDetails(undefined), false);
+});
+
+test("normalizeTuiSettings defaults header.details to compact for empty input", () => {
+  assert.equal(normalizeTuiSettings({}).header.details, "compact");
+});
+
+test("normalizeTuiSettings preserves logo when details is missing", () => {
+  const result = normalizeTuiSettings({ header: { logo: "rounded" } });
+  assert.equal(result.header.details, "compact");
+  assert.equal(result.header.logo, "rounded");
+});
+
+test("normalizeTuiSettings accepts none as header.details", () => {
+  assert.equal(normalizeTuiSettings({ header: { details: "none" } }).header.details, "none");
+});
+
+test("normalizeTuiSettings falls back to compact for invalid header.details", () => {
+  assert.equal(normalizeTuiSettings({ header: { details: "full" } }).header.details, "compact");
+});
+
+test("loadPackagedDefaultTuiSettings resolves with header.details === compact", async () => {
+  const packaged = await loadPackagedDefaultTuiSettings(PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+  assert.equal(packaged?.header.details, "compact");
+});
+
+test("saveTuiSettings round-trips header.details=none", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tui-"));
+  try {
+    const p = path.join(dir, "tui.json");
+    await saveTuiSettings(p, { ...DEFAULT_TUI_SETTINGS, header: { logo: DEFAULT_TUI_SETTINGS.header.logo, details: "none" } });
+    const reloaded = await loadSavedTuiSettings(p);
+    assert.equal(reloaded?.header.details, "none");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("legacy saved file without details loads with details=compact and logo preserved", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tui-"));
+  try {
+    const p = path.join(dir, "tui.json");
+    await writeFile(p, JSON.stringify({ version: 1, header: { logo: "squared" } }), "utf8");
+    const result = await loadSavedTuiSettings(p);
+    assert.equal(result?.header.details, "compact");
+    assert.equal(result?.header.logo, "squared");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("/tui header details=none updates the store, persists, and toasts", async () => {
+  resetTuiSettingsStoreForTests();
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tui-"));
+  try {
+    const userPath = path.join(dir, "tui.json");
+    const store = getTuiSettingsStore(userPath, PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+    const { pi, emit, commands } = makePi();
+    store.ensureRegistered(pi as any, { registerCommand: true });
+    await emit("session_start", { reason: "startup" });
+    const { ctx, notices } = makeCmdCtx();
+    await commands.get("tui").handler("header details=none", ctx);
+    assert.equal(store.get().header.details, "none");
+    const written = JSON.parse(await readFile(userPath, "utf8"));
+    assert.equal(written.header.details, "none");
+    assert.ok(notices.some((n) => n.level === "info" && /header\.details=none/.test(n.msg)));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    resetTuiSettingsStoreForTests();
+  }
+});
+
+test("/tui header details=bogus is rejected with error and leaves store at compact", async () => {
+  resetTuiSettingsStoreForTests();
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tui-"));
+  try {
+    const store = getTuiSettingsStore(path.join(dir, "tui.json"), PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+    const { pi, emit, commands } = makePi();
+    store.ensureRegistered(pi as any, { registerCommand: true });
+    await emit("session_start", { reason: "startup" });
+    const { ctx, notices } = makeCmdCtx();
+    await commands.get("tui").handler("header details=bogus", ctx);
+    assert.equal(store.get().header.details, "compact");
+    assert.ok(notices.some((n) => n.level === "error"));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    resetTuiSettingsStoreForTests();
+  }
+});
+
+test("bare /tui notice matches header.details=compact", async () => {
+  resetTuiSettingsStoreForTests();
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tui-"));
+  try {
+    const store = getTuiSettingsStore(path.join(dir, "tui.json"), PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+    const { pi, emit, commands } = makePi();
+    store.ensureRegistered(pi as any, { registerCommand: true });
+    await emit("session_start", { reason: "startup" });
+    const { ctx, notices } = makeCmdCtx();
+    await commands.get("tui").handler("", ctx);
+    assert.ok(notices.some((n) => /header\.details=compact/.test(n.msg)));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    resetTuiSettingsStoreForTests();
+  }
+});
+
+test("bare /tui header details with injected callback invokes it exactly once and emits no error", async () => {
+  resetTuiSettingsStoreForTests();
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tui-"));
+  try {
+    const store = getTuiSettingsStore(path.join(dir, "tui.json"), PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+    const { pi, emit, commands } = makePi();
+    let calls = 0;
+    store.ensureRegistered(pi as any, { registerCommand: true, showHeaderDetails: async () => { calls++; } });
+    await emit("session_start", { reason: "startup" });
+    const { ctx, notices } = makeCmdCtx();
+    await commands.get("tui").handler("header details", ctx);
+    assert.equal(calls, 1);
+    assert.equal(notices.filter((n) => n.level === "error").length, 0);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    resetTuiSettingsStoreForTests();
+  }
+});
+
+test("bare /tui header details with no callback notifies error with usage text", async () => {
+  resetTuiSettingsStoreForTests();
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tui-"));
+  try {
+    const store = getTuiSettingsStore(path.join(dir, "tui.json"), PACKAGE_DEFAULT_TUI_SETTINGS_PATH);
+    const { pi, emit, commands } = makePi();
+    store.ensureRegistered(pi as any, { registerCommand: true });
+    await emit("session_start", { reason: "startup" });
+    const { ctx, notices } = makeCmdCtx();
+    await commands.get("tui").handler("header details", ctx);
+    assert.ok(notices.some((n) => n.level === "error" && /Usage/.test(n.msg)));
   } finally {
     await rm(dir, { recursive: true, force: true });
     resetTuiSettingsStoreForTests();

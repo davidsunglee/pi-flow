@@ -6,11 +6,12 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-c
 
 export type IndicatorShape = "dot" | "pulse" | "spinner" | "wave";
 export type LogoVariant = "bracket" | "sidebar" | "rounded" | "squared";
+export type HeaderDetails = "none" | "compact";
 
 export interface TuiSettings {
   version: number;
   working: { indicator: IndicatorShape };
-  header: { logo: LogoVariant };
+  header: { logo: LogoVariant; details: HeaderDetails };
   editor: Record<string, never>;
   footer: Record<string, never>;
 }
@@ -22,10 +23,17 @@ export const DEFAULT_LOGO_VARIANT: LogoVariant = "bracket";
 // Canonical order, used everywhere variants are listed.
 export const LOGO_VARIANTS_ORDER: readonly LogoVariant[] = ["bracket", "sidebar", "rounded", "squared"];
 
+export const DEFAULT_HEADER_DETAILS: HeaderDetails = "compact";
+// Canonical order, used everywhere details values are listed.
+export const HEADER_DETAILS_ORDER: readonly HeaderDetails[] = ["none", "compact"];
+export function isHeaderDetails(v: unknown): v is HeaderDetails {
+  return typeof v === "string" && (HEADER_DETAILS_ORDER as readonly string[]).includes(v);
+}
+
 export const DEFAULT_TUI_SETTINGS: TuiSettings = {
   version: 1,
   working: { indicator: DEFAULT_INDICATOR },
-  header: { logo: DEFAULT_LOGO_VARIANT },
+  header: { logo: DEFAULT_LOGO_VARIANT, details: DEFAULT_HEADER_DETAILS },
   editor: {},
   footer: {},
 };
@@ -52,10 +60,11 @@ export function normalizeTuiSettings(value: unknown, fallback: TuiSettings = DEF
   const indicator = isIndicatorShape(working.indicator) ? working.indicator : fallback.working.indicator;
   const header = isPlainObject(value.header) ? value.header : {};
   const logo = isLogoVariant(header.logo) ? header.logo : fallback.header.logo;
+  const details = isHeaderDetails(header.details) ? header.details : fallback.header.details;
   return {
     version: typeof value.version === "number" ? value.version : fallback.version,
     working: { indicator },
-    header: { logo },
+    header: { logo, details },
     editor: {},
     footer: {},
   };
@@ -135,16 +144,18 @@ function getTuiUsage(): string {
     "Usage: /tui",
     "       /tui working indicator=<dot|pulse|spinner|wave>",
     "       /tui header logo=<bracket|sidebar|rounded|squared>",
+    "       /tui header details=<none|compact>",
+    "       /tui header details   (print full resource details to chat)",
   ].join("\n");
 }
 function describeTuiSettings(s: TuiSettings): string {
-  return `TUI: working.indicator=${s.working.indicator} header.logo=${s.header.logo}`;
+  return `TUI: working.indicator=${s.working.indicator} header.logo=${s.header.logo} header.details=${s.header.details}`;
 }
 
 export interface TuiSettingsStore {
   get(): TuiSettings;
   subscribe(listener: (settings: TuiSettings) => void): () => void;
-  ensureRegistered(pi: ExtensionAPI, opts: { registerCommand: boolean }): void;
+  ensureRegistered(pi: ExtensionAPI, opts: { registerCommand: boolean; showHeaderDetails?: (ctx: ExtensionCommandContext) => Promise<void> }): void;
 }
 
 class TuiSettingsStoreImpl implements TuiSettingsStore {
@@ -155,6 +166,7 @@ class TuiSettingsStoreImpl implements TuiSettingsStore {
   private registeredPi: ExtensionAPI | undefined;
   private runtimeRegistered = false;
   private commandRegistered = false;
+  private showHeaderDetails: ((ctx: ExtensionCommandContext) => Promise<void>) | undefined;
 
   constructor(settingsPath: string, packageDefaultPath: string) {
     this.settingsPath = settingsPath;
@@ -168,7 +180,7 @@ class TuiSettingsStoreImpl implements TuiSettingsStore {
     return () => { this.listeners.delete(listener); };
   }
 
-  ensureRegistered(pi: ExtensionAPI, opts: { registerCommand: boolean }): void {
+  ensureRegistered(pi: ExtensionAPI, opts: { registerCommand: boolean; showHeaderDetails?: (ctx: ExtensionCommandContext) => Promise<void> }): void {
     if (this.registeredPi !== pi) {
       if (this.registeredPi !== undefined) {
         this.listeners.clear();
@@ -178,6 +190,7 @@ class TuiSettingsStoreImpl implements TuiSettingsStore {
       this.runtimeRegistered = false;
       this.commandRegistered = false;
     }
+    if (opts.showHeaderDetails) this.showHeaderDetails = opts.showHeaderDetails;
     if (!this.runtimeRegistered) {
       this.runtimeRegistered = true;
       pi.on("session_start", async () => {
@@ -191,7 +204,7 @@ class TuiSettingsStoreImpl implements TuiSettingsStore {
     if (opts.registerCommand && !this.commandRegistered) {
       this.commandRegistered = true;
       pi.registerCommand("tui", {
-        description: "Configure the pi-flow-ux TUI (working indicator, header logo).",
+        description: "Configure the pi-flow-ux TUI (working indicator, header logo, header details).",
         handler: async (args: string, ctx: ExtensionCommandContext) => { await this.handleCommand(args, ctx); },
       });
     }
@@ -222,6 +235,18 @@ class TuiSettingsStoreImpl implements TuiSettingsStore {
       this.settings = { ...this.settings, header: { ...this.settings.header, logo: variant } };
       this.emit();
       await this.persistWithToast(ctx, `TUI updated: header.logo=${variant}`);
+      return;
+    }
+    if (parts.length === 2 && parts[0] === "header" && parts[1] === "details") {
+      if (this.showHeaderDetails) { await this.showHeaderDetails(ctx); } else { ctx.ui.notify(getTuiUsage(), "error"); }
+      return;
+    }
+    if (parts.length === 2 && parts[0] === "header" && parts[1]!.startsWith("details=")) {
+      const value = parts[1]!.slice("details=".length);
+      if (!isHeaderDetails(value)) { ctx.ui.notify(getTuiUsage(), "error"); return; }
+      this.settings = { ...this.settings, header: { ...this.settings.header, details: value } };
+      this.emit();
+      await this.persistWithToast(ctx, `TUI updated: header.details=${value}`);
       return;
     }
     ctx.ui.notify(getTuiUsage(), "error");

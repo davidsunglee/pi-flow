@@ -1,7 +1,7 @@
 {
   "version": 1,
   "working": { "indicator": "wave" },
-  "header": { "logo": "bracket" },
+  "header": { "logo": "bracket", "details": "compact" },
   "editor": {},
   "footer": {}
 }
