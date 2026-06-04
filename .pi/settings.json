@@ -8,6 +8,5 @@
       "themes": []
     },
     "../packages/pi-flow"
-  ],
-  "quietStartup": true
+  ]
 }
