@@ -6,7 +6,7 @@
     "startup-header",
     "pi-flow-ux"
   ],
-  "status": "open",
+  "status": "closed",
   "created_at": "2026-06-03T22:54:29.188Z"
 }
 
@@ -161,3 +161,5 @@ Full details, narrow/phone layout:
 ## Open Questions
 - Should we add/request an upstream pi API for an exact readonly resource/settings snapshot, or implement a best-effort resolver in `pi-flow-ux` using exported building blocks first?
 - If using a best-effort resolver, how should temporary CLI resources and resources contributed by other extensions via `resources_discover` be represented when exact parity is not possible?
+
+Completed via plan: docs/plans/2026-06-03-f5ddba6d.md
