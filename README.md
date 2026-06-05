@@ -75,4 +75,4 @@ pnpm test
 pnpm check
 ```
 
-For model-tier setup and configuration, see [`packages/pi-flow-core/docs/model-tier-setup.md`](packages/pi-flow-core/docs/model-tier-setup.md).
+For flow config setup and configuration, see [`packages/pi-flow-core/docs/flow-config-setup.md`](packages/pi-flow-core/docs/flow-config-setup.md).
