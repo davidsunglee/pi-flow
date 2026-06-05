@@ -64,7 +64,7 @@ Carry: {CARRY_OVER_REVIEW}
         template_file = write_temp_file(template_content)
         spec_file = write_temp_file("Original spec inline content")
         note_file = write_temp_file("Structural only note")
-        flow_config_file = write_temp_file("Model matrix content")
+        flow_config_file = write_temp_file("Flow config content")
         output_file = tempfile.NamedTemporaryFile(
             mode="w", delete=False, suffix=".md"
         ).name
@@ -106,7 +106,7 @@ Carry: {CARRY_OVER_REVIEW}
             self.assertIn("1", content)
             self.assertIn("/path/to/review", content)
             self.assertIn("/work", content)
-            self.assertIn("Model matrix content", content)
+            self.assertIn("Flow config content", content)
 
             # Verify no remaining placeholders
             self.assertNotIn("{PLAN_PATH}", content)

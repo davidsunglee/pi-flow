@@ -98,7 +98,7 @@ class TestFillRefineCodePrompt(unittest.TestCase):
             self.assertIn("review.md", content)
             # Verify max iterations as literal string
             self.assertIn("**Max iterations:** 5", content)
-            # Verify model matrix is included
+            # Verify flow config content is included
             self.assertIn("crossProviderModelTiers.capable", content)
             # Verify working directory is in Configuration section
             self.assertIn("**Working directory:** /work/dir", content)

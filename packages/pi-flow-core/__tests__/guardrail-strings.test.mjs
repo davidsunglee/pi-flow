@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 
@@ -183,4 +183,59 @@ test('old four-tier coordinator chain strings are gone', () => {
       assert.ok(!content.includes(stale), `${file} must not contain '${stale}'`);
     }
   }
+});
+
+test('refine skill flow-config stop strings are preserved byte-equal', () => {
+  const refinePlan = readFileSync(skillPath('refine-plan'), 'utf8');
+  assert.ok(
+    refinePlan.includes('refine-plan requires ~/.pi/agent/flow.json — see flow config setup.'),
+    'refine-plan SKILL.md must contain the flow-config stop string byte-equal'
+  );
+
+  const refineCode = readFileSync(skillPath('refine-code'), 'utf8');
+  assert.ok(
+    refineCode.includes('refine-code requires ~/.pi/agent/flow.json — see flow config setup.'),
+    'refine-code SKILL.md must contain the flow-config stop string byte-equal'
+  );
+});
+
+test('legacy flow configuration naming is absent from package source', () => {
+  // Split literals so this test file itself never contains the banned strings.
+  const LEGACY_FILE_NAME = new RegExp('model' + '-tier', 'i');
+  const LEGACY_CONTENT = [
+    new RegExp('model' + '-tiers', 'i'),
+    new RegExp('model' + '[ ._-]' + 'matrix', 'i'),
+  ];
+
+  const violations = [];
+
+  function walk(dir) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules' || entry.name === '__pycache__') continue;
+        walk(resolve(dir, entry.name));
+      } else {
+        const filePath = resolve(dir, entry.name);
+        if (LEGACY_FILE_NAME.test(entry.name)) {
+          violations.push(`file name: ${filePath}`);
+        }
+        let content;
+        try {
+          content = readFileSync(filePath, 'utf8');
+        } catch {
+          continue;
+        }
+        for (const pattern of LEGACY_CONTENT) {
+          if (pattern.test(content)) {
+            violations.push(`content (${pattern}): ${filePath}`);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  walk(PKG_DIR);
+
+  assert.deepEqual(violations, [], 'No files should contain legacy flow configuration naming');
 });
