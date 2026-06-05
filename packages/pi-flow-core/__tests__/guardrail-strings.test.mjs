@@ -56,27 +56,32 @@ test('define-spec spec-design-procedure missing-file error is preserved', () => 
   );
 });
 
-test('model-tier-resolution canonical templates 1 through 4 are preserved byte-equal', () => {
-  const content = readFileSync(sharedPath('model-tier-resolution.md'), 'utf8');
+test('dispatch-contract canonical leaf templates 1 through 5 are preserved byte-equal', () => {
+  const content = readFileSync(sharedPath('dispatch-contract.md'), 'utf8');
 
   assert.ok(
-    content.includes('~/.pi/agent/model-tiers.json missing or unreadable — cannot dispatch <agent>.'),
+    content.includes('~/.pi/agent/flow.json missing or unreadable — cannot dispatch <agent>.'),
     'Template (1): missing/unreadable file message must be present byte-equal'
   );
 
   assert.ok(
-    content.includes('model-tiers.json has no usable "<tier>" model — cannot dispatch <agent>.'),
+    content.includes('flow.json has no usable "<tier>" model — cannot dispatch <agent>.'),
     'Template (2): missing/empty selected tier message must be present byte-equal'
   );
 
   assert.ok(
-    content.includes('model-tiers.json has no dispatch map — cannot dispatch <agent>.'),
-    'Template (3): missing dispatch map message must be present byte-equal'
+    content.includes('flow.json has no subagentDispatch map — cannot dispatch <agent>.'),
+    'Template (3): missing subagentDispatch map message must be present byte-equal'
   );
 
   assert.ok(
-    content.includes('model-tiers.json has no dispatch.<provider> mapping for <tier> model <model> — cannot dispatch <agent>.'),
-    'Template (4): missing dispatch.<provider> message must be present byte-equal'
+    content.includes('flow.json has no subagentDispatch.<provider> mapping for <tier> model <model> — cannot dispatch <agent>.'),
+    'Template (4): missing subagentDispatch.<provider> message must be present byte-equal'
+  );
+
+  assert.ok(
+    content.includes('flow.json has no usable executionPolicy ("guarded" or "unrestricted") — cannot dispatch <agent>.'),
+    'Template (5): missing/invalid executionPolicy message must be present byte-equal'
   );
 });
 
@@ -147,29 +152,28 @@ test('refine-plan coverage-gate error is preserved', () => {
   );
 });
 
-test('coordinator-dispatch canonical templates are preserved byte-equal', () => {
-  const content = readFileSync(sharedPath('coordinator-dispatch.md'), 'utf8');
+test('dispatch-contract coordinator templates are preserved byte-equal', () => {
+  const content = readFileSync(sharedPath('dispatch-contract.md'), 'utf8');
 
   assert.ok(
-    content.includes('model-tiers.json has no coordinatorDispatch section — cannot dispatch <agent>.'),
-    'Missing coordinatorDispatch section template must be present byte-equal'
+    content.includes('flow.json has no coordinatorSubagentDispatch section — cannot dispatch <agent>.'),
+    'Missing coordinatorSubagentDispatch section template must be present byte-equal'
   );
 
   assert.ok(
-    content.includes('model-tiers.json coordinatorDispatch has no usable modelChain — cannot dispatch <agent>.'),
+    content.includes('flow.json coordinatorSubagentDispatch has no usable modelChain — cannot dispatch <agent>.'),
     'No usable modelChain template must be present byte-equal'
   );
 
   assert.ok(
-    content.includes('coordinator-dispatch: all coordinatorDispatch.modelChain models failed; last attempt: <model> via pi — <error>'),
+    content.includes('coordinator-dispatch: all coordinatorSubagentDispatch.modelChain models failed; last attempt: <model> via pi — <error>'),
     'Runtime exhaustion template must be present byte-equal'
   );
 });
 
 test('old four-tier coordinator chain strings are gone', () => {
   const files = [
-    sharedPath('coordinator-dispatch.md'),
-    sharedPath('model-tier-resolution.md'),
+    sharedPath('dispatch-contract.md'),
     skillPath('refine-plan'),
     skillPath('refine-code'),
   ];
