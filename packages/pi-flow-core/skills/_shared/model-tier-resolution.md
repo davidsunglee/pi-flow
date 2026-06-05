@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-This document is the single source of truth for general worker and reviewer dispatch resolution. The strict-by-default policy means a missing `model-tiers.json`, a missing selected tier, a missing `dispatch` map, or a missing `dispatch.<provider>` entry stops with the corresponding canonical template — there is no silent fallback. Coordinator dispatch is governed by `skills/_shared/coordinator-dispatch.md` and uses these primitives but applies its own four-tier chain semantics.
+This document is the single source of truth for general worker and reviewer dispatch resolution. The strict-by-default policy means a missing `model-tiers.json`, a missing selected tier, a missing `dispatch` map, or a missing `dispatch.<provider>` entry stops with the corresponding canonical template — there is no silent fallback. Coordinator dispatch is governed by `skills/_shared/coordinator-dispatch.md` and does not use these primitives — it consults the separate `coordinatorDispatch` section of the same file.
 
 ## Input
 
@@ -23,14 +23,18 @@ Expected JSON shape:
   "dispatch": {
     "<provider-prefix>": "<cli-name>",
     "anthropic":         "claude",
-    "openai-codex":      "pi"
+    "openai-codex":      "codex"
+  },
+  "coordinatorDispatch": {
+    "modelChain": ["<exact model id>", "..."]
   }
 }
 ```
 
 - Top-level tier keys (`capable`, `standard`, `cheap`) each map to a non-empty model string.
 - The optional `crossProvider` object has the same three tier names, each mapping to a non-empty model string.
-- The required `dispatch` object maps provider prefixes (e.g., `anthropic`, `openai-codex`) to CLI names (e.g., `claude`, `pi`).
+- The required `dispatch` object maps provider prefixes (e.g., `anthropic`, `openai-codex`) to CLI names (e.g., `claude`, `codex`).
+- The `coordinatorDispatch` object is read only by coordinator dispatch (see `## Coordinator dispatch` below) and is ignored by the primitive operations in this document. No `dispatch` entry needs to resolve to `pi`.
 
 ## Primitive operations
 
@@ -74,7 +78,7 @@ Parameters `<agent>`, `<tier>`, `<provider>`, and `<model>` are substituted verb
 
 ## Coordinator dispatch
 
-Coordinator agents (`code-refiner`, `plan-refiner`) MUST run on `pi` because they need subagent-orchestration tools (`subagent_run_serial` / `subagent_run_parallel`). The four-tier coordinator chain procedure, the skip-silently-on-non-pi rule, and the two hard-stop messages live in [./coordinator-dispatch.md](./coordinator-dispatch.md). This document supplies the primitive operations the coordinator chain consumes (tier-path resolution, provider-prefix extraction, `dispatch[<prefix>]` lookup) but does not duplicate the chain semantics.
+Coordinator agents (`code-refiner`, `plan-refiner`) MUST run on `pi` because they need subagent-orchestration tools (`subagent_run_serial` / `subagent_run_parallel`). That requirement is a system invariant, not user configuration. Coordinator dispatch consults only the `coordinatorDispatch.modelChain` section: entries are exact model identifiers passed verbatim to `subagent_run_serial` with hardcoded `cli: "pi"` — none of this document's primitive operations (tier-path resolution, provider-prefix extraction, `dispatch[<prefix>]` lookup) participate. The validation helper, the `modelChain` iteration semantics, and the canonical hard-stop templates live in [./coordinator-dispatch.md](./coordinator-dispatch.md).
 
 Worker re-resolution inside coordinator prompts uses the strict canonical policy from this document. The coordinator-dispatch file's `## Note on worker subagents` section enforces this.
 

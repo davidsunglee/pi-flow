@@ -12,6 +12,6 @@
         "openai-codex": "codex"
     },
     "coordinatorDispatch": {
-        "modelChain": ["openai-codex/gpt-5.4"]
+        "modelChain": ["openai-codex/gpt-5.4", "anthropic/claude-sonnet-4-6"]
     }
 }

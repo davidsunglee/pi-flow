@@ -53,8 +53,9 @@ substantive subagents:
   `skills/<skill>/scripts/` (e.g., `fill-template.py`, `assemble-coder-prompt.py`,
   `assemble-verifier-prompt.py`, `fill-refine-code-prompt.py`, `fill-refine-plan-prompt.py`).
 - Plan parsing via `extract-plan-tasks.py`.
-- Model-tier resolution via `resolve-model-dispatch.py` and the procedure in
-  `skills/_shared/coordinator-dispatch.md`.
+- Model-tier resolution via `resolve-model-dispatch.py`, and coordinator-dispatch
+  validation via `resolve-coordinator-dispatch.py` followed by the `modelChain`
+  iteration procedure in `skills/_shared/coordinator-dispatch.md`.
 - Verifier-visible file-set assembly using the documented union rule (task scope ∪ worker
   report ∪ orchestrator-observed diff state).
 - Diff context generation via `collect-diff-context.py`.

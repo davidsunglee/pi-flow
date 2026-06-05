@@ -80,7 +80,7 @@ If the file is missing or unreadable, stop with: "refine-plan requires ~/.pi/age
 
 ### Dispatch resolution
 
-Read [skills/_shared/coordinator-dispatch.md](../_shared/coordinator-dispatch.md) and follow it to resolve the coordinator `(model, cli)` pair before Step 8. The shared file is the single authority for the four-tier chain, the skip-silently rule for non-`pi` tiers, and the two hard-stop conditions with their exact error messages. Do not duplicate that procedure here.
+Read [skills/_shared/coordinator-dispatch.md](../_shared/coordinator-dispatch.md) and follow it to validate the `coordinatorDispatch` section and obtain the coordinator `modelChain` before Step 8. The shared file is the single authority for the validation-helper invocation, the `modelChain` iteration order, the hardcoded `cli: "pi"` invariant, and the canonical hard-stop templates. Do not duplicate that procedure here. If the validation helper hard-stops, do not dispatch — surface the canonical template verbatim, set `STATUS = failed` with the verbatim template as the reason, and skip to Step 11.
 
 ## Step 6: Allocate starting era
 
@@ -119,11 +119,11 @@ This is a structural-only review run. No original spec or idea is available. The
 
 ## Step 8: Dispatch plan-refiner
 
-Use the `(model, cli)` pair returned by the shared `coordinator-dispatch.md` procedure (Step 5). If the procedure hard-stopped, do not dispatch — surface the error from the shared file's `## Hard-stop conditions` section to the caller, set `STATUS = failed` with reason `coordinator-dispatch: <verbatim error message>`, and skip to Step 11.
+Dispatch per the shared `coordinator-dispatch.md` procedure using the `modelChain` validated in Step 5: attempt each entry in order via `subagent_run_serial` with that exact `model` string and hardcoded `cli: "pi"`, stopping at the first success. If every entry fails at dispatch time, emit the shared file's exhaustion template verbatim (substituting the last attempted model and its underlying error), set `STATUS = failed` with the verbatim template as the reason, and skip to Step 11.
 
 ```
 subagent_run_serial { tasks: [
-  { name: "plan-refiner", agent: "plan-refiner", task: "<filled refine-plan-prompt.md>", model: "<resolved model from coordinator-dispatch.md>", cli: "<resolved cli from coordinator-dispatch.md — guaranteed pi>" }
+  { name: "plan-refiner", agent: "plan-refiner", task: "<filled refine-plan-prompt.md>", model: "<modelChain entry under attempt — exact string from coordinatorDispatch.modelChain>", cli: "pi" }
 ]}
 ```
 
@@ -284,6 +284,6 @@ The `REVIEW_PATHS` list contains every review file written during the entire `re
 ## Edge Cases
 
 - **`commit` skill not present**: stop with a clear error pointing at `skills/commit/SKILL.md`.
-- **Coordinator dispatch CLI is not `pi`**: defer to the shared `coordinator-dispatch.md` procedure. The shared file's two hard-stop conditions ("no tier resolves to `pi`" and "all `pi`-eligible tiers failed") are the only sanctioned outcomes here; the prior cross-reference to `refine-code` is removed because the shared file is the single authority for both skills. Surface the shared file's verbatim error message to the caller, set `STATUS = failed` with the verbatim error as the reason, and exit.
+- **Coordinator dispatch fails** (config validation failure or all `modelChain` entries failed at dispatch time): defer to the shared `coordinator-dispatch.md` procedure. The shared file's canonical hard-stop templates (missing/unreadable file, missing `coordinatorDispatch` section, no usable `modelChain`, all-entries-failed exhaustion) are the only sanctioned outcomes here; the shared file is the single authority for both skills. Surface the verbatim template to the caller, set `STATUS = failed` with the verbatim template as the reason, and exit. There is no fallback to tier-based coordinator resolution.
 - **Plan path is in `docs/plans/done/` or another archived location**: proceed normally; era allocation still scans `docs/plans/reviews/` keyed by `PLAN_BASENAME`.
 - **Coordinator returns paths outside `docs/plans/reviews/`**: treat as `STATUS: failed` with reason `coordinator returned review path outside docs/plans/reviews/`.

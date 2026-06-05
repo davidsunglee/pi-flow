@@ -32,15 +32,16 @@ If `BASE_SHA` or `HEAD_SHA` is not provided, stop with an error — the skill ca
 cat ~/.pi/agent/model-tiers.json | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin), indent=2))"
 ```
 
-The model matrix provides tier mappings used by the coordinator:
+The model matrix provides tier mappings used by the coordinator's workers:
 - `crossProvider.capable` — first-pass and final verification reviews
-- `crossProvider.standard` — coordinator model (pi-backed orchestration path)
 - `standard` — hybrid re-reviews
 - `capable` — remediator
 
+The coordinator model itself is not a tier mapping: it comes from the `coordinatorDispatch.modelChain` section (see Dispatch resolution below).
+
 ### Dispatch resolution
 
-Read [skills/_shared/coordinator-dispatch.md](../_shared/coordinator-dispatch.md) and follow it to resolve the coordinator `(model, cli)` pair before Step 4. The shared file is the single authority for the four-tier chain, the skip-silently rule for non-`pi` tiers, and the two hard-stop conditions with their exact error messages. Do not duplicate that procedure here.
+Read [skills/_shared/coordinator-dispatch.md](../_shared/coordinator-dispatch.md) and follow it to validate the `coordinatorDispatch` section and obtain the coordinator `modelChain` before Step 4. The shared file is the single authority for the validation-helper invocation, the `modelChain` iteration order, the hardcoded `cli: "pi"` invariant, and the canonical hard-stop templates. Do not duplicate that procedure here. If the validation helper hard-stops, do not dispatch — surface the canonical template verbatim to the caller and exit.
 
 If the file doesn't exist or is unreadable, stop with: "refine-code requires ~/.pi/agent/model-tiers.json — see model matrix configuration."
 
@@ -50,11 +51,11 @@ Invoke `pi-flow helper refine-code/fill-refine-code-prompt --plan-goal <path|-> 
 
 ## Step 4: Dispatch code-refiner
 
-Use the `(model, cli)` pair returned by the shared `coordinator-dispatch.md` procedure (Step 2). If the procedure hard-stopped, do not dispatch — surface the error from the shared file's `## Hard-stop conditions` section to the caller and exit.
+Dispatch per the shared `coordinator-dispatch.md` procedure using the `modelChain` validated in Step 2: attempt each entry in order via `subagent_run_serial` with that exact `model` string and hardcoded `cli: "pi"`, stopping at the first success. If every entry fails at dispatch time, emit the shared file's exhaustion template verbatim (substituting the last attempted model and its underlying error) to the caller and exit.
 
 ```
 subagent_run_serial { tasks: [
-  { name: "code-refiner", agent: "code-refiner", task: "<filled refine-code-prompt.md>", model: "<resolved model from coordinator-dispatch.md>", cli: "<resolved cli from coordinator-dispatch.md — guaranteed pi>" }
+  { name: "code-refiner", agent: "code-refiner", task: "<filled refine-code-prompt.md>", model: "<modelChain entry under attempt — exact string from coordinatorDispatch.modelChain>", cli: "pi" }
 ]}
 ```
 
@@ -126,5 +127,5 @@ This is the only point at which Step 5's success outcome may reach the caller.
 ## Edge Cases
 
 - **No changes in range** (`BASE_SHA` equals `HEAD_SHA`): Stop with "No changes to review."
-- **Code-refiner fails to dispatch** (model unavailable, transport error, no `pi` tier resolves): defer to the shared `coordinator-dispatch.md` procedure. The shared file's two hard-stop conditions ("no tier resolves to `pi`" and "all `pi`-eligible tiers failed") are the only sanctioned outcomes here; do NOT declare a separate two-tier or three-tier fallback chain in this skill. Surface the shared file's verbatim error message to the caller and exit without dispatch.
+- **Code-refiner fails to dispatch** (config validation failure or all `modelChain` entries failed at dispatch time): defer to the shared `coordinator-dispatch.md` procedure. The shared file's canonical hard-stop templates (missing/unreadable file, missing `coordinatorDispatch` section, no usable `modelChain`, all-entries-failed exhaustion) are the only sanctioned outcomes here; do NOT declare a separate fallback chain in this skill, and there is no fallback to tier-based coordinator resolution. Surface the verbatim template to the caller and exit without dispatch.
 - **Empty requirements**: Review is purely quality-focused — no spec compliance check. The code-refiner handles this (it passes empty `{PLAN_CONTENTS}` through to the reviewer).
