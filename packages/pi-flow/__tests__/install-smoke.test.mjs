@@ -22,6 +22,7 @@ let consumerDir;
 let installedPkgDir;
 let install;
 let npmAvailable = false;
+let previousNpmConfigCache;
 
 before(() => {
   const npmProbe = spawnSync('npm', ['--version'], { encoding: 'utf8' });
@@ -30,11 +31,16 @@ before(() => {
   // and the tests below skip explicitly rather than erroring in this hook.
   if (!npmAvailable) return;
 
+  previousNpmConfigCache = process.env.npm_config_cache;
+  process.env.npm_config_cache = '/dev/null';
+
   ({ tarball } = buildAggregateTarball());
 
   tmpRoot = mkdtempSync(join(tmpdir(), 'pi-flow-smoke-'));
   consumerDir = join(tmpRoot, 'consumer');
+  const npmCacheDir = join(tmpRoot, 'npm-cache');
   mkdirSync(consumerDir, { recursive: true });
+  mkdirSync(npmCacheDir, { recursive: true });
   writeFileSync(
     join(consumerDir, 'package.json'),
     JSON.stringify({ name: 'pi-flow-aggregate-consumer', version: '0.0.0', private: true }) + '\n',
@@ -43,12 +49,18 @@ before(() => {
   install = spawnSync(
     'npm',
     ['install', tarball, '--offline', '--legacy-peer-deps', '--no-audit', '--no-fund'],
-    { cwd: consumerDir, encoding: 'utf8' },
+    {
+      cwd: consumerDir,
+      encoding: 'utf8',
+      env: { ...process.env, npm_config_cache: npmCacheDir },
+    },
   );
   installedPkgDir = join(consumerDir, 'node_modules', '@aphotic', 'pi-flow');
 });
 
 after(() => {
+  if (previousNpmConfigCache === undefined) delete process.env.npm_config_cache;
+  else process.env.npm_config_cache = previousNpmConfigCache;
   if (tarball) rmSync(dirname(tarball), { recursive: true, force: true });
   if (tmpRoot) rmSync(tmpRoot, { recursive: true, force: true });
 });

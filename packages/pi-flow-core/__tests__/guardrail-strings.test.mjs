@@ -146,3 +146,37 @@ test('refine-plan coverage-gate error is preserved', () => {
     'refine-plan SKILL.md must contain the coverage-gate error string'
   );
 });
+
+test('coordinator-dispatch canonical templates are preserved byte-equal', () => {
+  const content = readFileSync(sharedPath('coordinator-dispatch.md'), 'utf8');
+
+  assert.ok(
+    content.includes('model-tiers.json has no coordinatorDispatch section — cannot dispatch <agent>.'),
+    'Missing coordinatorDispatch section template must be present byte-equal'
+  );
+
+  assert.ok(
+    content.includes('model-tiers.json coordinatorDispatch has no usable modelChain — cannot dispatch <agent>.'),
+    'No usable modelChain template must be present byte-equal'
+  );
+
+  assert.ok(
+    content.includes('coordinator-dispatch: all coordinatorDispatch.modelChain models failed; last attempt: <model> via pi — <error>'),
+    'Runtime exhaustion template must be present byte-equal'
+  );
+});
+
+test('old four-tier coordinator chain strings are gone', () => {
+  const files = [
+    sharedPath('coordinator-dispatch.md'),
+    sharedPath('model-tier-resolution.md'),
+    skillPath('refine-plan'),
+    skillPath('refine-code'),
+  ];
+  for (const file of files) {
+    const content = readFileSync(file, 'utf8');
+    for (const stale of ['no model tier in', 'pi-eligible', 'four-tier', 'skip-silently', 'resolves to a pi CLI']) {
+      assert.ok(!content.includes(stale), `${file} must not contain '${stale}'`);
+    }
+  }
+});

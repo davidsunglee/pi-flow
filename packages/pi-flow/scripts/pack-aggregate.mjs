@@ -161,7 +161,7 @@ function stageOwnFiles(stageDir, versionIndex) {
   return pkg;
 }
 
-function stageSubpackage(stageDir, sub, versionIndex, tmpRoot) {
+function stageSubpackage(stageDir, sub, versionIndex, tmpRoot, npmPackEnv) {
   const sourceDir = resolve(PACKAGES_DIR, sub.dir);
   const sourcePkg = readJson(resolve(sourceDir, 'package.json'));
 
@@ -171,7 +171,7 @@ function stageSubpackage(stageDir, sub, versionIndex, tmpRoot) {
   const packed = run(
     'npm',
     ['pack', sourceDir, '--ignore-scripts', '--pack-destination', packDest, '--json'],
-    { cwd: tmpRoot },
+    { cwd: tmpRoot, env: npmPackEnv },
   );
   const tarball = resolve(packDest, JSON.parse(packed.stdout)[0].filename);
 
@@ -300,12 +300,15 @@ export function buildAggregateTarball({ outDir, keepStage = false } = {}) {
   const versionIndex = buildVersionIndex();
   const tmpRoot = mkdtempSync(join(tmpdir(), 'pi-flow-pack-'));
   const stageDir = join(tmpRoot, 'stage');
+  const npmCacheDir = join(tmpRoot, 'npm-cache');
   mkdirSync(stageDir, { recursive: true });
+  mkdirSync(npmCacheDir, { recursive: true });
+  const npmPackEnv = { ...process.env, npm_config_cache: npmCacheDir };
 
   try {
     stageOwnFiles(stageDir, versionIndex);
     for (const sub of BUNDLED_PACKAGES) {
-      stageSubpackage(stageDir, sub, versionIndex, tmpRoot);
+      stageSubpackage(stageDir, sub, versionIndex, tmpRoot, npmPackEnv);
     }
 
     const destination = outDir ? resolve(outDir) : mkdtempSync(join(tmpdir(), 'pi-flow-tgz-'));
@@ -313,7 +316,7 @@ export function buildAggregateTarball({ outDir, keepStage = false } = {}) {
     const packed = run(
       'npm',
       ['pack', '--ignore-scripts', '--pack-destination', destination, '--json'],
-      { cwd: stageDir },
+      { cwd: stageDir, env: npmPackEnv },
     );
     const tarball = resolve(destination, JSON.parse(packed.stdout)[0].filename);
 
