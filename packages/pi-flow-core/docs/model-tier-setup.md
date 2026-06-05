@@ -47,7 +47,7 @@ Edit the copied file to match your actual model subscriptions and CLI setup befo
 
 - Top-level tier keys (`capable`, `standard`, `cheap`) each map to a non-empty model string.
 - The optional `crossProvider` object has the same three tier names, each mapping to a non-empty model string.
-- The required `dispatch` object maps provider prefixes (e.g., `anthropic`, `openai-codex`) to CLI names (e.g., `claude`, `pi`).
+- The required `dispatch` object maps provider prefixes (e.g., `anthropic`, `openai-codex`) to leaf-worker CLI names (e.g., `claude`, `codex`). It may optionally route a provider to `pi`, but no leaf `dispatch` entry needs to resolve to `pi` for coordinator dispatch.
 - The `coordinatorDispatch` object is required for coordinator workflows (`refine-plan`, `refine-code`) and is never read by leaf-only workflows (`scout`, `define-spec`, `generate-plan`, `execute-plan`, `requesting-code-review`, `fastlane`), which do not fail when it is absent. Its single required key `modelChain` is an ordered, non-empty array of exact model identifier strings (not tier aliases); a single-entry chain is valid. Unknown extra keys inside `coordinatorDispatch` are ignored.
 
 ### Why coordinator dispatch is separate
