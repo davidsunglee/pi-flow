@@ -45,7 +45,7 @@ Fill these placeholders:
 
 ### 2b. Resolve model and dispatch
 
-Invoke pi-flow helper _shared/resolve-model-dispatch --tier capable --agent code-reviewer. On non-zero exit, surface the helper's stderr (byte-equal canonical failure message) and stop.
+Invoke pi-flow helper _shared/resolve-model-dispatch --tier modelTiers.capable --agent code-reviewer. On non-zero exit, surface the helper's stderr (byte-equal canonical failure message per `skills/_shared/dispatch-contract.md`) and stop.
 
 ### 3. Dispatch the subagent
 
@@ -53,11 +53,11 @@ Use pi's `subagent_run_serial` tool to dispatch a `code-reviewer` agent:
 
 ```
 subagent_run_serial { tasks: [
-  { name: "code-reviewer", agent: "code-reviewer", task: "<filled review-code-prompt.md>", model: "<capable from model-tiers.json>", cli: "<dispatch for capable>" }
+  { name: "code-reviewer", agent: "code-reviewer", task: "<filled review-code-prompt.md>", model: "<modelTiers.capable from flow.json>", cli: "<subagentDispatch for modelTiers.capable>", executionPolicy: "<resolved executionPolicy>" }
 ]}
 ```
 
-Use the `capable` model from `model-tiers.json` in a fresh context — the reviewer must see
+Use the `modelTiers.capable` model from `flow.json` in a fresh context — the reviewer must see
 the code without bias from the generation process.
 
 The reviewer's output is in `results[0].finalMessage`. Parse it for the `**Verdict:**` line in the `### Outcome` block (one of `Approved`, `Approved with concerns`, or `Not approved`) to determine next steps.

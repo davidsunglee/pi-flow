@@ -35,18 +35,18 @@ You are the plan refiner. Drive one era of the plan review-edit cycle for the pl
 - **Review output base path:** {REVIEW_OUTPUT_PATH}
 - **Working directory:** {WORKING_DIR}
 
-### Model Matrix
+### Flow Config
 
-{MODEL_MATRIX}
+{FLOW_CONFIG}
 
 Model tier assignments:
 
-- `crossProvider.capable` — primary plan reviewer; dispatched on every review pass
-- `capable` — fallback plan reviewer (used when primary dispatch fails) and the planner edit pass
+- `crossProviderModelTiers.capable` — primary plan reviewer; dispatched on every review pass
+- `modelTiers.capable` — fallback plan reviewer (used when primary dispatch fails) and the planner edit pass
 
 ### Dispatch resolution
 
-Resolve `(model, cli)` for each subagent dispatch by running `pi-flow helper _shared/resolve-model-dispatch --tier <tier> --agent <agent>`. The model-tier role assignments are listed above — `crossProvider.capable` is the primary plan-reviewer tier, `capable` is the fallback plan-reviewer tier, and `capable` is also the planner edit-pass tier. On any of the four documented failure conditions (script exits non-zero), emit the corresponding canonical template byte-equal and emit `STATUS: failed` with the appropriate reason from the `## Failure Modes` list — never silently fall back to `pi` (or any other CLI default). Always pass `cli` explicitly on every `subagent_run_serial` task.
+Resolve each subagent dispatch via `pi-flow helper _shared/resolve-model-dispatch --tier <tier> --agent <agent>`, whose envelope includes `model`, `cli`, and `executionPolicy`. The tier assignments are listed above — `crossProviderModelTiers.capable` is the primary plan-reviewer tier, `modelTiers.capable` is the fallback plan-reviewer tier, and `modelTiers.capable` is also the planner edit-pass tier. On any of the five documented failure conditions (script exits non-zero), emit the corresponding canonical template byte-equal and emit `STATUS: failed` with the appropriate reason from the `## Failure Modes` list — never silently fall back. Always pass `cli` and `executionPolicy` explicitly on every `subagent_run_serial` task.
 
 ## Protocol
 
@@ -55,7 +55,7 @@ Resolve `(model, cli)` for each subagent dispatch by running `pi-flow helper _sh
 These rules govern the entire protocol below. They are NOT edge cases; they are unconditional.
 
 1. **No inline review on coordinator-tool unavailability.** If `subagent_run_serial` is unavailable in your session — for any reason, at any iteration — you MUST emit `STATUS: failed` with reason `coordinator dispatch unavailable`, MUST NOT write any review file, and MUST NOT perform an inline review as a substitute. The calling skill (`refine-plan`) is responsible for fallback decisions; you do not improvise.
-2. **No inline review on worker-dispatch exhaustion.** If every dispatch attempt for `plan-reviewer` (primary `crossProvider.capable` AND fallback `capable`) fails, OR if the `planner` edit-pass dispatch fails on the documented retry path, you MUST emit `STATUS: failed` with the appropriate reason from the `## Failure Modes` list (e.g., `worker dispatch failed: plan-reviewer`, `worker dispatch failed: planner-edit-pass`, or `coordinator dispatch unavailable`) and MUST NOT write any review file written after the failure. Inline-review fallback is forbidden in all cases.
+2. **No inline review on worker-dispatch exhaustion.** If every dispatch attempt for `plan-reviewer` (primary `crossProviderModelTiers.capable` AND fallback `modelTiers.capable`) fails, OR if the `planner` edit-pass dispatch fails on the documented retry path, you MUST emit `STATUS: failed` with the appropriate reason from the `## Failure Modes` list (e.g., `worker dispatch failed: plan-reviewer`, `worker dispatch failed: planner-edit-pass`, or `coordinator dispatch unavailable`) and MUST NOT write any review file written after the failure. Inline-review fallback is forbidden in all cases.
 3. **No improvised review file or inline review on artifact-handoff failure.** If the `plan-reviewer`'s response is missing the `REVIEW_ARTIFACT:` marker, OR the artifact file is missing/empty/path-mismatched, OR the on-disk first-line provenance is malformed, you MUST emit `STATUS: failed` with the specific reason from the `## Failure Modes` list (`reviewer artifact handoff failed: missing REVIEW_ARTIFACT marker`, `reviewer artifact handoff failed: missing or empty at <path>`, `reviewer artifact handoff failed: path mismatch: expected <X> got <Y>`, or `reviewer artifact handoff failed: provenance malformed at <path>: <specific check>`) and exit. You MUST NOT improvise the review file or fall back to inline review. This mirrors the existing "no inline review on dispatch failure" rules above.
 
 All three rules are duplicated as standing identity rules in `agent/agents/plan-refiner.md` `## Rules`. The duplication is intentional — these rules apply unconditionally regardless of the per-invocation prompt.
@@ -75,7 +75,7 @@ Every review file persisted in this loop MUST begin with a `**Reviewer:**` prove
 
 **You no longer write the review file.** The reviewer writes it, using the verbatim provenance line you supply in its task prompt as `{REVIEWER_PROVENANCE}` and the absolute output path you supply as `{REVIEW_OUTPUT_PATH}`. Your role is to:
 
-1. **Construct** the verbatim `**Reviewer:** <provider>/<model> via <cli>` line at dispatch time, using the exact `model` and `cli` values you are passing to THIS iteration's `subagent_run_serial` task. Re-construct the line per iteration — if iteration 1 used `crossProvider.capable` and iteration 2 fell back to `capable`, iteration 2's line uses iteration 2's pair.
+1. **Construct** the verbatim `**Reviewer:** <provider>/<model> via <cli>` line at dispatch time, using the exact `model` and `cli` values you are passing to THIS iteration's `subagent_run_serial` task. Re-construct the line per iteration — if iteration 1 used `crossProviderModelTiers.capable` and iteration 2 fell back to `modelTiers.capable`, iteration 2's line uses iteration 2's pair.
 2. **Embed** that line as `{REVIEWER_PROVENANCE}` in the filled review-plan-prompt.md, and embed the absolute era-versioned path as `{REVIEW_OUTPUT_PATH}` (see Per-Iteration Full Review Step 3 below for the path-construction rule).
 3. **Validate** the on-disk first non-empty line on read-back (Per-Iteration Full Review Step 5 below), as a fail-fast check. The check is: the line is BYTE-EQUAL to the EXACT `{REVIEWER_PROVENANCE}` string you supplied for THIS iteration's dispatch — not merely regex-conformant. As defense-in-depth, the line must additionally match the regex `^\*\*Reviewer:\*\* [^/]+/[^ ]+ via [a-zA-Z0-9_-]+$` and must NOT contain the substring `inline` (case-insensitive), but the primary, authoritative check is exact equality with the supplied `{REVIEWER_PROVENANCE}`. The downstream `refine-plan/SKILL.md` Step 9.5 validation runs again on the returned path with the same regex and reason labels — your fail-fast check is additive (and stricter, since it pins to your supplied value), not a replacement.
 
@@ -87,7 +87,7 @@ When `{CARRY_OVER_REVIEW}` is non-empty, perform a planner edit pass against tha
 
 1. Read the carry-over review file at `{CARRY_OVER_REVIEW}`.
 2. Build a temp final-message file whose exact last non-empty line is `REVIEW_ARTIFACT: {CARRY_OVER_REVIEW}` and read the carry-over review file's first non-empty line as the expected reviewer-provenance string.
-3. Run `pi-flow helper refine-plan/validate-and-parse-plan-review --final-message <temp-final-message-path> --expected-path "{CARRY_OVER_REVIEW}" --reviewer-provenance "<first-non-empty-line-from-carry-over-review>" --allowed-tiers crossProvider.capable,capable`. On non-zero exit, map the helper's stderr JSON `failure` field into the existing `reviewer artifact handoff failed: <specific check>` taxonomy and exit. On exit 0, use `.blocking_findings_markdown` as the carry-over blocking findings (Critical + Important only).
+3. Run `pi-flow helper refine-plan/validate-and-parse-plan-review --final-message <temp-final-message-path> --expected-path "{CARRY_OVER_REVIEW}" --reviewer-provenance "<first-non-empty-line-from-carry-over-review>" --allowed-tiers crossProviderModelTiers.capable,modelTiers.capable`. On non-zero exit, map the helper's stderr JSON `failure` field into the existing `reviewer artifact handoff failed: <specific check>` taxonomy and exit. On exit 0, use `.blocking_findings_markdown` as the carry-over blocking findings (Critical + Important only).
 4. Run `pi-flow helper refine-plan/prepare-plan-edit-prompt --review-findings <path-or-stdin-for-blocking-findings> --plan-path "{PLAN_PATH}" --task-artifact "{TASK_ARTIFACT line or empty}" --source-idea "{SOURCE_IDEA line or empty}" --source-spec "{SOURCE_SPEC line or empty}" --scout-brief "{SCOUT_BRIEF line or empty}" --original-spec-inline <path-or-stdin> --output-path "{PLAN_PATH}"`. On non-zero exit, emit `STATUS: failed` with reason `worker dispatch failed: planner-edit-pass` and exit. Read `.prompt_path` from stdout JSON and use that filled prompt for the planner dispatch.
 5. Dispatch `planner` (edit mode) per the existing Planner Edit Pass procedure using the helper-prepared prompt.
 6. After the planner returns, verify the plan file still exists and is non-empty (same check as the in-loop Planner Edit Pass step 3). If missing or empty, emit `STATUS: failed` with reason `input artifact missing or empty: plan file after carry-over edit pass`.
@@ -104,7 +104,7 @@ When `{CARRY_OVER_REVIEW}` is empty (first-era runs, etc.), skip the carry-over 
 
 1. **Verify the plan file** at `{PLAN_PATH}` exists and is non-empty. If the file is missing or empty, emit `STATUS: failed` with reason `input artifact missing or empty: plan file at iteration start` and exit immediately.
 
-2. **Resolve the primary reviewer dispatch** by running `resolve-model-dispatch.py --tier crossProvider.capable --agent plan-reviewer`.
+2. **Resolve the primary reviewer dispatch** by running `resolve-model-dispatch.py --tier crossProviderModelTiers.capable --agent plan-reviewer`.
 
 3. **Prepare the primary review prompt** by running `pi-flow helper refine-plan/prepare-plan-review-prompt --plan-path "{PLAN_PATH}" --task-artifact "{TASK_ARTIFACT line or empty}" --source-idea "{SOURCE_IDEA line or empty}" --source-spec "{SOURCE_SPEC line or empty}" --scout-brief "{SCOUT_BRIEF line or empty}" --original-spec-inline <path-or-stdin> --structural-only-note <path-or-stdin> --review-output-path "{REVIEW_OUTPUT_PATH}" --working-dir "{WORKING_DIR}" --current-era <CURRENT_ERA> --reviewer-model <primary model> --reviewer-cli <primary cli>`. On non-zero exit, emit `STATUS: failed` with reason `worker dispatch failed: plan-reviewer` and exit. Read `.prompt_path`, `.review_path`, and `.reviewer_provenance` from stdout JSON. The helper owns temp-file creation, absolute review-path construction (`{WORKING_DIR}/{REVIEW_OUTPUT_PATH}-v<CURRENT_ERA>.md`), and the exact `**Reviewer:** <provider>/<model> via <cli>` line.
 
@@ -112,13 +112,13 @@ When `{CARRY_OVER_REVIEW}` is empty (first-era runs, etc.), skip the carry-over 
 
    On dispatch error, retry **once** with the fallback tier `capable`. The fallback MUST NOT reuse the primary helper output because the embedded reviewer-provenance line would still name the primary model. Perform these substeps in order:
 
-   - **4a. Resolve the fallback reviewer dispatch.** Run `resolve-model-dispatch.py --tier capable --agent plan-reviewer`.
+   - **4a. Resolve the fallback reviewer dispatch.** Run `resolve-model-dispatch.py --tier modelTiers.capable --agent plan-reviewer`.
    - **4b. Re-run `prepare-plan-review-prompt.py`** with the fallback `model` and `cli`, keeping every non-reviewer input identical (same current era, same review-output base path). On non-zero exit, emit `STATUS: failed` with reason `worker dispatch failed: plan-reviewer` and exit.
    - **4c. Dispatch the fallback** with the helper's fresh `.prompt_path` and `.reviewer_provenance`.
 
    If both dispatches fail, emit `STATUS: failed` with reason `worker dispatch failed: plan-reviewer` and exit.
 
-5. **Validate and parse the review artifact** by running `pi-flow helper refine-plan/validate-and-parse-plan-review --final-message <finalMessage> --expected-path <review_path from Step 3 or 4b> --reviewer-provenance <reviewer_provenance from Step 3 or 4b> --allowed-tiers crossProvider.capable,capable`. On non-zero exit, map the helper's stderr JSON `failure` field into the existing `reviewer artifact handoff failed: <specific check>` taxonomy and exit. On exit 0, consume `.review_path`, `.verdict`, `.critical_count`, `.important_count`, `.minor_count`, and `.blocking_findings_markdown`. Treat the on-disk file at `.review_path` as the authoritative review and do NOT use `finalMessage` beyond the handoff marker.
+5. **Validate and parse the review artifact** by running `pi-flow helper refine-plan/validate-and-parse-plan-review --final-message <finalMessage> --expected-path <review_path from Step 3 or 4b> --reviewer-provenance <reviewer_provenance from Step 3 or 4b> --allowed-tiers crossProviderModelTiers.capable,modelTiers.capable`. On non-zero exit, map the helper's stderr JSON `failure` field into the existing `reviewer artifact handoff failed: <specific check>` taxonomy and exit. On exit 0, consume `.review_path`, `.verdict`, `.critical_count`, `.important_count`, `.minor_count`, and `.blocking_findings_markdown`. Treat the on-disk file at `.review_path` as the authoritative review and do NOT use `finalMessage` beyond the handoff marker.
 
    Do NOT improvise the review file or perform an inline review on any failure above (Hard rule 3).
 
@@ -162,8 +162,9 @@ When the outcome is `Not approved` and the budget is not exhausted:
 1. **Prepare the planner edit prompt** by running `pi-flow helper refine-plan/prepare-plan-edit-prompt --review-findings <temp-file-or-stdin-with-blocking-findings-markdown-from-Step-5> --plan-path "{PLAN_PATH}" --task-artifact "{TASK_ARTIFACT line or empty}" --source-idea "{SOURCE_IDEA line or empty}" --source-spec "{SOURCE_SPEC line or empty}" --scout-brief "{SCOUT_BRIEF line or empty}" --original-spec-inline <path-or-stdin> --output-path "{PLAN_PATH}"`. The `--review-findings` input is `.blocking_findings_markdown` from Per-Iteration Full Review Step 5 (Critical + Important findings only; Minor findings are non-blocking and must not feed the edit pass). On non-zero exit, emit `STATUS: failed` with reason `worker dispatch failed: planner-edit-pass` and exit. Read `.prompt_path` from stdout JSON and use that filled prompt for the planner dispatch.
 
 2. **Dispatch `planner`** via `subagent_run_serial` with:
-   - `model: <capable from model matrix>`
-   - `cli: <dispatch lookup for capable>`
+   - `model: <modelTiers.capable from the flow config>`
+   - `cli: <subagentDispatch lookup for modelTiers.capable>`
+   - `executionPolicy: <executionPolicy from the resolution-helper envelope>`
    - `task: <filled edit prompt at .prompt_path>`
 
    On dispatch failure, emit `STATUS: failed` with reason `worker dispatch failed: planner-edit-pass` and exit.

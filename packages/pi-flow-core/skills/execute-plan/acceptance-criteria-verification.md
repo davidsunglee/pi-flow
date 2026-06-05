@@ -26,12 +26,12 @@ b. **Classify recipes.** Classify each `Verify:` recipe as either command-style 
 
 c. **Fill the verifier prompt.** Fill `$(pi-flow template execute-plan/verify-task-prompt)` via `pi-flow helper execute-plan/assemble-verifier-prompt`, passing the inputs above.
 
-d. **Resolve dispatch.** Resolve `(model, cli)` for the dispatch by invoking `pi-flow helper _shared/resolve-model-dispatch --tier crossProvider.standard --agent verifier`. On resolution failure, surface the byte-equal canonical Templates (1)–(4) per `skills/_shared/model-tier-resolution.md`.
+d. **Resolve dispatch.** Resolve the dispatch envelope `(model, cli, executionPolicy)` by invoking `pi-flow helper _shared/resolve-model-dispatch --tier crossProviderModelTiers.standard --agent verifier`. On resolution failure, surface the byte-equal canonical Templates (1)–(5) per `skills/_shared/dispatch-contract.md`.
 
 e. **Dispatch the verifier.** Dispatch a single `verifier` subagent via:
 
    ```
-   subagent_run_serial { tasks: [{ name: "verifier: <task-N>", agent: "verifier", task: <filled prompt>, model: <resolved>, cli: <resolved> }] }
+   subagent_run_serial { tasks: [{ name: "verifier: <task-N>", agent: "verifier", task: <filled prompt>, model: <resolved>, cli: <resolved>, executionPolicy: <resolved> }] }
    ```
 
 f. **Parse the result.** Parse the dispatched final message via `pi-flow helper execute-plan/parse-verifier-report`. Treat any protocol errors the parser surfaces as `VERDICT: FAIL`.

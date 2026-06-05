@@ -102,14 +102,14 @@ pi-flow helper _shared/parse-test-runner-artifact --artifact artifact.md
 # Reconcile a test-run record against on-disk artifacts
 pi-flow helper _shared/reconcile-test-run --artifact artifact.md --mode capture
 
-# Validate coordinatorDispatch and print the coordinator model chain
+# Validate coordinatorSubagentDispatch and print the coordinator model chain
 pi-flow helper _shared/resolve-coordinator-dispatch --agent plan-refiner
 
 # Resolve the dispatch model for a given tier
-pi-flow helper _shared/resolve-model-dispatch --tier capable --agent coder
+pi-flow helper _shared/resolve-model-dispatch --tier modelTiers.capable --agent coder
 
 # Validate provenance preambles inside a review document
-pi-flow helper _shared/validate-review-provenance --review-file review.md --allowed-tiers capable
+pi-flow helper _shared/validate-review-provenance --review-file review.md --allowed-tiers modelTiers.capable
 ```
 
 ### Per-skill helpers

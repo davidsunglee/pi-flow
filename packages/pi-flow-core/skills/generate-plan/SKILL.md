@@ -44,13 +44,13 @@ Use the text as-is.
 
 ## Step 2: Resolve model tiers
 
-Tier-role assignment: plan generation uses `capable`. Run the model-dispatch helper:
+Tier-role assignment: plan generation uses `modelTiers.capable`. Run the model-dispatch helper:
 
 ```bash
-pi-flow helper _shared/resolve-model-dispatch --tier capable --agent planner
+pi-flow helper _shared/resolve-model-dispatch --tier modelTiers.capable --agent planner
 ```
 
-On non-zero exit, surface its stderr output byte-equal (canonical Templates (1)–(4) from `_shared/model-tier-resolution.md`) and stop.
+On non-zero exit, surface its stderr output byte-equal (canonical Templates (1)–(5) from `_shared/dispatch-contract.md`) and stop.
 
 ## Step 3: Generate the plan
 
@@ -79,7 +79,7 @@ On non-zero exit, surface its stderr output byte-equal (canonical Templates (1)�
 
    ```
    subagent_run_serial { tasks: [
-     { name: "planner", agent: "planner", task: "<filled template>", model: "<model from Step 2>", cli: "<cli from Step 2>" }
+     { name: "planner", agent: "planner", task: "<filled template>", model: "<model from Step 2>", cli: "<cli from Step 2>", executionPolicy: "<executionPolicy from Step 2>" }
    ]}
    ```
    Read the planner's output from results[0].finalMessage — the planner writes the plan to disk; this result is the return message.

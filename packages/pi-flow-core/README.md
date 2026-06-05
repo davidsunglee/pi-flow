@@ -12,13 +12,13 @@ Workflow skills, bundled agent definitions, slash commands, and helper runner fo
 - **Slash commands** — `/flow:setup`, `/flow:ideas`, and the 7 workflow `/flow:*` dispatch commands exposed by `extensions/commands.ts`.
 - **Idea storage and tooling** — the `idea` LLM tool (the primary capture surface, invoked from natural-language conversation) plus the `/flow:ideas` browser, both backed by `docs/ideas/<8hex>.md` artifacts.
 - **Helper-runner CLI** (`pi-flow`) — resolves logical resource IDs against the installed package and dispatches to helpers or templates. See [docs/helper-runner.md](docs/helper-runner.md).
-- **Model-tier example** — `model-tiers.example.json` as a starting point for local model-tier configuration. See [docs/model-tier-setup.md](docs/model-tier-setup.md).
+- **Flow config example** — flow.example.json as a starting point for the local flow configuration (model tiers, subagent dispatch, coordinator dispatch, execution policy). See [docs/flow-config-setup.md](docs/flow-config-setup.md).
 
 ## Quick Start — Helper Runner
 
 ```sh
 # Run a shared Python helper
-pi-flow helper _shared/resolve-model-dispatch --tier capable --agent coder
+pi-flow helper _shared/resolve-model-dispatch --tier modelTiers.capable --agent coder
 
 # Run a skill-specific helper
 pi-flow helper execute-plan/extract-plan-tasks --plan plan.md
@@ -76,9 +76,9 @@ Run this once per project that previously stored ideas under `docs/todos/`. The 
 
 Preamble lines in existing on-disk specs, plans, briefs, or reviews that say `Source: TODO-<id>` or `Scout brief: docs/briefs/TODO-<id>-brief.md` will no longer be parsed by `pi-flow`'s provenance extractor (which now matches only `IDEA-<id>` / `docs/briefs/IDEA-<id>-brief.md`). pi-flow does not rewrite these preambles automatically — manually update them, or treat affected artifacts as historical (the plan/spec content still reads correctly to humans, but downstream workflows like execute-plan's "close linked idea" substep will silently skip).
 
-## Model Tiers
+## Flow Config
 
-Copy `model-tiers.example.json` to configure which Claude model tier is used for each role. See [docs/model-tier-setup.md](docs/model-tier-setup.md) for details.
+Copy flow.example.json to ~/.pi/agent/flow.json to configure which model tier is used for each role, the provider→CLI dispatch map, the coordinator model chain, and the subagent execution policy. See [docs/flow-config-setup.md](docs/flow-config-setup.md) for details.
 
 ## Required Companion Package
 

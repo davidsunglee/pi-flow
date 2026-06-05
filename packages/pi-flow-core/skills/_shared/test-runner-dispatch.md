@@ -26,9 +26,9 @@ ARTIFACT_BASELINE=$(python3 -c "import os, sys; p=sys.argv[1]; print(os.path.get
 
 Hold `ARTIFACT_BASELINE` across the dispatch.
 
-2. **Resolve `(model, cli)` for the dispatch.** Invoke `pi-flow helper _shared/resolve-model-dispatch --tier crossProvider.cheap --agent test-runner`. The tier is hardcoded as `crossProvider.cheap`; it is not caller-configurable. On resolution failure, surface byte-equal canonical Templates (1)–(4) per `skills/_shared/model-tier-resolution.md` and stop the call site.
+2. **Resolve the dispatch envelope `(model, cli, executionPolicy)`.** Invoke `pi-flow helper _shared/resolve-model-dispatch --tier crossProviderModelTiers.cheap --agent test-runner`. The tier is hardcoded as `crossProviderModelTiers.cheap`; it is not caller-configurable. On resolution failure, surface byte-equal canonical Templates (1)–(5) per `skills/_shared/dispatch-contract.md` and stop the call site.
 3. **Fill the prompt template.** Fill `skills/_shared/test-runner-prompt.md` from the four inputs. Conditionally include the phase section based on `phase_label` presence/non-emptiness: the caller fills `{PHASE_SECTION}` with the literal block `## Phase Label\n\n<phase_label>\n` when supplied and non-empty, or with the empty string when omitted or empty.
-4. **Dispatch.** Call `subagent_run_serial { tasks: [{ name: "test-runner: <phase label or 'no-phase'>", agent: "test-runner", task: <filled prompt>, model: <resolved>, cli: <resolved> }] }`.
+4. **Dispatch.** Call `subagent_run_serial { tasks: [{ name: "test-runner: <phase label or 'no-phase'>", agent: "test-runner", task: <filled prompt>, model: <resolved>, cli: <resolved>, executionPolicy: <resolved> }] }`.
 5. **Validate handoff and parse the artifact.** Validate the artifact handoff marker, then parse the artifact via `pi-flow helper _shared/parse-test-runner-artifact --artifact <artifact_path> --final-message <path-to-finalMessage-or-stdin> --expected-path <artifact_path> --freshness-baseline <ARTIFACT_BASELINE>`. When the parser's stdout JSON includes `used_fallback: true` (i.e., the test-runner did not emit a `TEST_RESULT_ARTIFACT:` terminal marker but the on-disk artifact is fresh and well-formed), the caller logs a one-line warning to the user.
 
 ## Output on success

@@ -70,17 +70,17 @@ refine-plan: no coverage source available and --structural-only not set. Provide
 
 `SOURCE_IDEA`, `SOURCE_SPEC`, and `SCOUT_BRIEF` are pointer/metadata fields and do **not** satisfy this gate on their own — the reviewer needs an actual body (`TASK_DESCRIPTION`) or an on-disk artifact (`TASK_ARTIFACT`) to perform Spec/Idea Coverage. Otherwise proceed.
 
-## Step 5: Read model matrix
+## Step 5: Read flow config
 
 ```bash
-cat ~/.pi/agent/model-tiers.json | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin), indent=2))"
+cat ~/.pi/agent/flow.json | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin), indent=2))"
 ```
 
-If the file is missing or unreadable, stop with: "refine-plan requires ~/.pi/agent/model-tiers.json — see model matrix configuration."
+If the file is missing or unreadable, stop with: "refine-plan requires ~/.pi/agent/flow.json — see flow config setup."
 
 ### Dispatch resolution
 
-Read [skills/_shared/coordinator-dispatch.md](../_shared/coordinator-dispatch.md) and follow it to validate the `coordinatorDispatch` section and obtain the coordinator `modelChain` before Step 8. The shared file is the single authority for the validation-helper invocation, the `modelChain` iteration order, the hardcoded `cli: "pi"` invariant, and the canonical hard-stop templates. Do not duplicate that procedure here. If the validation helper hard-stops, do not dispatch — surface the canonical template verbatim, set `STATUS = failed` with the verbatim template as the reason, and skip to Step 11.
+Read [skills/_shared/dispatch-contract.md](../_shared/dispatch-contract.md) and follow its coordinator procedure to validate the `coordinatorSubagentDispatch` section and obtain the coordinator `modelChain` plus `executionPolicy` before Step 8. The shared file is the single authority for the validation-helper invocation, the `modelChain` iteration order, the hardcoded `cli: "pi"` invariant, and the canonical hard-stop templates. Do not duplicate that procedure here. If the validation helper hard-stops, do not dispatch — surface the canonical template verbatim, set `STATUS = failed` with the verbatim template as the reason, and skip to Step 11.
 
 ## Step 6: Allocate starting era
 
@@ -107,7 +107,7 @@ Set `STARTING_ERA = max_existing + 1`. If no matches found, `STARTING_ERA = 1`.
 
 Read [refine-plan-prompt.md](refine-plan-prompt.md) in this directory.
 
-Fill `refine-plan-prompt.md` by invoking `pi-flow helper refine-plan/fill-refine-plan-prompt --plan-path "<PLAN_PATH from Step 1>" --task-artifact "<Task artifact line or empty>" --source-idea "<Source idea line or empty>" --source-spec "<Source spec line or empty>" --scout-brief "<Scout brief line or empty>" --original-spec-inline <path-to-task-description-text-or--for-stdin> --structural-only-note <path-to-structural-only-note-text-or--for-stdin> --max-iterations <MAX_ITERATIONS> --starting-era <STARTING_ERA> --review-output-path <REVIEW_OUTPUT_PATH> --working-dir <WORKING_DIR> --model-matrix <path-to-model-matrix-json> --carry-over-review "<CARRY_OVER_REVIEW or empty>" --output <filled-prompt-path>`. The helper enforces single-pass literal substitution and fails closed on any unreplaced placeholder. Pass the `CARRY_OVER_REVIEW` value (path or empty string) unchanged — whatever value Step 1 received (caller-set or internally re-set by Step 10) is threaded through verbatim.
+Fill `refine-plan-prompt.md` by invoking `pi-flow helper refine-plan/fill-refine-plan-prompt --plan-path "<PLAN_PATH from Step 1>" --task-artifact "<Task artifact line or empty>" --source-idea "<Source idea line or empty>" --source-spec "<Source spec line or empty>" --scout-brief "<Scout brief line or empty>" --original-spec-inline <path-to-task-description-text-or--for-stdin> --structural-only-note <path-to-structural-only-note-text-or--for-stdin> --max-iterations <MAX_ITERATIONS> --starting-era <STARTING_ERA> --review-output-path <REVIEW_OUTPUT_PATH> --working-dir <WORKING_DIR> --flow-config <path-to-flow-config-json> --carry-over-review "<CARRY_OVER_REVIEW or empty>" --output <filled-prompt-path>`. The helper enforces single-pass literal substitution and fails closed on any unreplaced placeholder. Pass the `CARRY_OVER_REVIEW` value (path or empty string) unchanged — whatever value Step 1 received (caller-set or internally re-set by Step 10) is threaded through verbatim.
 
 ### Step 7.5: Compose structural-only note
 
@@ -119,11 +119,11 @@ This is a structural-only review run. No original spec or idea is available. The
 
 ## Step 8: Dispatch plan-refiner
 
-Dispatch per the shared `coordinator-dispatch.md` procedure using the `modelChain` validated in Step 5: attempt each entry in order via `subagent_run_serial` with that exact `model` string and hardcoded `cli: "pi"`, stopping at the first success. If every entry fails at dispatch time, emit the shared file's exhaustion template verbatim (substituting the last attempted model and its underlying error), set `STATUS = failed` with the verbatim template as the reason, and skip to Step 11.
+Dispatch per the shared `dispatch-contract.md` coordinator procedure using the `modelChain` validated in Step 5: attempt each entry in order via `subagent_run_serial` with that exact `model` string and hardcoded `cli: "pi"`, stopping at the first success. If every entry fails at dispatch time, emit the shared file's exhaustion template verbatim (substituting the last attempted model and its underlying error), set `STATUS = failed` with the verbatim template as the reason, and skip to Step 11.
 
 ```
 subagent_run_serial { tasks: [
-  { name: "plan-refiner", agent: "plan-refiner", task: "<filled refine-plan-prompt.md>", model: "<modelChain entry under attempt — exact string from coordinatorDispatch.modelChain>", cli: "pi" }
+  { name: "plan-refiner", agent: "plan-refiner", task: "<filled refine-plan-prompt.md>", model: "<modelChain entry under attempt — exact string from coordinatorSubagentDispatch.modelChain>", cli: "pi", executionPolicy: "<executionPolicy from the Step 5 validation-helper envelope>" }
 ]}
 ```
 
@@ -142,7 +142,7 @@ Validate every parsed path with `test -s <path>` (non-empty regular file). On an
 
 Run this validation only on `STATUS: approved`, `STATUS: approved_with_concerns`, or `STATUS: not_approved_within_budget`; skip on `STATUS: failed` (no review file is guaranteed to exist on failure).
 
-For each review file path in the `## Review Files` list parsed in Step 9, invoke `pi-flow helper _shared/validate-review-provenance --review-file <path> --allowed-tiers crossProvider.capable,capable`. On non-zero exit, set `STATUS = failed` with reason `review provenance validation failed at <path>: <specific check>` (where `<specific check>` is the `failure` field from the script's stderr JSON) and skip to Step 11. Do NOT proceed to Step 10's commit gate after a validation failure.
+For each review file path in the `## Review Files` list parsed in Step 9, invoke `pi-flow helper _shared/validate-review-provenance --review-file <path> --allowed-tiers crossProviderModelTiers.capable,modelTiers.capable`. On non-zero exit, set `STATUS = failed` with reason `review provenance validation failed at <path>: <specific check>` (where `<specific check>` is the `failure` field from the script's stderr JSON) and skip to Step 11. Do NOT proceed to Step 10's commit gate after a validation failure.
 
 When all paths pass validation, proceed to Step 9.7.
 
@@ -284,6 +284,6 @@ The `REVIEW_PATHS` list contains every review file written during the entire `re
 ## Edge Cases
 
 - **`commit` skill not present**: stop with a clear error pointing at `skills/commit/SKILL.md`.
-- **Coordinator dispatch fails** (config validation failure or all `modelChain` entries failed at dispatch time): defer to the shared `coordinator-dispatch.md` procedure. The shared file's canonical hard-stop templates (missing/unreadable file, missing `coordinatorDispatch` section, no usable `modelChain`, all-entries-failed exhaustion) are the only sanctioned outcomes here; the shared file is the single authority for both skills. Surface the verbatim template to the caller, set `STATUS = failed` with the verbatim template as the reason, and exit. There is no fallback to tier-based coordinator resolution.
+- **Coordinator dispatch fails** (config validation failure or all `modelChain` entries failed at dispatch time): defer to the shared `dispatch-contract.md` coordinator procedure. The shared file's canonical hard-stop templates (missing/unreadable file, missing `coordinatorSubagentDispatch` section, no usable `modelChain`, all-entries-failed exhaustion) are the only sanctioned outcomes here; the shared file is the single authority for both skills. Surface the verbatim template to the caller, set `STATUS = failed` with the verbatim template as the reason, and exit. There is no fallback to tier-based coordinator resolution.
 - **Plan path is in `docs/plans/done/` or another archived location**: proceed normally; era allocation still scans `docs/plans/reviews/` keyed by `PLAN_BASENAME`.
 - **Coordinator returns paths outside `docs/plans/reviews/`**: treat as `STATUS: failed` with reason `coordinator returned review path outside docs/plans/reviews/`.

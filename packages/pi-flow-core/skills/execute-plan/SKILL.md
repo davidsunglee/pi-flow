@@ -134,16 +134,16 @@ Map plan recommendations to tiers:
 
 | Task recommendation | Tier |
 |---|---|
-| `capable` | `capable` from `model-tiers.json` |
-| `standard` | `standard` from `model-tiers.json` |
-| `cheap` | `cheap` from `model-tiers.json` |
+| `capable` | `modelTiers.capable` from `flow.json` |
+| `standard` | `modelTiers.standard` from `flow.json` |
+| `cheap` | `modelTiers.cheap` from `flow.json` |
 
 If a task has no tier, apply this rubric:
 - 1-2 files and a complete spec -> `cheap`.
 - Multiple files or integration concerns -> `standard`.
 - Design judgment or broad codebase understanding -> `capable`.
 
-For each task, invoke `pi-flow helper _shared/resolve-model-dispatch --tier <task-tier> --agent coder` and pass both resolved `model` and `cli` on every orchestration call, even when `cli` is `pi`. On non-zero exit, surface the byte-equal canonical Templates (1)-(4) from [`../_shared/model-tier-resolution.md`](../_shared/model-tier-resolution.md) and stop.
+For each task, invoke `pi-flow helper _shared/resolve-model-dispatch --tier <mapped tier path> --agent coder` and pass the resolved `model`, `cli`, and `executionPolicy` on every orchestration call, even when `cli` is `pi`. On non-zero exit, surface the byte-equal canonical Templates (1)-(5) from [`../_shared/dispatch-contract.md`](../_shared/dispatch-contract.md) and stop.
 
 ## Step 7: Baseline test capture
 
@@ -208,7 +208,7 @@ If executing directly in the current workspace (not a worktree), emit once befor
 For each wave/subwave:
 1. Fill `$(pi-flow template execute-plan/execute-task-prompt)` via `pi-flow helper execute-plan/assemble-coder-prompt --task-spec <path-or-dash> --context <path-or-dash> --working-dir <abs-dir> --tdd-block <enabled|disabled> --output <filled-prompt-path>`; use a path or `-` for each path-or-dash input. `enabled` inlines `_shared/coder-tdd-block.md`; `disabled` substitutes empty. The helper performs single-pass literal substitution and fails closed on unreplaced placeholders.
 2. Dispatch all tasks in parallel via `subagent_run_parallel`; in sequential mode, dispatch one at a time via `subagent_run_serial`.
-3. Use task entries shaped like `{ name: '<task-N>: <task-title>', agent: 'coder', task: '<filled prompt>', model: '<resolved>', cli: '<resolved>' }`.
+3. Use task entries shaped like `{ name: '<task-N>: <task-title>', agent: 'coder', task: '<filled prompt>', model: '<resolved>', cli: '<resolved>', executionPolicy: '<resolved>' }`.
 4. Parse each `finalMessage` with `pi-flow helper _shared/parse-coder-report --report <results[i].finalMessage path>`. `subagent_run_parallel` preserves input-task order.
 
 The filled `execute-task-prompt.md` already includes TDD, self-review, escalation, code-organization, and report-format guidance; do not add those separately.
@@ -243,7 +243,7 @@ Allowed mechanical glue:
 | Verifier prompt assembly | `pi-flow helper execute-plan/assemble-verifier-prompt` |
 | Diff context generation | `pi-flow helper execute-plan/collect-diff-context` |
 | Verifier-visible file-set assembly | orchestrator-computed union rule (Step 11.2 compatibility label) |
-| Model-tier resolution | `pi-flow helper _shared/resolve-model-dispatch` |
+| Model dispatch resolution | `pi-flow helper _shared/resolve-model-dispatch` |
 | Test-runner artifact parsing | `pi-flow helper _shared/parse-test-runner-artifact` |
 | Verifier report parsing | `pi-flow helper execute-plan/parse-verifier-report` |
 | Per-plan test-runs cleanup | `pi-flow helper _shared/cleanup-test-runs` |

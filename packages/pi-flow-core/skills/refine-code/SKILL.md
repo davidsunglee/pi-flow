@@ -26,36 +26,36 @@ Collect the following from the caller (coder, user, or another skill):
 
 If `BASE_SHA` or `HEAD_SHA` is not provided, stop with an error — the skill cannot infer these.
 
-## Step 2: Read model matrix
+## Step 2: Read flow config
 
 ```bash
-cat ~/.pi/agent/model-tiers.json | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin), indent=2))"
+cat ~/.pi/agent/flow.json | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin), indent=2))"
 ```
 
-The model matrix provides tier mappings used by the coordinator's workers:
-- `crossProvider.capable` — first-pass and final verification reviews
-- `standard` — hybrid re-reviews
-- `capable` — remediator
+The flow config provides tier mappings used by the coordinator's workers:
+- `crossProviderModelTiers.capable` — first-pass and final verification reviews
+- `modelTiers.standard` — hybrid re-reviews
+- `modelTiers.capable` — remediator
 
-The coordinator model itself is not a tier mapping: it comes from the `coordinatorDispatch.modelChain` section (see Dispatch resolution below).
+The coordinator model itself is not a tier mapping: it comes from the `coordinatorSubagentDispatch.modelChain` section (see Dispatch resolution below).
 
 ### Dispatch resolution
 
-Read [skills/_shared/coordinator-dispatch.md](../_shared/coordinator-dispatch.md) and follow it to validate the `coordinatorDispatch` section and obtain the coordinator `modelChain` before Step 4. The shared file is the single authority for the validation-helper invocation, the `modelChain` iteration order, the hardcoded `cli: "pi"` invariant, and the canonical hard-stop templates. Do not duplicate that procedure here. If the validation helper hard-stops, do not dispatch — surface the canonical template verbatim to the caller and exit.
+Read [skills/_shared/dispatch-contract.md](../_shared/dispatch-contract.md) and follow it to validate the `coordinatorSubagentDispatch` section and obtain the coordinator `modelChain` plus `executionPolicy` before Step 4. The shared file is the single authority for the validation-helper invocation, the `modelChain` iteration order, the hardcoded `cli: "pi"` invariant, and the canonical hard-stop templates. Do not duplicate that procedure here. If the validation helper hard-stops, do not dispatch — surface the canonical template verbatim to the caller and exit.
 
-If the file doesn't exist or is unreadable, stop with: "refine-code requires ~/.pi/agent/model-tiers.json — see model matrix configuration."
+If the file doesn't exist or is unreadable, stop with: "refine-code requires ~/.pi/agent/flow.json — see flow config setup."
 
 ## Step 3: Assemble coordinator prompt
 
-Invoke `pi-flow helper refine-code/fill-refine-code-prompt --plan-goal <path|-> --plan-contents <path|-> --base-sha <BASE_SHA> --head-sha <HEAD_SHA> --review-output-path <REVIEW_OUTPUT_PATH> --max-iterations <MAX_ITERATIONS> --model-matrix <path> --working-dir <WORKING_DIR> --carry-over-review "<carry-over review path or empty>" --output <filled-prompt-path>`. It performs single-pass substitution and fails closed on unreplaced placeholders.
+Invoke `pi-flow helper refine-code/fill-refine-code-prompt --plan-goal <path|-> --plan-contents <path|-> --base-sha <BASE_SHA> --head-sha <HEAD_SHA> --review-output-path <REVIEW_OUTPUT_PATH> --max-iterations <MAX_ITERATIONS> --flow-config <path> --working-dir <WORKING_DIR> --carry-over-review "<carry-over review path or empty>" --output <filled-prompt-path>`. It performs single-pass substitution and fails closed on unreplaced placeholders.
 
 ## Step 4: Dispatch code-refiner
 
-Dispatch per the shared `coordinator-dispatch.md` procedure using the `modelChain` validated in Step 2: attempt each entry in order via `subagent_run_serial` with that exact `model` string and hardcoded `cli: "pi"`, stopping at the first success. If every entry fails at dispatch time, emit the shared file's exhaustion template verbatim (substituting the last attempted model and its underlying error) to the caller and exit.
+Dispatch per the shared `dispatch-contract.md` coordinator procedure using the `modelChain` validated in Step 2: attempt each entry in order via `subagent_run_serial` with that exact `model` string and hardcoded `cli: "pi"`, stopping at the first success. If every entry fails at dispatch time, emit the shared file's exhaustion template verbatim (substituting the last attempted model and its underlying error) to the caller and exit.
 
 ```
 subagent_run_serial { tasks: [
-  { name: "code-refiner", agent: "code-refiner", task: "<filled refine-code-prompt.md>", model: "<modelChain entry under attempt — exact string from coordinatorDispatch.modelChain>", cli: "pi" }
+  { name: "code-refiner", agent: "code-refiner", task: "<filled refine-code-prompt.md>", model: "<modelChain entry under attempt — exact string from coordinatorSubagentDispatch.modelChain>", cli: "pi", executionPolicy: "<executionPolicy from the Step 2 validation-helper envelope>" }
 ]}
 ```
 
@@ -113,8 +113,8 @@ Run this validation only on `STATUS: approved`, `STATUS: approved_with_concerns`
 
 Use the path the coordinator reported in its `## Review File` block (the latest versioned `<REVIEW_OUTPUT_PATH>-v<ERA>.md`) as `<path>`.
 
-- On `STATUS: approved` or `STATUS: approved_with_concerns`: invoke `pi-flow helper _shared/validate-review-provenance --review-file <path> --allowed-tiers crossProvider.capable`.
-- On `STATUS: not_approved_within_budget`: invoke `pi-flow helper _shared/validate-review-provenance --review-file <path> --allowed-tiers crossProvider.capable,standard`.
+- On `STATUS: approved` or `STATUS: approved_with_concerns`: invoke `pi-flow helper _shared/validate-review-provenance --review-file <path> --allowed-tiers crossProviderModelTiers.capable`.
+- On `STATUS: not_approved_within_budget`: invoke `pi-flow helper _shared/validate-review-provenance --review-file <path> --allowed-tiers crossProviderModelTiers.capable,modelTiers.standard`.
 
 On non-zero exit, surface `refine-code: review provenance validation failed at <path>: <specific check>` to the caller and do not report the stashed success.
 
@@ -127,5 +127,5 @@ This is the only point at which Step 5's success outcome may reach the caller.
 ## Edge Cases
 
 - **No changes in range** (`BASE_SHA` equals `HEAD_SHA`): Stop with "No changes to review."
-- **Code-refiner fails to dispatch** (config validation failure or all `modelChain` entries failed at dispatch time): defer to the shared `coordinator-dispatch.md` procedure. The shared file's canonical hard-stop templates (missing/unreadable file, missing `coordinatorDispatch` section, no usable `modelChain`, all-entries-failed exhaustion) are the only sanctioned outcomes here; do NOT declare a separate fallback chain in this skill, and there is no fallback to tier-based coordinator resolution. Surface the verbatim template to the caller and exit without dispatch.
+- **Code-refiner fails to dispatch** (config validation failure or all `modelChain` entries failed at dispatch time): defer to the shared `dispatch-contract.md` coordinator procedure. The shared file's canonical hard-stop templates (missing/unreadable file, missing `coordinatorSubagentDispatch` section, no usable `modelChain`, all-entries-failed exhaustion) are the only sanctioned outcomes here; do NOT declare a separate fallback chain in this skill, and there is no fallback to tier-based coordinator resolution. Surface the verbatim template to the caller and exit without dispatch.
 - **Empty requirements**: Review is purely quality-focused — no spec compliance check. The code-refiner handles this (it passes empty `{PLAN_CONTENTS}` through to the reviewer).

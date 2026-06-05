@@ -27,13 +27,13 @@ Examine the user's slash-command input (excluding any `--tier` argument) and cla
 
 ### `--tier` parsing
 
-Scan the slash-command input for an optional `--tier <name>` argument at any position. Recognized values: `cheap`, `standard`, `capable`. Default tier is `standard` when the argument is absent or the input is empty.
+Scan the slash-command input for an optional `--tier <name>` argument at any position. Recognized values: `cheap`, `standard`, `capable`. Default tier is `standard` when the argument is absent or the input is empty. The parsed alias maps to tier path `modelTiers.<name>` (default `modelTiers.standard` when absent).
 
-If `--tier` is present with a value not in the recognized set, the resolution step will fail with Template (2) when the tier is looked up, so no special handling is needed here.
+If `--tier` is present with a value not in the recognized set, the value is passed through as `modelTiers.<value>` and fails at resolution with Template (2).
 
 ## Step 2: Resolve model and CLI
 
-Run `pi-flow helper _shared/resolve-model-dispatch --tier <tier> --agent scout` (where `<tier>` is the value parsed in Step 1, defaulting to `standard`). The full resolution procedure is documented in [`skills/_shared/model-tier-resolution.md`](../_shared/model-tier-resolution.md). On any failure the script exits non-zero and prints the appropriate byte-equal canonical failure message; surface that output verbatim and stop. Do **not** silently fall back to `pi` or any other CLI default.
+Run `pi-flow helper _shared/resolve-model-dispatch --tier modelTiers.<tier> --agent scout` (where `<tier>` is the value parsed in Step 1, defaulting to `standard`). The full resolution procedure is documented in [`skills/_shared/dispatch-contract.md`](../_shared/dispatch-contract.md). On any failure the script exits non-zero and prints the appropriate byte-equal canonical failure message; surface that output verbatim and stop. Do **not** silently fall back to `pi` or any other CLI default. The helper's envelope includes `executionPolicy`, consumed in Step 5.
 
 ## Step 3: Pre-existing-brief check
 
@@ -95,7 +95,8 @@ subagent_run_serial {
       agent: "scout",
       task: "<filled scout-prompt.md body>",
       model: "<resolved model from Step 2>",
-      cli: "<resolved cli from Step 2>"
+      cli: "<resolved cli from Step 2>",
+      executionPolicy: "<resolved executionPolicy from Step 2>"
     }
   ],
   wait: true
@@ -153,7 +154,7 @@ The freeform branch does **not** offer continuation — there is no idea ID to h
 
 ## Edge cases
 
-- **Missing `model-tiers.json` or any of the four resolution failures:** emit Template (1)–(4) byte-equal with the supplied parameters and stop. No dispatch occurs.
+- **Missing `flow.json` or any of the five resolution failures:** emit Template (1)–(5) byte-equal with the supplied parameters and stop. No dispatch occurs.
 - **`subagent_run_serial` unavailable in the session:** stop with an explicit error message. No inline reconnaissance fallback.
 - **`commit` skill failure:** surface the error verbatim and stop. No auto-retry. The user resolves the underlying issue (e.g., pre-commit hook failure) and commits manually or re-runs `/scout`.
 - **Agent dispatch returns a path different from `{OUTPUT_PATH}`:** treat as validation failure. No path normalization is applied.

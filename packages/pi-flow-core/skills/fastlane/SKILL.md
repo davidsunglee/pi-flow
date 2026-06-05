@@ -142,13 +142,13 @@ No worktree creation. Fastlane operates in the current workspace only.
 
 ## Step 4: Dispatch the coder
 
-Resolve `(model, cli)` with:
+Resolve `(model, cli, executionPolicy)` with:
 
 ~~~
-pi-flow helper _shared/resolve-model-dispatch --tier <coder_tier> --agent coder
+pi-flow helper _shared/resolve-model-dispatch --tier modelTiers.<coder_tier> --agent coder
 ~~~
 
-`<coder_tier>` is the run-state field from Step 2. On non-zero exit, surface the helper's stderr (canonical templates (1)–(4)) byte-equal and stop.
+`<coder_tier>` is the Step 2 run-state alias (`cheap`/`standard`/`capable`) mapped into the `modelTiers` section. On non-zero exit, surface the helper's stderr (canonical templates (1)–(5)) byte-equal and stop.
 
 Build the prompt:
 
@@ -182,6 +182,7 @@ subagent_run_serial {
       task: "<filled prompt>",
       model: "<resolved model>",
       cli: "<resolved cli>",
+      executionPolicy: "<resolved executionPolicy>",
       thinking: "high"
     }
   ],
@@ -221,7 +222,7 @@ Options:
 
 `(c)` records concerns in run state and continues to Step 6. `(x)` exits without committing; any `docs/test-runs/<spec-name>/` artifacts are preserved.
 
-For `NEEDS_CONTEXT`, surface `.needs_text`, ask the user for the missing context, append the reply under `## Additional Context` to the prompt body, and re-dispatch once with the same model, cli, and `thinking: "high"`. A second `NEEDS_CONTEXT` or any `BLOCKED` from the retry stops immediately through the BLOCKED handler.
+For `NEEDS_CONTEXT`, surface `.needs_text`, ask the user for the missing context, append the reply under `## Additional Context` to the prompt body, and re-dispatch once with the same model, cli, executionPolicy, and `thinking: "high"`. A second `NEEDS_CONTEXT` or any `BLOCKED` from the retry stops immediately through the BLOCKED handler.
 
 For `BLOCKED`, surface `.blocker_text` with this verbatim block, then stop immediately:
 
