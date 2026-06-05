@@ -109,7 +109,9 @@ def main():
     if not isinstance(data, dict):
         fail("flow.json missing or unreadable")
 
-    dispatch = data.get("subagentDispatch", {})
+    dispatch = data.get("subagentDispatch")
+    if not isinstance(dispatch, dict):
+        fail("flow.json missing or unreadable")
     tiers = [t.strip() for t in args.allowed_tiers.split(",") if t.strip()]
 
     expected_pairs = []

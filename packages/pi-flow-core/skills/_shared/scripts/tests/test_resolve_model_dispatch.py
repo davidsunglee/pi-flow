@@ -102,6 +102,26 @@ class TestResolveModelDispatch(unittest.TestCase):
             "flow.json has no subagentDispatch map — cannot dispatch coder.\n",
         )
 
+    def test_template_3_non_object_dispatch(self):
+        data = {
+            "modelTiers": {"capable": "anthropic/claude-opus-4-7"},
+            "subagentDispatch": "claude",
+            "executionPolicy": "guarded",
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(data, f)
+            tmp_path = f.name
+        try:
+            result = run(["--tier", "modelTiers.capable", "--agent", "coder", "--flow-config", tmp_path])
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(
+                result.stderr,
+                "flow.json has no subagentDispatch map — cannot dispatch coder.\n",
+            )
+            self.assertNotIn("Traceback", result.stderr)
+        finally:
+            os.unlink(tmp_path)
+
     def test_template_4_missing_provider(self):
         result = run(["--tier", "crossProviderModelTiers.capable", "--agent", "coder", "--flow-config", MISSING_PROVIDER])
         self.assertNotEqual(result.returncode, 0)
