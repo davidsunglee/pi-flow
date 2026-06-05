@@ -106,6 +106,9 @@ def main():
     except (IOError, OSError, json.JSONDecodeError):
         fail("flow.json missing or unreadable")
 
+    if not isinstance(data, dict):
+        fail("flow.json missing or unreadable")
+
     dispatch = data.get("subagentDispatch", {})
     tiers = [t.strip() for t in args.allowed_tiers.split(",") if t.strip()]
 

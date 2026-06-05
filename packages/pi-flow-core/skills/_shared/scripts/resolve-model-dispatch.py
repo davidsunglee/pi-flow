@@ -82,6 +82,9 @@ def main():
     except (IOError, OSError, json.JSONDecodeError):
         die(f"~/.pi/agent/flow.json missing or unreadable — cannot dispatch {args.agent}.")
 
+    if not isinstance(data, dict):
+        die(f'flow.json has no usable "{args.tier}" model — cannot dispatch {args.agent}.')
+
     model = resolve_tier(data, args.tier)
     if not model:
         die(f'flow.json has no usable "{args.tier}" model — cannot dispatch {args.agent}.')

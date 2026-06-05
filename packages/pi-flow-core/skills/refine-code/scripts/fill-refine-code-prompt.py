@@ -165,7 +165,7 @@ Example:
 
         # refine-code-prompt.md intentionally documents downstream placeholders
         # used by the code-refiner when it fills reviewer/remediator prompts.
-        # This helper owns only the eight placeholders above; values may also
+        # This helper owns only the nine placeholders above; values may also
         # contain literal {TOKENS} from plan text. Fail only when the input
         # template itself contains an unknown placeholder outside these sets.
         allowed_downstream_placeholders = {

@@ -121,6 +121,23 @@ class TestValidateReviewProvenance(unittest.TestCase):
         data = json.loads(result.stderr)
         self.assertEqual(data["failure"], "flow.json missing or unreadable")
 
+    def test_non_object_flow_config_file(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump([], f)
+            tmp_path = f.name
+        try:
+            result = run([
+                "--review-file", REVIEW_GOOD,
+                "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+                "--flow-config", tmp_path,
+            ])
+            self.assertNotEqual(result.returncode, 0)
+            data = json.loads(result.stderr)
+            self.assertEqual(data["failure"], "flow.json missing or unreadable")
+            self.assertNotIn("Traceback", result.stderr)
+        finally:
+            os.unlink(tmp_path)
+
 
 if __name__ == "__main__":
     unittest.main()
