@@ -32,8 +32,8 @@ class TestFillRefineCodePrompt(unittest.TestCase):
             plan_contents_file = f.name
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump({"crossProvider.capable": "model1"}, f)
-            model_matrix_file = f.name
+            json.dump({"crossProviderModelTiers.capable": "model1"}, f)
+            flow_config_file = f.name
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
             output_file = f.name
@@ -61,9 +61,9 @@ class TestFillRefineCodePrompt(unittest.TestCase):
 - **Review output base path:** {REVIEW_OUTPUT_PATH}
 - **Working directory:** {WORKING_DIR}
 
-### Model Matrix
+### Flow Config
 
-{MODEL_MATRIX}
+{FLOW_CONFIG}
 """)
             template_file = f.name
 
@@ -76,7 +76,7 @@ class TestFillRefineCodePrompt(unittest.TestCase):
                 "--head-sha", "def5678",
                 "--review-output-path", "review.md",
                 "--max-iterations", "5",
-                "--model-matrix", model_matrix_file,
+                "--flow-config", flow_config_file,
                 "--working-dir", "/work/dir",
                 "--carry-over-review", "",
                 "--output", output_file
@@ -99,7 +99,7 @@ class TestFillRefineCodePrompt(unittest.TestCase):
             # Verify max iterations as literal string
             self.assertIn("**Max iterations:** 5", content)
             # Verify model matrix is included
-            self.assertIn("crossProvider.capable", content)
+            self.assertIn("crossProviderModelTiers.capable", content)
             # Verify working directory is in Configuration section
             self.assertIn("**Working directory:** /work/dir", content)
             # Verify no remaining placeholders (the 8 required ones)
@@ -109,12 +109,12 @@ class TestFillRefineCodePrompt(unittest.TestCase):
             self.assertNotIn("{HEAD_SHA}", content)
             self.assertNotIn("{REVIEW_OUTPUT_PATH}", content)
             self.assertNotIn("{MAX_ITERATIONS}", content)
-            self.assertNotIn("{MODEL_MATRIX}", content)
+            self.assertNotIn("{FLOW_CONFIG}", content)
             self.assertNotIn("{WORKING_DIR}", content)
         finally:
             os.unlink(plan_goal_file)
             os.unlink(plan_contents_file)
-            os.unlink(model_matrix_file)
+            os.unlink(flow_config_file)
             os.unlink(output_file)
             os.unlink(template_file)
 
@@ -125,8 +125,8 @@ class TestFillRefineCodePrompt(unittest.TestCase):
             plan_contents_file = f.name
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump({"crossProvider.capable": "model1"}, f)
-            model_matrix_file = f.name
+            json.dump({"crossProviderModelTiers.capable": "model1"}, f)
+            flow_config_file = f.name
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
             output_file = f.name
@@ -140,7 +140,7 @@ class TestFillRefineCodePrompt(unittest.TestCase):
                 "--head-sha", "def5678",
                 "--review-output-path", "/path/to/review.md",
                 "--max-iterations", "5",
-                "--model-matrix", model_matrix_file,
+                "--flow-config", flow_config_file,
                 "--working-dir", "/work/dir",
                 "--carry-over-review", "",
                 "--output", output_file
@@ -152,7 +152,7 @@ class TestFillRefineCodePrompt(unittest.TestCase):
             self.assertEqual(stderr_json["input"], "plan-goal")
         finally:
             os.unlink(plan_contents_file)
-            os.unlink(model_matrix_file)
+            os.unlink(flow_config_file)
             os.unlink(output_file)
 
     def test_unreplaced_placeholder_fails_closed(self):
@@ -170,8 +170,8 @@ class TestFillRefineCodePrompt(unittest.TestCase):
             plan_contents_file = f.name
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump({"crossProvider.capable": "model1"}, f)
-            model_matrix_file = f.name
+            json.dump({"crossProviderModelTiers.capable": "model1"}, f)
+            flow_config_file = f.name
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
             output_file = f.name
@@ -185,7 +185,7 @@ class TestFillRefineCodePrompt(unittest.TestCase):
                 "--head-sha", "def5678",
                 "--review-output-path", "/path/to/review.md",
                 "--max-iterations", "5",
-                "--model-matrix", model_matrix_file,
+                "--flow-config", flow_config_file,
                 "--working-dir", "/work/dir",
                 "--carry-over-review", "",
                 "--output", output_file
@@ -199,7 +199,7 @@ class TestFillRefineCodePrompt(unittest.TestCase):
             os.unlink(template_file)
             os.unlink(plan_goal_file)
             os.unlink(plan_contents_file)
-            os.unlink(model_matrix_file)
+            os.unlink(flow_config_file)
             os.unlink(output_file)
 
     def test_no_recursive_expansion(self):
@@ -217,8 +217,8 @@ class TestFillRefineCodePrompt(unittest.TestCase):
             plan_contents_file = f.name
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump({"crossProvider.capable": "model1"}, f)
-            model_matrix_file = f.name
+            json.dump({"crossProviderModelTiers.capable": "model1"}, f)
+            flow_config_file = f.name
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
             output_file = f.name
@@ -232,7 +232,7 @@ class TestFillRefineCodePrompt(unittest.TestCase):
                 "--head-sha", "def5678",
                 "--review-output-path", "/path/to/review.md",
                 "--max-iterations", "5",
-                "--model-matrix", model_matrix_file,
+                "--flow-config", flow_config_file,
                 "--working-dir", "/work/dir",
                 "--carry-over-review", "",
                 "--output", output_file
@@ -246,11 +246,15 @@ class TestFillRefineCodePrompt(unittest.TestCase):
             os.unlink(plan_goal_file)
             os.unlink(template_file)
             os.unlink(plan_contents_file)
-            os.unlink(model_matrix_file)
+            os.unlink(flow_config_file)
             os.unlink(output_file)
 
     def test_plan_contents_placeholders_preserved(self):
         """Plan contents may document placeholder tokens and must be inserted literally."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+            f.write("Contents: {PLAN_CONTENTS}")
+            template_file = f.name
+
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
             f.write("Test goal")
             plan_goal_file = f.name
@@ -260,22 +264,22 @@ class TestFillRefineCodePrompt(unittest.TestCase):
             plan_contents_file = f.name
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump({"crossProvider.capable": "model1"}, f)
-            model_matrix_file = f.name
+            json.dump({"crossProviderModelTiers.capable": "model1"}, f)
+            flow_config_file = f.name
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
             output_file = f.name
 
         try:
             stdout, stderr, code = self.run_script([
-                "--template", str(self.real_template),
+                "--template", template_file,
                 "--plan-goal", plan_goal_file,
                 "--plan-contents", plan_contents_file,
                 "--base-sha", "abc1234",
                 "--head-sha", "def5678",
                 "--review-output-path", "/path/to/review.md",
                 "--max-iterations", "5",
-                "--model-matrix", model_matrix_file,
+                "--flow-config", flow_config_file,
                 "--working-dir", "/work/dir",
                 "--carry-over-review", "",
                 "--output", output_file
@@ -286,9 +290,10 @@ class TestFillRefineCodePrompt(unittest.TestCase):
                 content = f.read()
             self.assertIn("Plan mentions {TASK_SPEC} and {WORKING_DIR}", content)
         finally:
+            os.unlink(template_file)
             os.unlink(plan_goal_file)
             os.unlink(plan_contents_file)
-            os.unlink(model_matrix_file)
+            os.unlink(flow_config_file)
             os.unlink(output_file)
 
     def test_max_iterations_stringified(self):
@@ -306,8 +311,8 @@ class TestFillRefineCodePrompt(unittest.TestCase):
             plan_contents_file = f.name
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump({"crossProvider.capable": "model1"}, f)
-            model_matrix_file = f.name
+            json.dump({"crossProviderModelTiers.capable": "model1"}, f)
+            flow_config_file = f.name
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
             output_file = f.name
@@ -321,7 +326,7 @@ class TestFillRefineCodePrompt(unittest.TestCase):
                 "--head-sha", "def5678",
                 "--review-output-path", "/path/to/review.md",
                 "--max-iterations", "3",
-                "--model-matrix", model_matrix_file,
+                "--flow-config", flow_config_file,
                 "--working-dir", "/work/dir",
                 "--carry-over-review", "",
                 "--output", output_file
@@ -337,7 +342,7 @@ class TestFillRefineCodePrompt(unittest.TestCase):
             os.unlink(plan_goal_file)
             os.unlink(template_file)
             os.unlink(plan_contents_file)
-            os.unlink(model_matrix_file)
+            os.unlink(flow_config_file)
             os.unlink(output_file)
 
     def test_help_flag(self):
@@ -346,11 +351,15 @@ class TestFillRefineCodePrompt(unittest.TestCase):
         self.assertEqual(code, 0, f"Help failed: {stderr}")
         # Should mention all nine placeholders
         for placeholder in ["PLAN_GOAL", "PLAN_CONTENTS", "BASE_SHA", "HEAD_SHA",
-                           "REVIEW_OUTPUT_PATH", "MAX_ITERATIONS", "MODEL_MATRIX", "WORKING_DIR", "CARRY_OVER_REVIEW"]:
+                           "REVIEW_OUTPUT_PATH", "MAX_ITERATIONS", "FLOW_CONFIG", "WORKING_DIR", "CARRY_OVER_REVIEW"]:
             self.assertIn(placeholder, stdout, f"--help should mention {placeholder}")
 
     def test_carry_over_review_with_empty_string(self):
         """Test that --carry-over-review accepts empty string."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+            f.write("Goal: {PLAN_GOAL}")
+            template_file = f.name
+
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
             f.write("Test goal")
             plan_goal_file = f.name
@@ -360,21 +369,22 @@ class TestFillRefineCodePrompt(unittest.TestCase):
             plan_contents_file = f.name
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump({"crossProvider.capable": "model1"}, f)
-            model_matrix_file = f.name
+            json.dump({"crossProviderModelTiers.capable": "model1"}, f)
+            flow_config_file = f.name
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
             output_file = f.name
 
         try:
             stdout, stderr, code = self.run_script([
+                "--template", template_file,
                 "--plan-goal", plan_goal_file,
                 "--plan-contents", plan_contents_file,
                 "--base-sha", "abc1234",
                 "--head-sha", "def5678",
                 "--review-output-path", "review.md",
                 "--max-iterations", "5",
-                "--model-matrix", model_matrix_file,
+                "--flow-config", flow_config_file,
                 "--working-dir", "/work/dir",
                 "--carry-over-review", "",
                 "--output", output_file
@@ -382,9 +392,10 @@ class TestFillRefineCodePrompt(unittest.TestCase):
 
             self.assertEqual(code, 0, f"Script failed: {stderr}")
         finally:
+            os.unlink(template_file)
             os.unlink(plan_goal_file)
             os.unlink(plan_contents_file)
-            os.unlink(model_matrix_file)
+            os.unlink(flow_config_file)
             os.unlink(output_file)
 
     def test_carry_over_review_populated(self):
@@ -398,8 +409,8 @@ class TestFillRefineCodePrompt(unittest.TestCase):
             plan_contents_file = f.name
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump({"crossProvider.capable": "model1"}, f)
-            model_matrix_file = f.name
+            json.dump({"crossProviderModelTiers.capable": "model1"}, f)
+            flow_config_file = f.name
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
             f.write("Review findings from prior era")
@@ -421,7 +432,7 @@ class TestFillRefineCodePrompt(unittest.TestCase):
                 "--head-sha", "def5678",
                 "--review-output-path", "review.md",
                 "--max-iterations", "5",
-                "--model-matrix", model_matrix_file,
+                "--flow-config", flow_config_file,
                 "--working-dir", "/work/dir",
                 "--carry-over-review", carry_over_file,
                 "--output", output_file
@@ -436,7 +447,7 @@ class TestFillRefineCodePrompt(unittest.TestCase):
         finally:
             os.unlink(plan_goal_file)
             os.unlink(plan_contents_file)
-            os.unlink(model_matrix_file)
+            os.unlink(flow_config_file)
             os.unlink(carry_over_file)
             os.unlink(template_file)
             os.unlink(output_file)

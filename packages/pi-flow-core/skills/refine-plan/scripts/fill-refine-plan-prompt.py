@@ -4,7 +4,7 @@
 Supports thirteen placeholders:
   {PLAN_PATH}, {TASK_ARTIFACT}, {SOURCE_IDEA}, {SOURCE_SPEC}, {SCOUT_BRIEF},
   {ORIGINAL_SPEC_INLINE}, {STRUCTURAL_ONLY_NOTE}, {MAX_ITERATIONS},
-  {STARTING_ERA}, {REVIEW_OUTPUT_PATH}, {WORKING_DIR}, {MODEL_MATRIX},
+  {STARTING_ERA}, {REVIEW_OUTPUT_PATH}, {WORKING_DIR}, {FLOW_CONFIG},
   {CARRY_OVER_REVIEW}
 """
 
@@ -57,7 +57,7 @@ Placeholders:
   STARTING_ERA - Starting era (integer)
   REVIEW_OUTPUT_PATH - Review output path
   WORKING_DIR - Working directory
-  MODEL_MATRIX - Model matrix content (path or -)
+  FLOW_CONFIG - Flow config content (path or -)
   CARRY_OVER_REVIEW - Path to a prior era's review file (or empty string)
         """,
     )
@@ -113,9 +113,9 @@ Placeholders:
         help="Working directory",
     )
     parser.add_argument(
-        "--model-matrix",
+        "--flow-config",
         required=True,
-        help="Model matrix content (path or -)",
+        help="Flow config content (path or -)",
     )
     parser.add_argument(
         "--carry-over-review",
@@ -138,7 +138,7 @@ Placeholders:
     # Read values that must be file paths or stdin
     original_spec_inline = read_file_or_stdin(args.original_spec_inline, "original-spec-inline")
     structural_only_note = read_file_or_stdin(args.structural_only_note, "structural-only-note")
-    model_matrix = read_file_or_stdin(args.model_matrix, "model-matrix")
+    flow_config = read_file_or_stdin(args.flow_config, "flow-config")
     carry_over_review = args.carry_over_review
 
     # Build the placeholder map
@@ -154,7 +154,7 @@ Placeholders:
         "{STARTING_ERA}": str(args.starting_era),
         "{REVIEW_OUTPUT_PATH}": args.review_output_path,
         "{WORKING_DIR}": args.working_dir,
-        "{MODEL_MATRIX}": model_matrix,
+        "{FLOW_CONFIG}": flow_config,
         "{CARRY_OVER_REVIEW}": carry_over_review,
     }
 

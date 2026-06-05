@@ -58,13 +58,13 @@ Iterations: {MAX_ITERATIONS}
 Era: {STARTING_ERA}
 Review: {REVIEW_OUTPUT_PATH}
 Work: {WORKING_DIR}
-Matrix: {MODEL_MATRIX}
+Matrix: {FLOW_CONFIG}
 Carry: {CARRY_OVER_REVIEW}
 """
         template_file = write_temp_file(template_content)
         spec_file = write_temp_file("Original spec inline content")
         note_file = write_temp_file("Structural only note")
-        matrix_file = write_temp_file("Model matrix content")
+        flow_config_file = write_temp_file("Model matrix content")
         output_file = tempfile.NamedTemporaryFile(
             mode="w", delete=False, suffix=".md"
         ).name
@@ -83,7 +83,7 @@ Carry: {CARRY_OVER_REVIEW}
                 "--starting-era", "1",
                 "--review-output-path", "/path/to/review",
                 "--working-dir", "/work",
-                "--model-matrix", matrix_file,
+                "--flow-config", flow_config_file,
                 "--carry-over-review", "",
                 "--output", output_file,
             )
@@ -120,10 +120,10 @@ Carry: {CARRY_OVER_REVIEW}
             self.assertNotIn("{STARTING_ERA}", content)
             self.assertNotIn("{REVIEW_OUTPUT_PATH}", content)
             self.assertNotIn("{WORKING_DIR}", content)
-            self.assertNotIn("{MODEL_MATRIX}", content)
+            self.assertNotIn("{FLOW_CONFIG}", content)
             self.assertNotIn("{CARRY_OVER_REVIEW}", content)
         finally:
-            for f in [template_file, spec_file, note_file, matrix_file, output_file]:
+            for f in [template_file, spec_file, note_file, flow_config_file, output_file]:
                 if os.path.exists(f):
                     os.unlink(f)
 
@@ -134,7 +134,7 @@ class TestInputMissingOrUnreadable(unittest.TestCase):
     def test_input_missing_or_unreadable_original_spec_inline(self):
         """Test missing original-spec-inline file; assert exit 2 and proper error."""
         note_file = write_temp_file("Note")
-        matrix_file = write_temp_file("Matrix")
+        flow_config_file = write_temp_file("Matrix")
         output_file = tempfile.NamedTemporaryFile(
             mode="w", delete=False, suffix=".md"
         ).name
@@ -153,7 +153,7 @@ class TestInputMissingOrUnreadable(unittest.TestCase):
                 "--starting-era", "1",
                 "--review-output-path", "/path/to/review",
                 "--working-dir", "/work",
-                "--model-matrix", matrix_file,
+                "--flow-config", flow_config_file,
                 "--carry-over-review", "",
                 "--output", output_file,
             )
@@ -165,7 +165,7 @@ class TestInputMissingOrUnreadable(unittest.TestCase):
             self.assertEqual(error_data["failure"], "input missing or unreadable")
             self.assertEqual(error_data["input"], "original-spec-inline")
         finally:
-            for f in [note_file, matrix_file, output_file]:
+            for f in [note_file, flow_config_file, output_file]:
                 if os.path.exists(f):
                     os.unlink(f)
 
@@ -181,7 +181,7 @@ class TestUnreplacedPlaceholder(unittest.TestCase):
         )
         spec_file = write_temp_file("Original spec")
         note_file = write_temp_file("Note")
-        matrix_file = write_temp_file("Matrix")
+        flow_config_file = write_temp_file("Matrix")
         output_file = tempfile.NamedTemporaryFile(
             mode="w", delete=False, suffix=".md"
         ).name
@@ -200,7 +200,7 @@ class TestUnreplacedPlaceholder(unittest.TestCase):
                 "--starting-era", "1",
                 "--review-output-path", "/path/to/review",
                 "--working-dir", "/work",
-                "--model-matrix", matrix_file,
+                "--flow-config", flow_config_file,
                 "--carry-over-review", "",
                 "--output", output_file,
             )
@@ -213,7 +213,7 @@ class TestUnreplacedPlaceholder(unittest.TestCase):
                 error_data["failure"], "unreplaced placeholders remain"
             )
         finally:
-            for f in [template_file, spec_file, note_file, matrix_file, output_file]:
+            for f in [template_file, spec_file, note_file, flow_config_file, output_file]:
                 if os.path.exists(f):
                     os.unlink(f)
 
@@ -228,7 +228,7 @@ class TestEmptyStringSubstitution(unittest.TestCase):
         )
         spec_file = write_temp_file("Original spec")
         note_file = write_temp_file("Note")
-        matrix_file = write_temp_file("Matrix")
+        flow_config_file = write_temp_file("Matrix")
         output_file = tempfile.NamedTemporaryFile(
             mode="w", delete=False, suffix=".md"
         ).name
@@ -247,7 +247,7 @@ class TestEmptyStringSubstitution(unittest.TestCase):
                 "--starting-era", "1",
                 "--review-output-path", "/path/to/review",
                 "--working-dir", "/work",
-                "--model-matrix", matrix_file,
+                "--flow-config", flow_config_file,
                 "--carry-over-review", "",
                 "--output", output_file,
             )
@@ -262,7 +262,7 @@ class TestEmptyStringSubstitution(unittest.TestCase):
             self.assertIn("Artifact: '' End.", content)
             self.assertNotIn("{TASK_ARTIFACT}", content)
         finally:
-            for f in [template_file, spec_file, note_file, matrix_file, output_file]:
+            for f in [template_file, spec_file, note_file, flow_config_file, output_file]:
                 if os.path.exists(f):
                     os.unlink(f)
 
@@ -276,7 +276,7 @@ class TestNoRecursiveExpansion(unittest.TestCase):
         template_file = write_temp_file(template_content)
         spec_file = write_temp_file("Original spec")
         note_file = write_temp_file("Note")
-        matrix_file = write_temp_file("Matrix")
+        flow_config_file = write_temp_file("Matrix")
         output_file = tempfile.NamedTemporaryFile(
             mode="w", delete=False, suffix=".md"
         ).name
@@ -295,7 +295,7 @@ class TestNoRecursiveExpansion(unittest.TestCase):
                 "--starting-era", "1",
                 "--review-output-path", "/path/to/review",
                 "--working-dir", "/work",
-                "--model-matrix", matrix_file,
+                "--flow-config", flow_config_file,
                 "--carry-over-review", "",
                 "--output", output_file,
             )
@@ -305,18 +305,18 @@ class TestNoRecursiveExpansion(unittest.TestCase):
                 content = f.read()
             self.assertIn("Artifact: {SOURCE_IDEA}; Idea: Source idea value", content)
         finally:
-            for f in [template_file, spec_file, note_file, matrix_file, output_file]:
+            for f in [template_file, spec_file, note_file, flow_config_file, output_file]:
                 if os.path.exists(f):
                     os.unlink(f)
 
     def test_no_recursive_expansion(self):
         """Test passing value with placeholder; assert no recursive expansion."""
         # Create a template with all 13 placeholders to avoid "unreplaced" error
-        template_content = """{PLAN_PATH} {TASK_ARTIFACT} {SOURCE_IDEA} {SOURCE_SPEC} {SCOUT_BRIEF} {ORIGINAL_SPEC_INLINE} {STRUCTURAL_ONLY_NOTE} {MAX_ITERATIONS} {STARTING_ERA} {REVIEW_OUTPUT_PATH} {WORKING_DIR} {MODEL_MATRIX} {CARRY_OVER_REVIEW}"""
+        template_content = """{PLAN_PATH} {TASK_ARTIFACT} {SOURCE_IDEA} {SOURCE_SPEC} {SCOUT_BRIEF} {ORIGINAL_SPEC_INLINE} {STRUCTURAL_ONLY_NOTE} {MAX_ITERATIONS} {STARTING_ERA} {REVIEW_OUTPUT_PATH} {WORKING_DIR} {FLOW_CONFIG} {CARRY_OVER_REVIEW}"""
         template_file = write_temp_file(template_content)
         spec_file = write_temp_file("Original spec")
         note_file = write_temp_file("Note")
-        matrix_file = write_temp_file("Matrix")
+        flow_config_file = write_temp_file("Matrix")
         output_file = tempfile.NamedTemporaryFile(
             mode="w", delete=False, suffix=".md"
         ).name
@@ -335,7 +335,7 @@ class TestNoRecursiveExpansion(unittest.TestCase):
                 "--starting-era", "1",
                 "--review-output-path", "/path/to/review",
                 "--working-dir", "/work",
-                "--model-matrix", matrix_file,
+                "--flow-config", flow_config_file,
                 "--carry-over-review", "",
                 "--output", output_file,
             )
@@ -349,7 +349,7 @@ class TestNoRecursiveExpansion(unittest.TestCase):
             # Verify no recursive expansion - the {OTHER} inside the value should be preserved
             self.assertIn("see {OTHER}", content)
         finally:
-            for f in [template_file, spec_file, note_file, matrix_file, output_file]:
+            for f in [template_file, spec_file, note_file, flow_config_file, output_file]:
                 if os.path.exists(f):
                     os.unlink(f)
 
@@ -362,7 +362,7 @@ class TestStartingEraStringified(unittest.TestCase):
         template_file = write_temp_file("Era: {STARTING_ERA}")
         spec_file = write_temp_file("Original spec")
         note_file = write_temp_file("Note")
-        matrix_file = write_temp_file("Matrix")
+        flow_config_file = write_temp_file("Matrix")
         output_file = tempfile.NamedTemporaryFile(
             mode="w", delete=False, suffix=".md"
         ).name
@@ -381,7 +381,7 @@ class TestStartingEraStringified(unittest.TestCase):
                 "--starting-era", "2",
                 "--review-output-path", "/path/to/review",
                 "--working-dir", "/work",
-                "--model-matrix", matrix_file,
+                "--flow-config", flow_config_file,
                 "--carry-over-review", "",
                 "--output", output_file,
             )
@@ -396,7 +396,7 @@ class TestStartingEraStringified(unittest.TestCase):
             self.assertIn("Era: 2", content)
             self.assertNotIn("{STARTING_ERA}", content)
         finally:
-            for f in [template_file, spec_file, note_file, matrix_file, output_file]:
+            for f in [template_file, spec_file, note_file, flow_config_file, output_file]:
                 if os.path.exists(f):
                     os.unlink(f)
 
@@ -408,7 +408,7 @@ class TestOutputDashWritesStdout(unittest.TestCase):
         template_file = write_temp_file("Era: {STARTING_ERA}")
         spec_file = write_temp_file("Original spec")
         note_file = write_temp_file("Note")
-        matrix_file = write_temp_file("Matrix")
+        flow_config_file = write_temp_file("Matrix")
 
         cwd = tempfile.mkdtemp()
         try:
@@ -427,7 +427,7 @@ class TestOutputDashWritesStdout(unittest.TestCase):
                     "--starting-era", "7",
                     "--review-output-path", "/path/to/review",
                     "--working-dir", "/work",
-                    "--model-matrix", matrix_file,
+                    "--flow-config", flow_config_file,
                     "--carry-over-review", "",
                     "--output", "-",
                 ],
@@ -443,7 +443,7 @@ class TestOutputDashWritesStdout(unittest.TestCase):
                 "Helper should not create a file literally named '-'",
             )
         finally:
-            for f in [template_file, spec_file, note_file, matrix_file]:
+            for f in [template_file, spec_file, note_file, flow_config_file]:
                 if os.path.exists(f):
                     os.unlink(f)
             dash_path = os.path.join(cwd, "-")
@@ -460,7 +460,7 @@ class TestCarryOverReviewPopulated(unittest.TestCase):
         template_file = write_temp_file("Review: {CARRY_OVER_REVIEW}")
         spec_file = write_temp_file("Original spec")
         note_file = write_temp_file("Note")
-        matrix_file = write_temp_file("Matrix")
+        flow_config_file = write_temp_file("Matrix")
         review_path = "docs/plans/reviews/foo-plan-review-v1.md"
         output_file = tempfile.NamedTemporaryFile(
             mode="w", delete=False, suffix=".md"
@@ -480,7 +480,7 @@ class TestCarryOverReviewPopulated(unittest.TestCase):
                 "--starting-era", "1",
                 "--review-output-path", "/path/to/review",
                 "--working-dir", "/work",
-                "--model-matrix", matrix_file,
+                "--flow-config", flow_config_file,
                 "--carry-over-review", review_path,
                 "--output", output_file,
             )
@@ -496,7 +496,7 @@ class TestCarryOverReviewPopulated(unittest.TestCase):
             self.assertIn("Review: docs/plans/reviews/foo-plan-review-v1.md", content)
             self.assertNotIn("{CARRY_OVER_REVIEW}", content)
         finally:
-            for f in [template_file, spec_file, note_file, matrix_file, output_file]:
+            for f in [template_file, spec_file, note_file, flow_config_file, output_file]:
                 if os.path.exists(f):
                     os.unlink(f)
 
@@ -523,7 +523,7 @@ class TestHelp(unittest.TestCase):
             "STARTING_ERA",
             "REVIEW_OUTPUT_PATH",
             "WORKING_DIR",
-            "MODEL_MATRIX",
+            "FLOW_CONFIG",
             "CARRY_OVER_REVIEW",
         ]
 

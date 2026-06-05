@@ -18,7 +18,7 @@ function getPacklist() {
 
 test('packlist includes required files', () => {
   const files = getPacklist();
-  const required = ['bin/pi-flow.mjs', 'package.json', 'LICENSE', 'model-tiers.example.json'];
+  const required = ['bin/pi-flow.mjs', 'package.json', 'LICENSE', 'flow.example.json'];
   for (const req of required) {
     assert.ok(files.includes(req), `packlist must include ${req}; got: ${files.join(', ')}`);
   }

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync, readdirSync, statSync, rmSync } from 'node:fs';
+import { existsSync, readdirSync, statSync, rmSync, mkdtempSync, mkdirSync, copyFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const CLI = resolve(PACKAGE_ROOT, 'bin/pi-flow.mjs');
@@ -25,9 +26,9 @@ function cleanupPycache(root) {
   }
 }
 
-const FIXTURE_MODEL_TIERS = resolve(
+const FIXTURE_FLOW_CONFIG = resolve(
   PACKAGE_ROOT,
-  'skills/_shared/scripts/tests/fixtures/model-tiers-complete.json'
+  'skills/_shared/scripts/tests/fixtures/flow-complete.json'
 );
 const FIXTURE_PLAN = resolve(
   PACKAGE_ROOT,
@@ -47,10 +48,10 @@ test('helper-runner', (t) => {
       'helper', '_shared/resolve-model-dispatch',
       '--tier', 'nosuchtier',
       '--agent', 'test',
-      '--model-tiers', FIXTURE_MODEL_TIERS
+      '--flow-config', FIXTURE_FLOW_CONFIG
     );
     assert.equal(r.status, 1);
-    assert.ok(r.stderr.includes('model-tiers.json has no usable "nosuchtier" model'));
+    assert.ok(r.stderr.includes('flow.json has no usable "nosuchtier" model'));
   });
 
   t.test('helper resolves known per-skill script', () => {
@@ -139,32 +140,53 @@ test('helper-runner', (t) => {
   });
 
   t.test('helper invocation writes no __pycache__ under skills/ even when caller env lacks PYTHONDONTWRITEBYTECODE', () => {
-    cleanupPycache(resolve(PACKAGE_ROOT, 'skills'));
-    const callerEnv = { ...process.env };
-    delete callerEnv.PYTHONDONTWRITEBYTECODE;
-    const r = spawnSync(
-      'node',
-      [CLI, 'helper', 'execute-plan/extract-plan-tasks', '--plan', FIXTURE_PLAN],
-      { encoding: 'utf8', env: callerEnv }
-    );
-    assert.equal(r.status, 0, `helper must succeed: ${r.stderr}`);
-    function findPycache(dir) {
-      const results = [];
-      for (const entry of readdirSync(dir)) {
-        const full = resolve(dir, entry);
-        let stat;
-        try { stat = statSync(full); } catch { continue; }
-        if (!stat.isDirectory()) continue;
-        if (entry === '__pycache__') results.push(full);
-        else results.push(...findPycache(full));
+    // Run from a hermetic temp copy of the package tree so concurrent Python
+    // test runs (which legitimately create __pycache__ in the real tree)
+    // cannot pollute the scan. If the CLI ever dropped its
+    // PYTHONDONTWRITEBYTECODE injection, importing fence_aware /
+    // plan_fence_hardening would write __pycache__ into this temp tree
+    // and fail the assertion below.
+    const tmpRoot = mkdtempSync(resolve(tmpdir(), 'pi-flow-pycache-'));
+    try {
+      const copies = [
+        'bin/pi-flow.mjs',
+        'skills/execute-plan/scripts/extract-plan-tasks.py',
+        'skills/_shared/scripts/fence_aware.py',
+        'skills/_shared/scripts/plan_fence_hardening.py',
+      ];
+      for (const rel of copies) {
+        const dest = resolve(tmpRoot, rel);
+        mkdirSync(dirname(dest), { recursive: true });
+        copyFileSync(resolve(PACKAGE_ROOT, rel), dest);
       }
-      return results;
+      const callerEnv = { ...process.env };
+      delete callerEnv.PYTHONDONTWRITEBYTECODE;
+      const r = spawnSync(
+        'node',
+        [resolve(tmpRoot, 'bin/pi-flow.mjs'), 'helper', 'execute-plan/extract-plan-tasks', '--plan', FIXTURE_PLAN],
+        { encoding: 'utf8', env: callerEnv }
+      );
+      assert.equal(r.status, 0, `helper must succeed: ${r.stderr}`);
+      function findPycache(dir) {
+        const results = [];
+        for (const entry of readdirSync(dir)) {
+          const full = resolve(dir, entry);
+          let stat;
+          try { stat = statSync(full); } catch { continue; }
+          if (!stat.isDirectory()) continue;
+          if (entry === '__pycache__') results.push(full);
+          else results.push(...findPycache(full));
+        }
+        return results;
+      }
+      const found = findPycache(resolve(tmpRoot, 'skills'));
+      assert.deepEqual(
+        found,
+        [],
+        `pi-flow helper must not leave __pycache__ artifacts; found: ${found.join(', ')}`
+      );
+    } finally {
+      rmSync(tmpRoot, { recursive: true, force: true });
     }
-    const found = findPycache(resolve(PACKAGE_ROOT, 'skills'));
-    assert.deepEqual(
-      found,
-      [],
-      `pi-flow helper must not leave __pycache__ artifacts; found: ${found.join(', ')}`
-    );
   });
 });

@@ -41,18 +41,19 @@ def run_script(*args):
 
 class ValidateAndParsePlanReviewTest(unittest.TestCase):
     def setUp(self):
-        self.model_tiers = write_temp_json({
-            "crossProvider": {"capable": "openai/reviewer-v1"},
-            "capable": "anthropic/reviewer-fallback",
-            "dispatch": {
+        self.flow_config = write_temp_json({
+            "crossProviderModelTiers": {"capable": "openai/reviewer-v1"},
+            "modelTiers": {"capable": "anthropic/reviewer-fallback"},
+            "subagentDispatch": {
                 "openai": "pi",
                 "anthropic": "claude",
                 "inline": "pi",
             },
+            "executionPolicy": "guarded",
         })
 
     def tearDown(self):
-        os.unlink(self.model_tiers)
+        os.unlink(self.flow_config)
 
     def run_success_case(self, fixture_name):
         review_path = os.path.join(FIXTURES, fixture_name)
@@ -62,8 +63,8 @@ class ValidateAndParsePlanReviewTest(unittest.TestCase):
                 "--final-message", final_message,
                 "--expected-path", review_path,
                 "--reviewer-provenance", EXPECTED_PROVENANCE,
-                "--allowed-tiers", "crossProvider.capable,capable",
-                "--model-tiers", self.model_tiers,
+                "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+                "--flow-config", self.flow_config,
             )
         finally:
             os.unlink(final_message)
@@ -116,8 +117,8 @@ class ValidateAndParsePlanReviewTest(unittest.TestCase):
                 "--final-message", final_message,
                 "--expected-path", review_path,
                 "--reviewer-provenance", EXPECTED_PROVENANCE,
-                "--allowed-tiers", "crossProvider.capable,capable",
-                "--model-tiers", self.model_tiers,
+                "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+                "--flow-config", self.flow_config,
             )
         finally:
             os.unlink(final_message)
@@ -135,8 +136,8 @@ class ValidateAndParsePlanReviewTest(unittest.TestCase):
                 "--final-message", final_message,
                 "--expected-path", wrong_path,
                 "--reviewer-provenance", EXPECTED_PROVENANCE,
-                "--allowed-tiers", "crossProvider.capable,capable",
-                "--model-tiers", self.model_tiers,
+                "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+                "--flow-config", self.flow_config,
             )
         finally:
             os.unlink(final_message)
@@ -153,8 +154,8 @@ class ValidateAndParsePlanReviewTest(unittest.TestCase):
                 "--final-message", final_message,
                 "--expected-path", empty_review,
                 "--reviewer-provenance", EXPECTED_PROVENANCE,
-                "--allowed-tiers", "crossProvider.capable,capable",
-                "--model-tiers", self.model_tiers,
+                "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+                "--flow-config", self.flow_config,
             )
         finally:
             os.unlink(final_message)
@@ -172,8 +173,8 @@ class ValidateAndParsePlanReviewTest(unittest.TestCase):
                 "--final-message", final_message,
                 "--expected-path", review_path,
                 "--reviewer-provenance", "**Reviewer:** anthropic/reviewer-fallback via claude",
-                "--allowed-tiers", "crossProvider.capable,capable",
-                "--model-tiers", self.model_tiers,
+                "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+                "--flow-config", self.flow_config,
             )
         finally:
             os.unlink(final_message)
@@ -201,20 +202,21 @@ class ValidateAndParsePlanReviewTest(unittest.TestCase):
                     "### Recommendations\n\n_None._\n"
                 )
             override_tiers = write_temp_json({
-                "crossProvider": {"capable": "inline/reviewer-v1"},
-                "capable": "anthropic/reviewer-fallback",
-                "dispatch": {
+                "crossProviderModelTiers": {"capable": "inline/reviewer-v1"},
+                "modelTiers": {"capable": "anthropic/reviewer-fallback"},
+                "subagentDispatch": {
                     "inline": "pi",
                     "anthropic": "claude",
                 },
+                "executionPolicy": "guarded",
             })
             try:
                 proc = run_script(
                     "--final-message", final_message,
                     "--expected-path", review_path,
                     "--reviewer-provenance", "**Reviewer:** inline/reviewer-v1 via pi",
-                    "--allowed-tiers", "crossProvider.capable,capable",
-                    "--model-tiers", override_tiers,
+                    "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+                    "--flow-config", override_tiers,
                 )
             finally:
                 os.unlink(override_tiers)
@@ -247,8 +249,8 @@ class ValidateAndParsePlanReviewTest(unittest.TestCase):
                 "--final-message", final_message,
                 "--expected-path", review_path,
                 "--reviewer-provenance", EXPECTED_PROVENANCE,
-                "--allowed-tiers", "crossProvider.capable,capable",
-                "--model-tiers", self.model_tiers,
+                "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+                "--flow-config", self.flow_config,
             )
         finally:
             os.unlink(final_message)

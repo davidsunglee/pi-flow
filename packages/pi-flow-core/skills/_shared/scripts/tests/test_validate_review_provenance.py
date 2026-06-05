@@ -9,7 +9,7 @@ SCRIPT = os.path.join(
     os.path.dirname(__file__), "..", "validate-review-provenance.py"
 )
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
-COMPLETE = os.path.join(FIXTURES, "model-tiers-complete.json")
+COMPLETE = os.path.join(FIXTURES, "flow-complete.json")
 REVIEW_GOOD = os.path.join(FIXTURES, "review-good.md")
 REVIEW_MALFORMED = os.path.join(FIXTURES, "review-malformed-line.md")
 REVIEW_INLINE = os.path.join(FIXTURES, "review-inline-forbidden.md")
@@ -35,12 +35,12 @@ class TestValidateReviewProvenance(unittest.TestCase):
     def test_good_review_cross_provider(self):
         result = run([
             "--review-file", REVIEW_GOOD,
-            "--allowed-tiers", "crossProvider.capable,capable",
-            "--model-tiers", COMPLETE,
+            "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+            "--flow-config", COMPLETE,
         ])
         self.assertEqual(result.returncode, 0)
         data = json.loads(result.stdout)
-        self.assertEqual(data["matched_tier"], "crossProvider.capable")
+        self.assertEqual(data["matched_tier"], "crossProviderModelTiers.capable")
         self.assertEqual(data["provider_model"], "openai-codex/gpt-5.5")
         self.assertEqual(data["cli"], "pi")
 
@@ -49,12 +49,12 @@ class TestValidateReviewProvenance(unittest.TestCase):
         try:
             result = run([
                 "--review-file", path,
-                "--allowed-tiers", "crossProvider.capable,capable",
-                "--model-tiers", COMPLETE,
+                "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+                "--flow-config", COMPLETE,
             ])
             self.assertEqual(result.returncode, 0)
             data = json.loads(result.stdout)
-            self.assertEqual(data["matched_tier"], "capable")
+            self.assertEqual(data["matched_tier"], "modelTiers.capable")
             self.assertEqual(data["provider_model"], "anthropic/claude-opus-4-7")
             self.assertEqual(data["cli"], "claude")
         finally:
@@ -63,8 +63,8 @@ class TestValidateReviewProvenance(unittest.TestCase):
     def test_malformed_format(self):
         result = run([
             "--review-file", REVIEW_MALFORMED,
-            "--allowed-tiers", "crossProvider.capable,capable",
-            "--model-tiers", COMPLETE,
+            "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+            "--flow-config", COMPLETE,
         ])
         self.assertNotEqual(result.returncode, 0)
         data = json.loads(result.stderr)
@@ -73,8 +73,8 @@ class TestValidateReviewProvenance(unittest.TestCase):
     def test_inline_forbidden(self):
         result = run([
             "--review-file", REVIEW_INLINE,
-            "--allowed-tiers", "crossProvider.capable,capable",
-            "--model-tiers", COMPLETE,
+            "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+            "--flow-config", COMPLETE,
         ])
         self.assertNotEqual(result.returncode, 0)
         data = json.loads(result.stderr)
@@ -85,8 +85,8 @@ class TestValidateReviewProvenance(unittest.TestCase):
         try:
             result = run([
                 "--review-file", path,
-                "--allowed-tiers", "crossProvider.capable,capable",
-                "--model-tiers", COMPLETE,
+                "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+                "--flow-config", COMPLETE,
             ])
             self.assertNotEqual(result.returncode, 0)
             data = json.loads(result.stderr)
@@ -102,8 +102,8 @@ class TestValidateReviewProvenance(unittest.TestCase):
         try:
             result = run([
                 "--review-file", path,
-                "--allowed-tiers", "crossProvider.capable,capable",
-                "--model-tiers", COMPLETE,
+                "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+                "--flow-config", COMPLETE,
             ])
             self.assertNotEqual(result.returncode, 0)
             data = json.loads(result.stderr)
@@ -111,15 +111,15 @@ class TestValidateReviewProvenance(unittest.TestCase):
         finally:
             os.unlink(path)
 
-    def test_missing_model_tiers_file(self):
+    def test_missing_flow_config_file(self):
         result = run([
             "--review-file", REVIEW_GOOD,
-            "--allowed-tiers", "crossProvider.capable,capable",
-            "--model-tiers", "/nonexistent/path/model-tiers.json",
+            "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+            "--flow-config", "/nonexistent/path/flow.json",
         ])
         self.assertNotEqual(result.returncode, 0)
         data = json.loads(result.stderr)
-        self.assertEqual(data["failure"], "model-tiers.json missing or unreadable")
+        self.assertEqual(data["failure"], "flow.json missing or unreadable")
 
 
 if __name__ == "__main__":

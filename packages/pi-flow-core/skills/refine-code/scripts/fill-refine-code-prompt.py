@@ -3,7 +3,7 @@
 fill-refine-code-prompt: Fill placeholders in the refine-code-prompt.md template.
 
 This script reads the refine-code-prompt.md template and replaces nine required
-placeholders with provided values. Text inputs (plan-goal, plan-contents, model-matrix)
+placeholders with provided values. Text inputs (plan-goal, plan-contents, flow-config)
 accept file paths or '-' for stdin. Other inputs (SHAs, paths, integers) are literal values.
 The carry-over-review input is a literal prior-review path or empty string.
 
@@ -30,11 +30,11 @@ Nine required placeholders:
   HEAD_SHA — post-implementation git SHA
   REVIEW_OUTPUT_PATH — path where reviewer will write the review file
   MAX_ITERATIONS — maximum number of review iterations
-  MODEL_MATRIX — JSON with model tier configurations
+  FLOW_CONFIG — JSON with the flow configuration (model tiers, dispatch maps, execution policy)
   WORKING_DIR — working directory for execution
   CARRY_OVER_REVIEW — prior era's review file path (empty string "" valid)
 
-Text inputs (plan-goal, plan-contents, model-matrix) accept file paths or '-' for stdin.
+Text inputs (plan-goal, plan-contents, flow-config) accept file paths or '-' for stdin.
 Other inputs are literal values. CARRY_OVER_REVIEW is passed through literally.
 
 Example:
@@ -45,7 +45,7 @@ Example:
     --head-sha def5678 \\
     --review-output-path review.md \\
     --max-iterations 5 \\
-    --model-matrix /path/to/models.json \\
+    --flow-config /path/to/flow.json \\
     --working-dir /work \\
     --carry-over-review /path/to/review.txt \\
     --output output.md
@@ -91,9 +91,9 @@ Example:
         help="Maximum number of review iterations"
     )
     parser.add_argument(
-        "--model-matrix",
+        "--flow-config",
         required=True,
-        help="Path to model matrix JSON, or '-' for stdin"
+        help="Path to flow config JSON, or '-' for stdin"
     )
     parser.add_argument(
         "--working-dir",
@@ -145,7 +145,7 @@ Example:
         # Read all inputs
         plan_goal = read_text_input(args.plan_goal, "plan-goal")
         plan_contents = read_text_input(args.plan_contents, "plan-contents")
-        model_matrix = read_text_input(args.model_matrix, "model-matrix")
+        flow_config = read_text_input(args.flow_config, "flow-config")
 
         # Carry-over review is a literal path string (or empty string).
         carry_over_review = args.carry_over_review
@@ -158,7 +158,7 @@ Example:
             "HEAD_SHA": args.head_sha,
             "REVIEW_OUTPUT_PATH": args.review_output_path,
             "MAX_ITERATIONS": str(args.max_iterations),
-            "MODEL_MATRIX": model_matrix,
+            "FLOW_CONFIG": flow_config,
             "WORKING_DIR": args.working_dir,
             "CARRY_OVER_REVIEW": carry_over_review,
         }

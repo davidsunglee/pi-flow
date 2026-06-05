@@ -143,9 +143,9 @@ def main():
         help="Comma-separated tier list for validate-review-provenance.py",
     )
     parser.add_argument(
-        "--model-tiers",
-        default="~/.pi/agent/model-tiers.json",
-        help="Path to model-tiers JSON for validate-review-provenance.py",
+        "--flow-config",
+        default="~/.pi/agent/flow.json",
+        help="Path to flow config JSON for validate-review-provenance.py",
     )
     args = parser.parse_args()
 
@@ -174,7 +174,7 @@ def main():
         str(VALIDATE_PROVENANCE),
         "--review-file", review_path,
         "--allowed-tiers", args.allowed_tiers,
-        "--model-tiers", args.model_tiers,
+        "--flow-config", args.flow_config,
     ])
 
     sections = split_markdown_sections(review_text, "###")

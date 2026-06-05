@@ -5,8 +5,8 @@ matches an allowed model tier.
 
 Inputs:
   --review-file    Path to the review markdown file
-  --allowed-tiers  Comma-separated tier paths (e.g. "crossProvider.capable,capable")
-  --model-tiers    Path to model-tiers JSON file (default: ~/.pi/agent/model-tiers.json)
+  --allowed-tiers  Comma-separated tier paths (e.g. "crossProviderModelTiers.capable,modelTiers.capable")
+  --flow-config    Path to flow config JSON file (default: ~/.pi/agent/flow.json)
 
 Outputs (stdout, JSON on success):
   {"provider_model": "<provider>/<model>", "cli": "<cli>", "matched_tier": "<tier>"}
@@ -16,7 +16,7 @@ Failure labels (written to stderr as JSON {"failure": "<label>"}, exit 1):
   format mismatch
   inline-substring forbidden
   model/cli mismatch (expected <pairs> got <observed>)
-  model-tiers.json missing or unreadable
+  flow.json missing or unreadable
 """
 import argparse
 import json
@@ -54,19 +54,19 @@ def main():
             "  format mismatch\n"
             "  inline-substring forbidden\n"
             "  model/cli mismatch (expected <pairs> got <observed>)\n"
-            "  model-tiers.json missing or unreadable\n"
+            "  flow.json missing or unreadable\n"
         ),
     )
     parser.add_argument("--review-file", required=True, help="Path to the review markdown file")
     parser.add_argument(
         "--allowed-tiers",
         required=True,
-        help="Comma-separated tier paths (e.g. 'crossProvider.capable,capable')",
+        help="Comma-separated tier paths (e.g. 'crossProviderModelTiers.capable,modelTiers.capable')",
     )
     parser.add_argument(
-        "--model-tiers",
-        default="~/.pi/agent/model-tiers.json",
-        help="Path to model-tiers JSON file (default: ~/.pi/agent/model-tiers.json)",
+        "--flow-config",
+        default="~/.pi/agent/flow.json",
+        help="Path to flow config JSON file (default: ~/.pi/agent/flow.json)",
     )
     args = parser.parse_args()
 
@@ -99,14 +99,14 @@ def main():
     observed_model = parts[0]
     observed_cli = parts[1]
 
-    path = os.path.expanduser(args.model_tiers)
+    path = os.path.expanduser(args.flow_config)
     try:
         with open(path) as f:
             data = json.load(f)
     except (IOError, OSError, json.JSONDecodeError):
-        fail("model-tiers.json missing or unreadable")
+        fail("flow.json missing or unreadable")
 
-    dispatch = data.get("dispatch", {})
+    dispatch = data.get("subagentDispatch", {})
     tiers = [t.strip() for t in args.allowed_tiers.split(",") if t.strip()]
 
     expected_pairs = []
