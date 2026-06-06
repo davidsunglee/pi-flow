@@ -119,9 +119,11 @@ def main():
 
     for tier in tiers:
         resolved_model = resolve_tier(data, tier)
-        if not resolved_model:
+        if not isinstance(resolved_model, str) or "/" not in resolved_model:
             continue
-        provider = resolved_model.split("/", 1)[0]
+        provider, _, model_suffix = resolved_model.partition("/")
+        if not provider or not model_suffix:
+            continue
         expected_cli = dispatch.get(provider)
         if not expected_cli:
             continue

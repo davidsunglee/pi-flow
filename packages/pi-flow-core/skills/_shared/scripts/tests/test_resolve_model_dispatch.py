@@ -94,6 +94,86 @@ class TestResolveModelDispatch(unittest.TestCase):
         finally:
             os.unlink(tmp_path)
 
+    def test_template_2_non_string_tier_value(self):
+        data = {
+            "modelTiers": {"capable": 42},
+            "subagentDispatch": {"anthropic": "claude"},
+            "executionPolicy": "guarded",
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(data, f)
+            tmp_path = f.name
+        try:
+            result = run(["--tier", "modelTiers.capable", "--agent", "coder", "--flow-config", tmp_path])
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(
+                result.stderr,
+                'flow.json has no usable "modelTiers.capable" model — cannot dispatch coder.\n',
+            )
+            self.assertNotIn("Traceback", result.stderr)
+        finally:
+            os.unlink(tmp_path)
+
+    def test_template_2_slashless_tier_value(self):
+        data = {
+            "modelTiers": {"capable": "claude-opus-4-7"},
+            "subagentDispatch": {"claude-opus-4-7": "claude"},
+            "executionPolicy": "guarded",
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(data, f)
+            tmp_path = f.name
+        try:
+            result = run(["--tier", "modelTiers.capable", "--agent", "coder", "--flow-config", tmp_path])
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(
+                result.stderr,
+                'flow.json has no usable "modelTiers.capable" model — cannot dispatch coder.\n',
+            )
+            self.assertNotIn("Traceback", result.stderr)
+        finally:
+            os.unlink(tmp_path)
+
+    def test_template_2_empty_provider_prefix(self):
+        data = {
+            "modelTiers": {"capable": "/claude-opus-4-7"},
+            "subagentDispatch": {"": "claude"},
+            "executionPolicy": "guarded",
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(data, f)
+            tmp_path = f.name
+        try:
+            result = run(["--tier", "modelTiers.capable", "--agent", "coder", "--flow-config", tmp_path])
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(
+                result.stderr,
+                'flow.json has no usable "modelTiers.capable" model — cannot dispatch coder.\n',
+            )
+            self.assertNotIn("Traceback", result.stderr)
+        finally:
+            os.unlink(tmp_path)
+
+    def test_template_2_empty_model_suffix(self):
+        data = {
+            "modelTiers": {"capable": "anthropic/"},
+            "subagentDispatch": {"anthropic": "claude"},
+            "executionPolicy": "guarded",
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(data, f)
+            tmp_path = f.name
+        try:
+            result = run(["--tier", "modelTiers.capable", "--agent", "coder", "--flow-config", tmp_path])
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(
+                result.stderr,
+                'flow.json has no usable "modelTiers.capable" model — cannot dispatch coder.\n',
+            )
+            self.assertNotIn("Traceback", result.stderr)
+        finally:
+            os.unlink(tmp_path)
+
     def test_template_3_missing_dispatch(self):
         result = run(["--tier", "modelTiers.capable", "--agent", "coder", "--flow-config", NO_DISPATCH])
         self.assertNotEqual(result.returncode, 0)

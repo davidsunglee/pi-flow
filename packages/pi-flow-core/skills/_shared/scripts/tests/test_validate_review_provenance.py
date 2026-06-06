@@ -162,5 +162,86 @@ class TestValidateReviewProvenance(unittest.TestCase):
             os.unlink(tmp_path)
 
 
+    def test_non_string_tier_value_skipped(self):
+        # Cross-provider tier has bogus non-string value; modelTiers.capable should still match.
+        data = {
+            "modelTiers": {"capable": "anthropic/claude-opus-4-7"},
+            "crossProviderModelTiers": {"capable": 42},
+            "subagentDispatch": {"anthropic": "claude"},
+            "executionPolicy": "guarded",
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as cf:
+            json.dump(data, cf)
+            cf_path = cf.name
+        review_path = write_review("**Reviewer:** anthropic/claude-opus-4-7 via claude\n\n## Outcome\n\nGood.\n")
+        try:
+            result = run([
+                "--review-file", review_path,
+                "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+                "--flow-config", cf_path,
+            ])
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertEqual(result.returncode, 0)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["matched_tier"], "modelTiers.capable")
+        finally:
+            os.unlink(cf_path)
+            os.unlink(review_path)
+
+    def test_slashless_tier_value_skipped(self):
+        data = {
+            "modelTiers": {"capable": "anthropic/claude-opus-4-7"},
+            "crossProviderModelTiers": {"capable": "bogus-no-slash"},
+            "subagentDispatch": {"anthropic": "claude", "bogus-no-slash": "pi"},
+            "executionPolicy": "guarded",
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as cf:
+            json.dump(data, cf)
+            cf_path = cf.name
+        # Observed line uses the bogus slashless model — should NOT match.
+        review_path = write_review("**Reviewer:** bogus-no-slash via pi\n\n## Outcome\n\nBad.\n")
+        try:
+            result = run([
+                "--review-file", review_path,
+                "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+                "--flow-config", cf_path,
+            ])
+            # First line won't match REVIEWER_RE (no slash in model) → format mismatch.
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertNotEqual(result.returncode, 0)
+            payload = json.loads(result.stderr)
+            # Either format mismatch (caught at regex) is fine; the key is no traceback.
+            self.assertIn(payload["failure"], ("format mismatch",))
+        finally:
+            os.unlink(cf_path)
+            os.unlink(review_path)
+
+    def test_slashless_allowed_tier_does_not_crash(self):
+        # Slashless value in an allowed tier should be skipped, falling back to other tiers.
+        data = {
+            "modelTiers": {"capable": "anthropic/claude-opus-4-7"},
+            "crossProviderModelTiers": {"capable": "bogus-no-slash"},
+            "subagentDispatch": {"anthropic": "claude"},
+            "executionPolicy": "guarded",
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as cf:
+            json.dump(data, cf)
+            cf_path = cf.name
+        review_path = write_review("**Reviewer:** anthropic/claude-opus-4-7 via claude\n\n## Outcome\n\nGood.\n")
+        try:
+            result = run([
+                "--review-file", review_path,
+                "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+                "--flow-config", cf_path,
+            ])
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertEqual(result.returncode, 0)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["matched_tier"], "modelTiers.capable")
+        finally:
+            os.unlink(cf_path)
+            os.unlink(review_path)
+
+
 if __name__ == "__main__":
     unittest.main()

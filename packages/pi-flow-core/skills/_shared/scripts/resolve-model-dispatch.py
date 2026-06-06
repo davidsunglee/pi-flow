@@ -86,14 +86,16 @@ def main():
         die(f'flow.json has no usable "{args.tier}" model — cannot dispatch {args.agent}.')
 
     model = resolve_tier(data, args.tier)
-    if not model:
+    if not isinstance(model, str) or "/" not in model:
+        die(f'flow.json has no usable "{args.tier}" model — cannot dispatch {args.agent}.')
+    provider, _, model_suffix = model.partition("/")
+    if not provider or not model_suffix:
         die(f'flow.json has no usable "{args.tier}" model — cannot dispatch {args.agent}.')
 
     dispatch = data.get("subagentDispatch")
     if not isinstance(dispatch, dict) or not dispatch:
         die(f"flow.json has no subagentDispatch map — cannot dispatch {args.agent}.")
 
-    provider = model.split("/", 1)[0]
     cli = dispatch.get(provider)
     if not cli:
         die(
