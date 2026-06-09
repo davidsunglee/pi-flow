@@ -49,6 +49,8 @@ MARKER_FILES = [
 REPORT_FILES = [
     "packages/pi-flow-core/agents/coder.md",
     "packages/pi-flow-core/agents/verifier.md",
+    "packages/pi-flow-core/agents/code-refiner.md",
+    "packages/pi-flow-core/agents/plan-refiner.md",
 ]
 
 ALL_RUNTIME_FILES = MARKER_FILES + REPORT_FILES
