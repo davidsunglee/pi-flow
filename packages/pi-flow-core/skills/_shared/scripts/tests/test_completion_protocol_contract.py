@@ -66,6 +66,23 @@ REPORT_FILES = [
 
 ALL_RUNTIME_FILES = MARKER_FILES + REPORT_FILES
 
+# Task prompt templates dispatched to subagents at runtime. They do not embed the
+# canonical completion-protocol block themselves (their workers inherit it from the
+# agent definitions above), so they are excluded from the byte-equality managed-region
+# and required-phrase checks. They MUST still be scanned for forbidden final-answer-first
+# wording so a regression in any dispatched prompt fails this suite.
+TASK_PROMPT_FILES = [
+    "packages/pi-flow-core/skills/execute-plan/execute-task-prompt.md",
+    "packages/pi-flow-core/skills/execute-plan/verify-task-prompt.md",
+    "packages/pi-flow-core/skills/fastlane/fastlane-coder-prompt.md",
+    "packages/pi-flow-core/skills/generate-plan/edit-plan-prompt.md",
+    "packages/pi-flow-core/skills/refine-code/refine-code-prompt.md",
+    "packages/pi-flow-core/skills/refine-plan/refine-plan-prompt.md",
+]
+
+# Every runtime-dispatched subagent prompt that must avoid final-answer-first wording.
+FORBIDDEN_SCAN_FILES = ALL_RUNTIME_FILES + TASK_PROMPT_FILES
+
 # Final-answer-first wording: phrasings that describe the final assistant
 # message as the completion act, with the tool call as an afterthought.
 # Codex emits a terminal final answer and stops before the tool call when
@@ -127,8 +144,18 @@ class TestSharedSnippetExists(unittest.TestCase):
 
 
 class TestNoFinalAnswerFirstWording(unittest.TestCase):
+    def test_scanned_task_prompts_exist(self):
+        # A rename that drops a dispatched prompt from the scan must fail loudly
+        # rather than silently shrinking forbidden-wording coverage.
+        for rel_path in TASK_PROMPT_FILES:
+            with self.subTest(file=rel_path):
+                self.assertTrue(
+                    os.path.isfile(os.path.join(REPO_ROOT, rel_path)),
+                    msg=f"runtime task prompt {rel_path} is missing from the repo",
+                )
+
     def test_runtime_files_and_snippet_avoid_final_answer_first_wording(self):
-        for rel_path in ALL_RUNTIME_FILES + [SHARED_SNIPPET]:
+        for rel_path in FORBIDDEN_SCAN_FILES + [SHARED_SNIPPET]:
             body = read(rel_path)
             for label, pattern in FORBIDDEN_PATTERNS:
                 with self.subTest(file=rel_path, forbidden=label):
