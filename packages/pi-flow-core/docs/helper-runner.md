@@ -198,6 +198,17 @@ fi
 
 ---
 
+## Diagnosing version skew
+
+If helpers or templates resolve from a different `pi-flow` install than the one
+running the active skills, use `/flow:doctor` to identify the skew and
+optionally repoint the managed links. See
+[version-alignment.md](version-alignment.md) for the full procedure, including
+verifying the active version, pinning vs floating, local-checkout workflows,
+and the `--fix`/`--source` target forms.
+
+---
+
 ## Bootstrapping the `pi-flow` shim via `/flow:setup`
 
 Pi package installs (especially `pi install git:...`) often do not expose a
