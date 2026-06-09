@@ -1,0 +1,1596 @@
+PHASE: final-gate
+COMMAND: pnpm --filter @aphotic/pi-flow-core run check
+WORKING_DIRECTORY: /Users/david/Code/pi-flow
+EXIT_CODE: 0
+TIMESTAMP: 2026-06-09T00:00:00Z
+FAILING_IDENTIFIERS_COUNT: 0
+FAILING_IDENTIFIERS:
+END_FAILING_IDENTIFIERS
+NON_RECONCILABLE_COUNT: 0
+NON_RECONCILABLE_FAILURES:
+END_NON_RECONCILABLE_FAILURES
+
+--- RAW RUN OUTPUT BELOW ---
+$ pnpm run typecheck && pnpm run test
+$ tsc --noEmit
+$ pnpm run test:node && pnpm run test:helpers
+$ find bin __tests__ extensions \( -name '*.test.mjs' -o -name '*.test.ts' \) -print0 | xargs -0 node --experimental-strip-types --test --test-reporter tap
+TAP version 13
+# Subtest: fastlane customize submenu options are preserved
+ok 1 - fastlane customize submenu options are preserved
+  ---
+  duration_ms: 1.613375
+  type: 'test'
+  ...
+# Subtest: fastlane BLOCKED handler banner is preserved
+ok 2 - fastlane BLOCKED handler banner is preserved
+  ---
+  duration_ms: 0.980583
+  type: 'test'
+  ...
+# Subtest: scout commit gate menu is preserved
+ok 3 - scout commit gate menu is preserved
+  ---
+  duration_ms: 0.217791
+  type: 'test'
+  ...
+# Subtest: define-spec spec-design-procedure missing-file error is preserved
+ok 4 - define-spec spec-design-procedure missing-file error is preserved
+  ---
+  duration_ms: 0.294125
+  type: 'test'
+  ...
+# Subtest: dispatch-contract canonical leaf templates 1 through 5 are preserved byte-equal
+ok 5 - dispatch-contract canonical leaf templates 1 through 5 are preserved byte-equal
+  ---
+  duration_ms: 0.221042
+  type: 'test'
+  ...
+# Subtest: refine-code STATUS handlers are preserved
+ok 6 - refine-code STATUS handlers are preserved
+  ---
+  duration_ms: 0.21075
+  type: 'test'
+  ...
+# Subtest: execute-plan verifier-dispatch boundary blockquote is preserved
+ok 7 - execute-plan verifier-dispatch boundary blockquote is preserved
+  ---
+  duration_ms: 0.486166
+  type: 'test'
+  ...
+# Subtest: execute-plan intermediate-wave failure menu choices are preserved byte-for-byte
+ok 8 - execute-plan intermediate-wave failure menu choices are preserved byte-for-byte
+  ---
+  duration_ms: 0.135125
+  type: 'test'
+  ...
+# Subtest: execute-plan final-wave failure menu choices are preserved byte-for-byte
+ok 9 - execute-plan final-wave failure menu choices are preserved byte-for-byte
+  ---
+  duration_ms: 0.094167
+  type: 'test'
+  ...
+# Subtest: execute-plan expected-failure skip path is conservative and intermediate-wave only
+ok 10 - execute-plan expected-failure skip path is conservative and intermediate-wave only
+  ---
+  duration_ms: 0.187667
+  type: 'test'
+  ...
+# Subtest: refine-plan coverage-gate error is preserved
+ok 11 - refine-plan coverage-gate error is preserved
+  ---
+  duration_ms: 0.307041
+  type: 'test'
+  ...
+# Subtest: dispatch-contract coordinator templates are preserved byte-equal
+ok 12 - dispatch-contract coordinator templates are preserved byte-equal
+  ---
+  duration_ms: 0.089125
+  type: 'test'
+  ...
+# Subtest: old four-tier coordinator chain strings are gone
+ok 13 - old four-tier coordinator chain strings are gone
+  ---
+  duration_ms: 0.202292
+  type: 'test'
+  ...
+# Subtest: refine skill flow-config stop strings are preserved byte-equal
+ok 14 - refine skill flow-config stop strings are preserved byte-equal
+  ---
+  duration_ms: 2.844
+  type: 'test'
+  ...
+# Subtest: legacy flow configuration naming is absent from package source
+ok 15 - legacy flow configuration naming is absent from package source
+  ---
+  duration_ms: 35.917625
+  type: 'test'
+  ...
+# Subtest: idea-tool-only: packaged extensions register only the built-in `idea` tool — no external `todo` tool required for idea-artifact state
+    # Subtest: registers `flow:ideas` command and `idea` tool — no `todo` or `flow:todo` registrations
+    ok 1 - registers `flow:ideas` command and `idea` tool — no `todo` or `flow:todo` registrations
+      ---
+      duration_ms: 0.407833
+      type: 'test'
+      ...
+    # Subtest: generate-plan orchestration prerequisite: skill reads idea bodies via the built-in `idea` tool (no external `todo` tool referenced)
+    ok 2 - generate-plan orchestration prerequisite: skill reads idea bodies via the built-in `idea` tool (no external `todo` tool referenced)
+      ---
+      duration_ms: 30.116333
+      type: 'test'
+      ...
+    # Subtest: execute-plan orchestration end-to-end: Step 16.2 'close linked idea' path round-trips an IDEA-<id> through the `idea` tool's read + update with only the built-in `idea` tool registered
+    ok 3 - execute-plan orchestration end-to-end: Step 16.2 'close linked idea' path round-trips an IDEA-<id> through the `idea` tool's read + update with only the built-in `idea` tool registered
+      ---
+      duration_ms: 180.502625
+      type: 'test'
+      ...
+    1..3
+ok 16 - idea-tool-only: packaged extensions register only the built-in `idea` tool — no external `todo` tool required for idea-artifact state
+  ---
+  duration_ms: 226.419
+  type: 'test'
+  ...
+# Subtest: package.json identifies pi-flow-core as a pi-package
+ok 17 - package.json identifies pi-flow-core as a pi-package
+  ---
+  duration_ms: 1.417917
+  type: 'test'
+  ...
+# Subtest: pi.extensions manifest lists extensions/commands.ts and the file exists on disk
+ok 18 - pi.extensions manifest lists extensions/commands.ts and the file exists on disk
+  ---
+  duration_ms: 2.555125
+  type: 'test'
+  ...
+# Subtest: pi.skills glob matches exactly 15 SKILL.md files
+ok 19 - pi.skills glob matches exactly 15 SKILL.md files
+  ---
+  duration_ms: 1.842458
+  type: 'test'
+  ...
+# Subtest: web-browser skill is absent
+ok 20 - web-browser skill is absent
+  ---
+  duration_ms: 0.106083
+  type: 'test'
+  ...
+# Subtest: bundled agents directory has exactly 10 required files
+ok 21 - bundled agents directory has exactly 10 required files
+  ---
+  duration_ms: 0.190292
+  type: 'test'
+  ...
+# Subtest: no python3 agent/skills shell invocations remain
+ok 22 - no python3 agent/skills shell invocations remain
+  ---
+  duration_ms: 16.783333
+  type: 'test'
+  ...
+# Subtest: no python3 ~/.pi/agent/skills shell invocations remain
+ok 23 - no python3 ~/.pi/agent/skills shell invocations remain
+  ---
+  duration_ms: 4.891083
+  type: 'test'
+  ...
+# Subtest: every pi-flow helper id in skill markdown has exactly one slash and resolves on disk
+ok 24 - every pi-flow helper id in skill markdown has exactly one slash and resolves on disk
+  ---
+  duration_ms: 4.233833
+  type: 'test'
+  ...
+# Subtest: helper-runner invocations exist in every path-rewritten skill
+ok 25 - helper-runner invocations exist in every path-rewritten skill
+  ---
+  duration_ms: 0.286917
+  type: 'test'
+  ...
+# Subtest: excluded artifacts are absent
+ok 26 - excluded artifacts are absent
+  ---
+  duration_ms: 5.330917
+  type: 'test'
+  ...
+# Subtest: bin entry is executable and starts with node shebang
+ok 27 - bin entry is executable and starts with node shebang
+  ---
+  duration_ms: 0.108667
+  type: 'test'
+  ...
+# Subtest: pi-flow-core ships no UX manifest entries or UX source directories
+ok 28 - pi-flow-core ships no UX manifest entries or UX source directories
+  ---
+  duration_ms: 0.28725
+  type: 'test'
+  ...
+# Subtest: package.json declares no install-time side-effect scripts
+ok 29 - package.json declares no install-time side-effect scripts
+  ---
+  duration_ms: 0.132166
+  type: 'test'
+  ...
+# Subtest: package scripts do not contain shell cleanup forms that can consume forwarded args
+ok 30 - package scripts do not contain shell cleanup forms that can consume forwarded args
+  ---
+  duration_ms: 0.369292
+  type: 'test'
+  ...
+# Subtest: test:helpers uses the dedicated TypeScript helper-test runner
+ok 31 - test:helpers uses the dedicated TypeScript helper-test runner
+  ---
+  duration_ms: 0.12375
+  type: 'test'
+  ...
+# Subtest: helper-test runner rejects forwarded positional args before cleanup can run
+ok 32 - helper-test runner rejects forwarded positional args before cleanup can run
+  ---
+  duration_ms: 179.118875
+  type: 'test'
+  ...
+# Subtest: peerDependencies declares @earendil-works/pi-coding-agent
+ok 33 - peerDependencies declares @earendil-works/pi-coding-agent
+  ---
+  duration_ms: 0.1825
+  type: 'test'
+  ...
+# Subtest: ideas.json packaged config ships and declares the flow:ideas command with the four workflow actions
+ok 34 - ideas.json packaged config ships and declares the flow:ideas command with the four workflow actions
+  ---
+  duration_ms: 0.282083
+  type: 'test'
+  ...
+# Subtest: pi-flow-core depends on @aphotic/pi-ideas and no longer declares typebox
+ok 35 - pi-flow-core depends on @aphotic/pi-ideas and no longer declares typebox
+  ---
+  duration_ms: 0.172292
+  type: 'test'
+  ...
+# Subtest: files array includes extensions
+ok 36 - files array includes extensions
+  ---
+  duration_ms: 0.164875
+  type: 'test'
+  ...
+# Subtest: pi manifest skills glob matches actual SKILL.md placement
+ok 37 - pi manifest skills glob matches actual SKILL.md placement
+  ---
+  duration_ms: 0.43475
+  type: 'test'
+  ...
+# Subtest: pi CLI discovery probe
+ok 38 - pi CLI discovery probe
+  ---
+  duration_ms: 1645.549375
+  type: 'test'
+  ...
+# Subtest: packlist includes required files
+ok 39 - packlist includes required files
+  ---
+  duration_ms: 682.961459
+  type: 'test'
+  ...
+# Subtest: packlist excludes test and build artifacts
+ok 40 - packlist excludes test and build artifacts
+  ---
+  duration_ms: 428.4675
+  type: 'test'
+  ...
+# Subtest: --help exits 0 and mentions helper and template
+ok 41 - --help exits 0 and mentions helper and template
+  ---
+  duration_ms: 103.460791
+  type: 'test'
+  ...
+# Subtest: -h exits 0 and mentions helper and template
+ok 42 - -h exits 0 and mentions helper and template
+  ---
+  duration_ms: 103.851833
+  type: 'test'
+  ...
+# Subtest: no subcommand exits 2
+ok 43 - no subcommand exits 2
+  ---
+  duration_ms: 90.156625
+  type: 'test'
+  ...
+# Subtest: unknown subcommand exits 2
+ok 44 - unknown subcommand exits 2
+  ---
+  duration_ms: 81.795333
+  type: 'test'
+  ...
+# Subtest: helper with no id exits 2 with missing resource id JSON
+ok 45 - helper with no id exits 2 with missing resource id JSON
+  ---
+  duration_ms: 97.506167
+  type: 'test'
+  ...
+# Subtest: helper with unknown id exits non-zero with unknown helper JSON
+ok 46 - helper with unknown id exits non-zero with unknown helper JSON
+  ---
+  duration_ms: 70.219833
+  type: 'test'
+  ...
+# Subtest: template with no id exits 2 with missing resource id JSON
+ok 47 - template with no id exits 2 with missing resource id JSON
+  ---
+  duration_ms: 94.005917
+  type: 'test'
+  ...
+# Subtest: template with unknown id exits non-zero with unknown template JSON
+ok 48 - template with unknown id exits non-zero with unknown template JSON
+  ---
+  duration_ms: 88.656208
+  type: 'test'
+  ...
+# Subtest: helper rejects id with .. segment
+ok 49 - helper rejects id with .. segment
+  ---
+  duration_ms: 66.484833
+  type: 'test'
+  ...
+# Subtest: helper rejects id with leading slash
+ok 50 - helper rejects id with leading slash
+  ---
+  duration_ms: 79.585
+  type: 'test'
+  ...
+# Subtest: template rejects id with .. segment
+ok 51 - template rejects id with .. segment
+  ---
+  duration_ms: 74.701833
+  type: 'test'
+  ...
+# Subtest: pi-loader-smoke: pi loader discovers the commands extension with 10 flow commands and the idea tool
+ok 52 - pi-loader-smoke: pi loader discovers the commands extension with 10 flow commands and the idea tool
+  ---
+  duration_ms: 14.020084
+  type: 'test'
+  ...
+# Subtest: setup + dispatch smoke
+    # Subtest: @aphotic/pi-mux-subagents extension is resolved from packages/pi-flow-core/node_modules and DefaultResourceLoader loads both extensions with errors === []
+    ok 1 - @aphotic/pi-mux-subagents extension is resolved from packages/pi-flow-core/node_modules and DefaultResourceLoader loads both extensions with errors === []
+      ---
+      duration_ms: 0.805084
+      type: 'test'
+      ...
+    # Subtest: /flow:setup --target project creates symlinks in <sandbox>/.pi/agents/ and every pi-flow-core/agents/*.md source has a corresponding symlink whose realpath resolves back into the package
+    ok 2 - /flow:setup --target project creates symlinks in <sandbox>/.pi/agents/ and every pi-flow-core/agents/*.md source has a corresponding symlink whose realpath resolves back into the package
+      ---
+      duration_ms: 23.742875
+      type: 'test'
+      ...
+    # Subtest: reading a linked agent file through the symlink returns YAML frontmatter with name: scout and a description field
+    ok 3 - reading a linked agent file through the symlink returns YAML frontmatter with name: scout and a description field
+      ---
+      duration_ms: 0.376666
+      type: 'test'
+      ...
+    # Subtest: the loaded @aphotic/pi-mux-subagents extension registers a subagent_run* primitive and its discovery accessor lists a superset of the linked project agents
+    ok 4 - the loaded @aphotic/pi-mux-subagents extension registers a subagent_run* primitive and its discovery accessor lists a superset of the linked project agents
+      ---
+      duration_ms: 0.157
+      type: 'test'
+      ...
+    # Subtest: a workflow command (/flow:scout) invocation with IDEA-abcd1234 produces exactly one pi.sendUserMessage call with the byte-equal dispatch body
+    ok 5 - a workflow command (/flow:scout) invocation with IDEA-abcd1234 produces exactly one pi.sendUserMessage call with the byte-equal dispatch body
+      ---
+      duration_ms: 0.218667
+      type: 'test'
+      ...
+    # Subtest: a second /flow:setup run reports all entries as skipped
+    ok 6 - a second /flow:setup run reports all entries as skipped
+      ---
+      duration_ms: 21.239625
+      type: 'test'
+      ...
+    1..6
+ok 53 - setup + dispatch smoke
+  ---
+  duration_ms: 124.479542
+  type: 'test'
+  ...
+# Subtest: helper-runner
+    # Subtest: helper resolves known shared script and forwards exit code
+    ok 1 - helper resolves known shared script and forwards exit code
+      ---
+      duration_ms: 149.734208
+      type: 'test'
+      ...
+    # Subtest: helper resolves known per-skill script
+    ok 2 - helper resolves known per-skill script
+      ---
+      duration_ms: 149.21
+      type: 'test'
+      ...
+    # Subtest: helper rejects unknown shared id
+    ok 3 - helper rejects unknown shared id
+      ---
+      duration_ms: 74.351167
+      type: 'test'
+      ...
+    # Subtest: helper rejects unknown per-skill id
+    ok 4 - helper rejects unknown per-skill id
+      ---
+      duration_ms: 112.874875
+      type: 'test'
+      ...
+    # Subtest: helper rejects malformed id with no slash
+    ok 5 - helper rejects malformed id with no slash
+      ---
+      duration_ms: 81.178291
+      type: 'test'
+      ...
+    # Subtest: helper rejects id with .. traversal
+    ok 6 - helper rejects id with .. traversal
+      ---
+      duration_ms: 104.299208
+      type: 'test'
+      ...
+    # Subtest: helper rejects id with absolute path segment
+    ok 7 - helper rejects id with absolute path segment
+      ---
+      duration_ms: 67.548667
+      type: 'test'
+      ...
+    # Subtest: template resolves shared markdown
+    ok 8 - template resolves shared markdown
+      ---
+      duration_ms: 86.283375
+      type: 'test'
+      ...
+    # Subtest: template resolves per-skill markdown
+    ok 9 - template resolves per-skill markdown
+      ---
+      duration_ms: 72.45425
+      type: 'test'
+      ...
+    # Subtest: template rejects unknown id
+    ok 10 - template rejects unknown id
+      ---
+      duration_ms: 76.784291
+      type: 'test'
+      ...
+    # Subtest: help command exits zero and prints both subcommand names
+    ok 11 - help command exits zero and prints both subcommand names
+      ---
+      duration_ms: 64.043333
+      type: 'test'
+      ...
+    # Subtest: unknown subcommand exits non-zero
+    ok 12 - unknown subcommand exits non-zero
+      ---
+      duration_ms: 58.548583
+      type: 'test'
+      ...
+    # Subtest: helper invocation writes no __pycache__ under skills/ even when caller env lacks PYTHONDONTWRITEBYTECODE
+    ok 13 - helper invocation writes no __pycache__ under skills/ even when caller env lacks PYTHONDONTWRITEBYTECODE
+      ---
+      duration_ms: 92.118958
+      type: 'test'
+      ...
+    1..13
+ok 54 - helper-runner
+  ---
+  duration_ms: 1196.774458
+  type: 'test'
+  ...
+# Subtest: default extension entry point registers exactly the flow commands and idea tool
+ok 55 - default extension entry point registers exactly the flow commands and idea tool
+  ---
+  duration_ms: 2.02525
+  type: 'test'
+  ...
+# Subtest: classifySurface: returns each classification for crafted inputs
+ok 56 - classifySurface: returns each classification for crafted inputs
+  ---
+  duration_ms: 0.73425
+  type: 'test'
+  ...
+# Subtest: isLocalDevCheckout: a checkout under cwd with no install segment is local-dev
+ok 57 - isLocalDevCheckout: a checkout under cwd with no install segment is local-dev
+  ---
+  duration_ms: 0.056125
+  type: 'test'
+  ...
+# Subtest: parseDeclaredPackages: parses the live two-entry shape (object npm floating + bare local)
+ok 58 - parseDeclaredPackages: parses the live two-entry shape (object npm floating + bare local)
+  ---
+  duration_ms: 0.633333
+  type: 'test'
+  ...
+# Subtest: parseDeclaredPackages: marks an explicit @version npm spec as pinned
+ok 59 - parseDeclaredPackages: marks an explicit @version npm spec as pinned
+  ---
+  duration_ms: 0.069209
+  type: 'test'
+  ...
+# Subtest: parseDeclaredPackages: returns [] when packages is absent or not an array
+ok 60 - parseDeclaredPackages: returns [] when packages is absent or not an array
+  ---
+  duration_ms: 0.047125
+  type: 'test'
+  ...
+# Subtest: buildDiagnosis: helper shim to a stale core yields stale-skew and hasSkew=true
+ok 61 - buildDiagnosis: helper shim to a stale core yields stale-skew and hasSkew=true
+  ---
+  duration_ms: 54.097666
+  type: 'test'
+  ...
+# Subtest: buildDiagnosis: helper shim and agents resolving to active yields hasSkew=false
+ok 62 - buildDiagnosis: helper shim and agents resolving to active yields hasSkew=false
+  ---
+  duration_ms: 11.236958
+  type: 'test'
+  ...
+# Subtest: buildDiagnosis: a checkout under cwd (no node_modules) is local-dev and not skew
+ok 63 - buildDiagnosis: a checkout under cwd (no node_modules) is local-dev and not skew
+  ---
+  duration_ms: 15.76225
+  type: 'test'
+  ...
+# Subtest: renderReport: names the active package and emits the SKEW verdict when skewed
+ok 64 - renderReport: names the active package and emits the SKEW verdict when skewed
+  ---
+  duration_ms: 28.488416
+  type: 'test'
+  ...
+# Subtest: renderReport: emits the OK verdict when nothing is skewed
+ok 65 - renderReport: emits the OK verdict when nothing is skewed
+  ---
+  duration_ms: 7.635625
+  type: 'test'
+  ...
+# Subtest: resolveBinToCore: follows an aggregate wrapper .bin symlink to the delegated core
+ok 66 - resolveBinToCore: follows an aggregate wrapper .bin symlink to the delegated core
+  ---
+  duration_ms: 5.630084
+  type: 'test'
+  ...
+# Subtest: resolveReconcileTarget: a single distinct root returns ok with the active target
+ok 67 - resolveReconcileTarget: a single distinct root returns ok with the active target
+  ---
+  duration_ms: 0.213167
+  type: 'test'
+  ...
+# Subtest: resolveReconcileTarget: two distinct roots (npm + checkout) returns ambiguous with both candidates
+ok 68 - resolveReconcileTarget: two distinct roots (npm + checkout) returns ambiguous with both candidates
+  ---
+  duration_ms: 0.090542
+  type: 'test'
+  ...
+# Subtest: validateExplicitTarget: accepts a seeded core root
+ok 69 - validateExplicitTarget: accepts a seeded core root
+  ---
+  duration_ms: 2.193542
+  type: 'test'
+  ...
+# Subtest: validateExplicitTarget: accepts a directory with a single descent core
+ok 70 - validateExplicitTarget: accepts a directory with a single descent core
+  ---
+  duration_ms: 2.180542
+  type: 'test'
+  ...
+# Subtest: validateExplicitTarget: a non-existent path reports target path does not exist
+ok 71 - validateExplicitTarget: a non-existent path reports target path does not exist
+  ---
+  duration_ms: 0.599375
+  type: 'test'
+  ...
+# Subtest: validateExplicitTarget: a dir that is not a core with no descents reports not usable
+ok 72 - validateExplicitTarget: a dir that is not a core with no descents reports not usable
+  ---
+  duration_ms: 0.887166
+  type: 'test'
+  ...
+# Subtest: validateExplicitTarget: a dir with two descent cores reports multiple pi-flow-core packages
+ok 73 - validateExplicitTarget: a dir with two descent cores reports multiple pi-flow-core packages
+  ---
+  duration_ms: 4.067917
+  type: 'test'
+  ...
+# Subtest: repairLink: an absent link is created and points at the target
+ok 74 - repairLink: an absent link is created and points at the target
+  ---
+  duration_ms: 1.774541
+  type: 'test'
+  ...
+# Subtest: repairLink: an already-correct link is skipped
+ok 75 - repairLink: an already-correct link is skipped
+  ---
+  duration_ms: 1.774542
+  type: 'test'
+  ...
+# Subtest: repairLink: a stale-skew symlink is repaired and repointed at the target
+ok 76 - repairLink: a stale-skew symlink is repaired and repointed at the target
+  ---
+  duration_ms: 5.992917
+  type: 'test'
+  ...
+# Subtest: repairLink: a symlink into a local-dev checkout is preserved and left unchanged
+ok 77 - repairLink: a symlink into a local-dev checkout is preserved and left unchanged
+  ---
+  duration_ms: 4.309083
+  type: 'test'
+  ...
+# Subtest: repairLink: a symlink to a non-pi-flow target is a conflict and left unchanged
+ok 78 - repairLink: a symlink to a non-pi-flow target is a conflict and left unchanged
+  ---
+  duration_ms: 8.657375
+  type: 'test'
+  ...
+# Subtest: repairLink: a real file at the path is a conflict and its contents are unchanged
+ok 79 - repairLink: a real file at the path is a conflict and its contents are unchanged
+  ---
+  duration_ms: 1.956625
+  type: 'test'
+  ...
+# Subtest: parseDoctorArgs: an empty string yields all flags false and no source
+ok 80 - parseDoctorArgs: an empty string yields all flags false and no source
+  ---
+  duration_ms: 0.214167
+  type: 'test'
+  ...
+# Subtest: parseDoctorArgs: --fix sets fix only
+ok 81 - parseDoctorArgs: --fix sets fix only
+  ---
+  duration_ms: 0.08925
+  type: 'test'
+  ...
+# Subtest: parseDoctorArgs: --fix --source pkg/x sets fix and captures the source value
+ok 82 - parseDoctorArgs: --fix --source pkg/x sets fix and captures the source value
+  ---
+  duration_ms: 0.045708
+  type: 'test'
+  ...
+# Subtest: parseDoctorArgs: --help (and -h) set help; unknown flags are ignored
+ok 83 - parseDoctorArgs: --help (and -h) set help; unknown flags are ignored
+  ---
+  duration_ms: 0.060584
+  type: 'test'
+  ...
+# Subtest: helpText: documents --source, names the core package, and states the never-edit-settings boundary
+ok 84 - helpText: documents --source, names the core package, and states the never-edit-settings boundary
+  ---
+  duration_ms: 0.065584
+  type: 'test'
+  ...
+# Subtest: runDoctorFix: repoints the helper shim and agent links to the target and never writes settings.json
+ok 85 - runDoctorFix: repoints the helper shim and agent links to the target and never writes settings.json
+  ---
+  duration_ms: 8.294
+  type: 'test'
+  ...
+# Subtest: buildDiagnosis: node-bin through aggregate wrapper reports the delegated core, never non-pi-flow
+ok 86 - buildDiagnosis: node-bin through aggregate wrapper reports the delegated core, never non-pi-flow
+  ---
+  duration_ms: 5.074958
+  type: 'test'
+  ...
+# Subtest: packaged refinePrompt retains the canonical five-section order and ${idea} placeholder
+ok 87 - packaged refinePrompt retains the canonical five-section order and ${idea} placeholder
+  ---
+  duration_ms: 2.481042
+  type: 'test'
+  ...
+# Subtest: packaged refinePrompt directs the model to read and inspect the existing idea's \#\# Open Questions before rewriting
+ok 88 - packaged refinePrompt directs the model to read and inspect the existing idea's \#\# Open Questions before rewriting
+  ---
+  duration_ms: 0.448541
+  type: 'test'
+  ...
+# Subtest: packaged refinePrompt separates conversation-time clarifying questions from the final \#\# Open Questions section
+ok 89 - packaged refinePrompt separates conversation-time clarifying questions from the final \#\# Open Questions section
+  ---
+  duration_ms: 0.32525
+  type: 'test'
+  ...
+# Subtest: packaged refinePrompt makes None. the default outcome when material questions are answered
+ok 90 - packaged refinePrompt makes None. the default outcome when material questions are answered
+  ---
+  duration_ms: 0.296625
+  type: 'test'
+  ...
+# Subtest: packaged refinePrompt preserves existing recommendation and no-premature-rewrite behaviors
+ok 91 - packaged refinePrompt preserves existing recommendation and no-premature-rewrite behaviors
+  ---
+  duration_ms: 0.279667
+  type: 'test'
+  ...
+# Subtest: realpathOrNull: returns null for a non-existent path
+ok 92 - realpathOrNull: returns null for a non-existent path
+  ---
+  duration_ms: 3.765792
+  type: 'test'
+  ...
+# Subtest: packageRootFromBin: follows a symlinked bin to the real root's parent-of-bin
+ok 93 - packageRootFromBin: follows a symlinked bin to the real root's parent-of-bin
+  ---
+  duration_ms: 3.659625
+  type: 'test'
+  ...
+# Subtest: readPiFlowCorePackage: returns name and version for a valid root
+ok 94 - readPiFlowCorePackage: returns name and version for a valid root
+  ---
+  duration_ms: 2.177417
+  type: 'test'
+  ...
+# Subtest: readPiFlowCorePackage: returns null for wrong-name package.json
+ok 95 - readPiFlowCorePackage: returns null for wrong-name package.json
+  ---
+  duration_ms: 1.52075
+  type: 'test'
+  ...
+# Subtest: readPiFlowCorePackage: returns null for missing package.json
+ok 96 - readPiFlowCorePackage: returns null for missing package.json
+  ---
+  duration_ms: 3.508625
+  type: 'test'
+  ...
+# Subtest: readPiFlowCorePackage: returns null for root missing bin/pi-flow.mjs
+ok 97 - readPiFlowCorePackage: returns null for root missing bin/pi-flow.mjs
+  ---
+  duration_ms: 1.551125
+  type: 'test'
+  ...
+# Subtest: findEnclosingCoreRoot: finds the root from a nested agents/x.md path
+ok 98 - findEnclosingCoreRoot: finds the root from a nested agents/x.md path
+  ---
+  duration_ms: 3.084959
+  type: 'test'
+  ...
+# Subtest: findEnclosingCoreRoot: returns null when not inside any pi-flow-core package
+ok 99 - findEnclosingCoreRoot: returns null when not inside any pi-flow-core package
+  ---
+  duration_ms: 2.183708
+  type: 'test'
+  ...
+# Subtest: parseArgs strips --exact flag and returns rest
+ok 100 - parseArgs strips --exact flag and returns rest
+  ---
+  duration_ms: 1.675292
+  type: 'test'
+  ...
+# Subtest: parseArgs strips --no-interpret flag and returns rest
+ok 101 - parseArgs strips --no-interpret flag and returns rest
+  ---
+  duration_ms: 0.062958
+  type: 'test'
+  ...
+# Subtest: parseArgs empty string returns defaults
+ok 102 - parseArgs empty string returns defaults
+  ---
+  duration_ms: 0.040584
+  type: 'test'
+  ...
+# Subtest: recognizeExact scout IDEA-abcd1234 returns canonical form
+ok 103 - recognizeExact scout IDEA-abcd1234 returns canonical form
+  ---
+  duration_ms: 0.125125
+  type: 'test'
+  ...
+# Subtest: recognizeExact scout bare hex returns canonical form
+ok 104 - recognizeExact scout bare hex returns canonical form
+  ---
+  duration_ms: 0.044167
+  type: 'test'
+  ...
+# Subtest: recognizeExact scout briefs path returns path
+ok 105 - recognizeExact scout briefs path returns path
+  ---
+  duration_ms: 0.065959
+  type: 'test'
+  ...
+# Subtest: recognizeExact scout docs/plans returns undefined (wrong artifact dir)
+ok 106 - recognizeExact scout docs/plans returns undefined (wrong artifact dir)
+  ---
+  duration_ms: 0.0385
+  type: 'test'
+  ...
+# Subtest: recognizeExact execute-plan docs/plans returns path
+ok 107 - recognizeExact execute-plan docs/plans returns path
+  ---
+  duration_ms: 0.030083
+  type: 'test'
+  ...
+# Subtest: recognizeExact scout empty string returns empty string
+ok 108 - recognizeExact scout empty string returns empty string
+  ---
+  duration_ms: 0.037084
+  type: 'test'
+  ...
+# Subtest: recognizeExact scout prose returns undefined
+ok 109 - recognizeExact scout prose returns undefined
+  ---
+  duration_ms: 0.071459
+  type: 'test'
+  ...
+# Subtest: matrix: scout accepts docs/briefs/*.md
+ok 110 - matrix: scout accepts docs/briefs/*.md
+  ---
+  duration_ms: 0.044792
+  type: 'test'
+  ...
+# Subtest: matrix: define-spec accepts docs/specs/*.md
+ok 111 - matrix: define-spec accepts docs/specs/*.md
+  ---
+  duration_ms: 0.033625
+  type: 'test'
+  ...
+# Subtest: matrix: generate-plan accepts docs/briefs/*.md
+ok 112 - matrix: generate-plan accepts docs/briefs/*.md
+  ---
+  duration_ms: 0.0255
+  type: 'test'
+  ...
+# Subtest: matrix: refine-plan accepts docs/plans/*.md
+ok 113 - matrix: refine-plan accepts docs/plans/*.md
+  ---
+  duration_ms: 0.023208
+  type: 'test'
+  ...
+# Subtest: matrix: execute-plan accepts docs/plans/*.md
+ok 114 - matrix: execute-plan accepts docs/plans/*.md
+  ---
+  duration_ms: 0.027875
+  type: 'test'
+  ...
+# Subtest: matrix: refine-code accepts docs/reviews/*.md
+ok 115 - matrix: refine-code accepts docs/reviews/*.md
+  ---
+  duration_ms: 0.022166
+  type: 'test'
+  ...
+# Subtest: matrix: fastlane accepts docs/specs/*.md
+ok 116 - matrix: fastlane accepts docs/specs/*.md
+  ---
+  duration_ms: 0.120958
+  type: 'test'
+  ...
+# Subtest: matrix: scout accepts empty
+ok 117 - matrix: scout accepts empty
+  ---
+  duration_ms: 0.054334
+  type: 'test'
+  ...
+# Subtest: matrix: define-spec accepts empty
+ok 118 - matrix: define-spec accepts empty
+  ---
+  duration_ms: 0.041167
+  type: 'test'
+  ...
+# Subtest: matrix: generate-plan accepts empty
+ok 119 - matrix: generate-plan accepts empty
+  ---
+  duration_ms: 0.0365
+  type: 'test'
+  ...
+# Subtest: matrix: fastlane accepts empty
+ok 120 - matrix: fastlane accepts empty
+  ---
+  duration_ms: 0.036167
+  type: 'test'
+  ...
+# Subtest: matrix: scout accepts IDEA-abcd1234
+ok 121 - matrix: scout accepts IDEA-abcd1234
+  ---
+  duration_ms: 0.043417
+  type: 'test'
+  ...
+# Subtest: matrix: define-spec accepts IDEA-abcd1234
+ok 122 - matrix: define-spec accepts IDEA-abcd1234
+  ---
+  duration_ms: 0.038541
+  type: 'test'
+  ...
+# Subtest: matrix: generate-plan accepts IDEA-abcd1234
+ok 123 - matrix: generate-plan accepts IDEA-abcd1234
+  ---
+  duration_ms: 0.063458
+  type: 'test'
+  ...
+# Subtest: matrix: scout rejects legacy artifact prefix
+ok 124 - matrix: scout rejects legacy artifact prefix
+  ---
+  duration_ms: 0.054583
+  type: 'test'
+  ...
+# Subtest: matrix: define-spec rejects legacy artifact prefix
+ok 125 - matrix: define-spec rejects legacy artifact prefix
+  ---
+  duration_ms: 0.047583
+  type: 'test'
+  ...
+# Subtest: matrix: generate-plan rejects legacy artifact prefix
+ok 126 - matrix: generate-plan rejects legacy artifact prefix
+  ---
+  duration_ms: 0.037208
+  type: 'test'
+  ...
+# Subtest: routeArgs scout legacy artifact prefix routes as interpreted
+ok 127 - routeArgs scout legacy artifact prefix routes as interpreted
+  ---
+  duration_ms: 0.10075
+  type: 'test'
+  ...
+# Subtest: matrix: scout rejects docs/specs/*.md
+ok 128 - matrix: scout rejects docs/specs/*.md
+  ---
+  duration_ms: 0.039417
+  type: 'test'
+  ...
+# Subtest: matrix: scout rejects docs/plans/*.md
+ok 129 - matrix: scout rejects docs/plans/*.md
+  ---
+  duration_ms: 0.038083
+  type: 'test'
+  ...
+# Subtest: matrix: scout rejects docs/reviews/*.md
+ok 130 - matrix: scout rejects docs/reviews/*.md
+  ---
+  duration_ms: 0.036125
+  type: 'test'
+  ...
+# Subtest: matrix: define-spec rejects docs/briefs/*.md
+ok 131 - matrix: define-spec rejects docs/briefs/*.md
+  ---
+  duration_ms: 0.044042
+  type: 'test'
+  ...
+# Subtest: matrix: define-spec rejects docs/plans/*.md
+ok 132 - matrix: define-spec rejects docs/plans/*.md
+  ---
+  duration_ms: 0.041625
+  type: 'test'
+  ...
+# Subtest: matrix: define-spec rejects docs/reviews/*.md
+ok 133 - matrix: define-spec rejects docs/reviews/*.md
+  ---
+  duration_ms: 0.03625
+  type: 'test'
+  ...
+# Subtest: matrix: generate-plan rejects docs/specs/*.md
+ok 134 - matrix: generate-plan rejects docs/specs/*.md
+  ---
+  duration_ms: 0.035875
+  type: 'test'
+  ...
+# Subtest: matrix: generate-plan rejects docs/plans/*.md
+ok 135 - matrix: generate-plan rejects docs/plans/*.md
+  ---
+  duration_ms: 0.040292
+  type: 'test'
+  ...
+# Subtest: matrix: generate-plan rejects docs/reviews/*.md
+ok 136 - matrix: generate-plan rejects docs/reviews/*.md
+  ---
+  duration_ms: 0.041209
+  type: 'test'
+  ...
+# Subtest: matrix: refine-plan rejects empty
+ok 137 - matrix: refine-plan rejects empty
+  ---
+  duration_ms: 0.049417
+  type: 'test'
+  ...
+# Subtest: matrix: refine-plan rejects IDEA-abcd1234
+ok 138 - matrix: refine-plan rejects IDEA-abcd1234
+  ---
+  duration_ms: 0.039959
+  type: 'test'
+  ...
+# Subtest: matrix: refine-plan rejects docs/specs/*.md
+ok 139 - matrix: refine-plan rejects docs/specs/*.md
+  ---
+  duration_ms: 0.037209
+  type: 'test'
+  ...
+# Subtest: matrix: refine-plan rejects docs/briefs/*.md
+ok 140 - matrix: refine-plan rejects docs/briefs/*.md
+  ---
+  duration_ms: 0.041833
+  type: 'test'
+  ...
+# Subtest: matrix: refine-plan rejects docs/reviews/*.md
+ok 141 - matrix: refine-plan rejects docs/reviews/*.md
+  ---
+  duration_ms: 0.035667
+  type: 'test'
+  ...
+# Subtest: matrix: execute-plan rejects empty
+ok 142 - matrix: execute-plan rejects empty
+  ---
+  duration_ms: 0.034083
+  type: 'test'
+  ...
+# Subtest: matrix: execute-plan rejects IDEA-abcd1234
+ok 143 - matrix: execute-plan rejects IDEA-abcd1234
+  ---
+  duration_ms: 0.042166
+  type: 'test'
+  ...
+# Subtest: matrix: execute-plan rejects docs/specs/*.md
+ok 144 - matrix: execute-plan rejects docs/specs/*.md
+  ---
+  duration_ms: 0.03875
+  type: 'test'
+  ...
+# Subtest: matrix: execute-plan rejects docs/briefs/*.md
+ok 145 - matrix: execute-plan rejects docs/briefs/*.md
+  ---
+  duration_ms: 0.0335
+  type: 'test'
+  ...
+# Subtest: matrix: execute-plan rejects docs/reviews/*.md
+ok 146 - matrix: execute-plan rejects docs/reviews/*.md
+  ---
+  duration_ms: 0.033083
+  type: 'test'
+  ...
+# Subtest: matrix: refine-code rejects empty
+ok 147 - matrix: refine-code rejects empty
+  ---
+  duration_ms: 0.032208
+  type: 'test'
+  ...
+# Subtest: matrix: refine-code rejects IDEA-abcd1234
+ok 148 - matrix: refine-code rejects IDEA-abcd1234
+  ---
+  duration_ms: 0.033834
+  type: 'test'
+  ...
+# Subtest: matrix: refine-code rejects docs/specs/*.md
+ok 149 - matrix: refine-code rejects docs/specs/*.md
+  ---
+  duration_ms: 0.037666
+  type: 'test'
+  ...
+# Subtest: matrix: refine-code rejects docs/briefs/*.md
+ok 150 - matrix: refine-code rejects docs/briefs/*.md
+  ---
+  duration_ms: 0.0335
+  type: 'test'
+  ...
+# Subtest: matrix: refine-code rejects docs/plans/*.md
+ok 151 - matrix: refine-code rejects docs/plans/*.md
+  ---
+  duration_ms: 0.032792
+  type: 'test'
+  ...
+# Subtest: matrix: fastlane rejects IDEA-abcd1234
+ok 152 - matrix: fastlane rejects IDEA-abcd1234
+  ---
+  duration_ms: 0.032375
+  type: 'test'
+  ...
+# Subtest: matrix: fastlane rejects docs/briefs/*.md
+ok 153 - matrix: fastlane rejects docs/briefs/*.md
+  ---
+  duration_ms: 0.096542
+  type: 'test'
+  ...
+# Subtest: matrix: fastlane rejects docs/plans/*.md
+ok 154 - matrix: fastlane rejects docs/plans/*.md
+  ---
+  duration_ms: 0.047875
+  type: 'test'
+  ...
+# Subtest: matrix: fastlane rejects docs/reviews/*.md
+ok 155 - matrix: fastlane rejects docs/reviews/*.md
+  ---
+  duration_ms: 0.027042
+  type: 'test'
+  ...
+# Subtest: buildExactPrompt with arg returns exact string
+ok 156 - buildExactPrompt with arg returns exact string
+  ---
+  duration_ms: 0.028625
+  type: 'test'
+  ...
+# Subtest: buildExactPrompt with empty arg returns (none)
+ok 157 - buildExactPrompt with empty arg returns (none)
+  ---
+  duration_ms: 0.019625
+  type: 'test'
+  ...
+# Subtest: buildInterpretedPrompt returns exact multi-line body
+ok 158 - buildInterpretedPrompt returns exact multi-line body
+  ---
+  duration_ms: 0.021291
+  type: 'test'
+  ...
+# Subtest: routeArgs --exact with prose returns exact-required-but-non-exact
+ok 159 - routeArgs --exact with prose returns exact-required-but-non-exact
+  ---
+  duration_ms: 0.084792
+  type: 'test'
+  ...
+# Subtest: routeArgs IDEA-abcd1234 returns exact with correct prompt
+ok 160 - routeArgs IDEA-abcd1234 returns exact with correct prompt
+  ---
+  duration_ms: 0.031375
+  type: 'test'
+  ...
+# Subtest: routeArgs prose returns interpreted with correct prompt
+ok 161 - routeArgs prose returns interpreted with correct prompt
+  ---
+  duration_ms: 0.026167
+  type: 'test'
+  ...
+# Subtest: routeArgs generate-plan --exact docs/specs/x.md is rejected per matrix
+ok 162 - routeArgs generate-plan --exact docs/specs/x.md is rejected per matrix
+  ---
+  duration_ms: 0.030833
+  type: 'test'
+  ...
+# Subtest: recognizeExact IDEA-id with trailing boolean flag preserves flag verbatim
+ok 163 - recognizeExact IDEA-id with trailing boolean flag preserves flag verbatim
+  ---
+  duration_ms: 0.028542
+  type: 'test'
+  ...
+# Subtest: recognizeExact docs path with trailing value flag preserves flag verbatim
+ok 164 - recognizeExact docs path with trailing value flag preserves flag verbatim
+  ---
+  duration_ms: 0.01975
+  type: 'test'
+  ...
+# Subtest: recognizeExact flag-only input routes as empty for empty-allowed skill
+ok 165 - recognizeExact flag-only input routes as empty for empty-allowed skill
+  ---
+  duration_ms: 0.018875
+  type: 'test'
+  ...
+# Subtest: recognizeExact flag-only input is rejected for skill that disallows empty
+ok 166 - recognizeExact flag-only input is rejected for skill that disallows empty
+  ---
+  duration_ms: 0.018583
+  type: 'test'
+  ...
+# Subtest: routeArgs --exact IDEA-id with flag routes as exact preserving flag
+ok 167 - routeArgs --exact IDEA-id with flag routes as exact preserving flag
+  ---
+  duration_ms: 0.02525
+  type: 'test'
+  ...
+# Subtest: routeArgs --exact docs path with value flag routes as exact preserving flag
+ok 168 - routeArgs --exact docs path with value flag routes as exact preserving flag
+  ---
+  duration_ms: 0.033333
+  type: 'test'
+  ...
+# Subtest: routeArgs --exact with wrong artifact dir returns exact-required-but-non-exact
+ok 169 - routeArgs --exact with wrong artifact dir returns exact-required-but-non-exact
+  ---
+  duration_ms: 0.03125
+  type: 'test'
+  ...
+# Subtest: recognizeExact scout flag-before-prose returns undefined (prose remains)
+ok 170 - recognizeExact scout flag-before-prose returns undefined (prose remains)
+  ---
+  duration_ms: 0.026792
+  type: 'test'
+  ...
+# Subtest: recognizeExact execute-plan flag-before-artifact returns rest verbatim
+ok 171 - recognizeExact execute-plan flag-before-artifact returns rest verbatim
+  ---
+  duration_ms: 0.028167
+  type: 'test'
+  ...
+# Subtest: recognizeExact scout flag-before-artifact (briefs) returns rest verbatim
+ok 172 - recognizeExact scout flag-before-artifact (briefs) returns rest verbatim
+  ---
+  duration_ms: 0.017625
+  type: 'test'
+  ...
+# Subtest: recognizeExact scout flag-with-value then IDEA id returns rest verbatim
+ok 173 - recognizeExact scout flag-with-value then IDEA id returns rest verbatim
+  ---
+  duration_ms: 0.017083
+  type: 'test'
+  ...
+# Subtest: routeArgs scout flag-before-prose routes as interpreted
+ok 174 - routeArgs scout flag-before-prose routes as interpreted
+  ---
+  duration_ms: 0.02
+  type: 'test'
+  ...
+# Subtest: routeArgs execute-plan --exact with flag-before-artifact routes as exact preserving flag
+ok 175 - routeArgs execute-plan --exact with flag-before-artifact routes as exact preserving flag
+  ---
+  duration_ms: 0.024791
+  type: 'test'
+  ...
+# Subtest: routeArgs scout --exact with flag-before-prose returns exact-required-but-non-exact
+ok 176 - routeArgs scout --exact with flag-before-prose returns exact-required-but-non-exact
+  ---
+  duration_ms: 0.023583
+  type: 'test'
+  ...
+# Subtest: parseArgs trims leading/trailing whitespace from rest
+ok 177 - parseArgs trims leading/trailing whitespace from rest
+  ---
+  duration_ms: 0.024542
+  type: 'test'
+  ...
+# Subtest: parseArgs collapses repeated spaces after --exact
+ok 178 - parseArgs collapses repeated spaces after --exact
+  ---
+  duration_ms: 0.023916
+  type: 'test'
+  ...
+# Subtest: parseArgs whitespace-only input yields empty rest
+ok 179 - parseArgs whitespace-only input yields empty rest
+  ---
+  duration_ms: 0.020083
+  type: 'test'
+  ...
+# Subtest: parseArgs truly empty input still yields empty rest
+ok 180 - parseArgs truly empty input still yields empty rest
+  ---
+  duration_ms: 0.018208
+  type: 'test'
+  ...
+# Subtest: routeArgs IDEA-id with leading/trailing whitespace routes as exact
+ok 181 - routeArgs IDEA-id with leading/trailing whitespace routes as exact
+  ---
+  duration_ms: 0.024709
+  type: 'test'
+  ...
+# Subtest: routeArgs --exact with repeated spaces before IDEA-id routes as exact
+ok 182 - routeArgs --exact with repeated spaces before IDEA-id routes as exact
+  ---
+  duration_ms: 0.019292
+  type: 'test'
+  ...
+# Subtest: routeArgs whitespace-only args routes as exact for empty-allowed skill
+ok 183 - routeArgs whitespace-only args routes as exact for empty-allowed skill
+  ---
+  duration_ms: 0.030375
+  type: 'test'
+  ...
+# Subtest: runSetup: creates symlinks for each bundled agent file (happy path)
+ok 184 - runSetup: creates symlinks for each bundled agent file (happy path)
+  ---
+  duration_ms: 7.085125
+  type: 'test'
+  ...
+# Subtest: runSetup: re-run is idempotent — matching symlinks reported as skipped
+ok 185 - runSetup: re-run is idempotent — matching symlinks reported as skipped
+  ---
+  duration_ms: 3.797042
+  type: 'test'
+  ...
+# Subtest: runSetup: refuses to overwrite a real file at the target
+ok 186 - runSetup: refuses to overwrite a real file at the target
+  ---
+  duration_ms: 3.315542
+  type: 'test'
+  ...
+# Subtest: runSetup: reports divergent symlink as a conflict with expected/actual
+ok 187 - runSetup: reports divergent symlink as a conflict with expected/actual
+  ---
+  duration_ms: 2.777667
+  type: 'test'
+  ...
+# Subtest: runSetup: refuses durable setup for temporary scope without --target
+ok 188 - runSetup: refuses durable setup for temporary scope without --target
+  ---
+  duration_ms: 3.840875
+  type: 'test'
+  ...
+# Subtest: runSetup: temporary scope with --target proceeds with setup
+ok 189 - runSetup: temporary scope with --target proceeds with setup
+  ---
+  duration_ms: 1.345041
+  type: 'test'
+  ...
+# Subtest: resolveScope: matches via realpath-normalized sourceInfo.baseDir
+ok 190 - resolveScope: matches via realpath-normalized sourceInfo.baseDir
+  ---
+  duration_ms: 0.451166
+  type: 'test'
+  ...
+# Subtest: resolveScope: heuristic fallback identifies user-scoped install under ~/.pi
+ok 191 - resolveScope: heuristic fallback identifies user-scoped install under ~/.pi
+  ---
+  duration_ms: 1.073542
+  type: 'test'
+  ...
+# Subtest: resolveScope: heuristic fallback identifies project install via cwd node_modules
+ok 192 - resolveScope: heuristic fallback identifies project install via cwd node_modules
+  ---
+  duration_ms: 0.949541
+  type: 'test'
+  ...
+# Subtest: resolveScope: heuristic fallback returns temporary for standalone installs
+ok 193 - resolveScope: heuristic fallback returns temporary for standalone installs
+  ---
+  duration_ms: 0.770417
+  type: 'test'
+  ...
+# Subtest: runHelperShimSetup: user target — creates symlink when shim is missing
+ok 194 - runHelperShimSetup: user target — creates symlink when shim is missing
+  ---
+  duration_ms: 1.897834
+  type: 'test'
+  ...
+# Subtest: runHelperShimSetup: user target — idempotent skip when shim already points to this package
+ok 195 - runHelperShimSetup: user target — idempotent skip when shim already points to this package
+  ---
+  duration_ms: 1.604834
+  type: 'test'
+  ...
+# Subtest: runHelperShimSetup: user target — divergent symlink reported as conflict and not overwritten
+ok 196 - runHelperShimSetup: user target — divergent symlink reported as conflict and not overwritten
+  ---
+  duration_ms: 2.058084
+  type: 'test'
+  ...
+# Subtest: runHelperShimSetup: user target — real file at shim path reported as conflict and preserved
+ok 197 - runHelperShimSetup: user target — real file at shim path reported as conflict and preserved
+  ---
+  duration_ms: 2.02725
+  type: 'test'
+  ...
+# Subtest: runHelperShimSetup: project target — missing shim emits guidance and does not create
+ok 198 - runHelperShimSetup: project target — missing shim emits guidance and does not create
+  ---
+  duration_ms: 1.23425
+  type: 'test'
+  ...
+# Subtest: runHelperShimSetup: project target — existing matching shim reported as skipped
+ok 199 - runHelperShimSetup: project target — existing matching shim reported as skipped
+  ---
+  duration_ms: 1.516083
+  type: 'test'
+  ...
+# Subtest: runHelperShimSetup: project target — existing divergent symlink preserved with guidance
+ok 200 - runHelperShimSetup: project target — existing divergent symlink preserved with guidance
+  ---
+  duration_ms: 2.037042
+  type: 'test'
+  ...
+# Subtest: resolveScope: matches a symlinked sourceInfo.baseDir via realpath normalization
+ok 201 - resolveScope: matches a symlinked sourceInfo.baseDir via realpath normalization
+  ---
+  duration_ms: 0.711584
+  type: 'test'
+  ...
+# Subtest: resolveScope: silently skips candidate baseDir entries that no longer exist
+ok 202 - resolveScope: silently skips candidate baseDir entries that no longer exist
+  ---
+  duration_ms: 0.503583
+  type: 'test'
+  ...
+# Subtest: registerWorkflowCommands registers the 7 flow commands with exact descriptions
+ok 203 - registerWorkflowCommands registers the 7 flow commands with exact descriptions
+  ---
+  duration_ms: 1.671334
+  type: 'test'
+  ...
+# Subtest: flow:scout exact routing sends the exact prompt once
+ok 204 - flow:scout exact routing sends the exact prompt once
+  ---
+  duration_ms: 0.325042
+  type: 'test'
+  ...
+# Subtest: flow:scout interpreted routing sends the interpreted prompt once
+ok 205 - flow:scout interpreted routing sends the interpreted prompt once
+  ---
+  duration_ms: 0.124917
+  type: 'test'
+  ...
+# Subtest: flow:scout rejects --exact on non-exact input
+ok 206 - flow:scout rejects --exact on non-exact input
+  ---
+  duration_ms: 0.156208
+  type: 'test'
+  ...
+# Subtest: flow:scout rejects --no-interpret on non-exact input
+ok 207 - flow:scout rejects --no-interpret on non-exact input
+  ---
+  duration_ms: 0.087542
+  type: 'test'
+  ...
+# Subtest: flow:spec exact routing sends the exact prompt once
+ok 208 - flow:spec exact routing sends the exact prompt once
+  ---
+  duration_ms: 0.049375
+  type: 'test'
+  ...
+# Subtest: flow:spec interpreted routing sends the interpreted prompt once
+ok 209 - flow:spec interpreted routing sends the interpreted prompt once
+  ---
+  duration_ms: 0.059
+  type: 'test'
+  ...
+# Subtest: flow:spec rejects --exact on non-exact input
+ok 210 - flow:spec rejects --exact on non-exact input
+  ---
+  duration_ms: 0.052459
+  type: 'test'
+  ...
+# Subtest: flow:spec rejects --no-interpret on non-exact input
+ok 211 - flow:spec rejects --no-interpret on non-exact input
+  ---
+  duration_ms: 0.061792
+  type: 'test'
+  ...
+# Subtest: flow:plan exact routing sends the exact prompt once
+ok 212 - flow:plan exact routing sends the exact prompt once
+  ---
+  duration_ms: 0.096541
+  type: 'test'
+  ...
+# Subtest: flow:plan interpreted routing sends the interpreted prompt once
+ok 213 - flow:plan interpreted routing sends the interpreted prompt once
+  ---
+  duration_ms: 0.062334
+  type: 'test'
+  ...
+# Subtest: flow:plan rejects --exact on non-exact input
+ok 214 - flow:plan rejects --exact on non-exact input
+  ---
+  duration_ms: 0.046542
+  type: 'test'
+  ...
+# Subtest: flow:plan rejects --no-interpret on non-exact input
+ok 215 - flow:plan rejects --no-interpret on non-exact input
+  ---
+  duration_ms: 0.034709
+  type: 'test'
+  ...
+# Subtest: flow:refine-plan exact routing sends the exact prompt once
+ok 216 - flow:refine-plan exact routing sends the exact prompt once
+  ---
+  duration_ms: 0.064875
+  type: 'test'
+  ...
+# Subtest: flow:refine-plan interpreted routing sends the interpreted prompt once
+ok 217 - flow:refine-plan interpreted routing sends the interpreted prompt once
+  ---
+  duration_ms: 0.0265
+  type: 'test'
+  ...
+# Subtest: flow:refine-plan rejects --exact on non-exact input
+ok 218 - flow:refine-plan rejects --exact on non-exact input
+  ---
+  duration_ms: 0.0325
+  type: 'test'
+  ...
+# Subtest: flow:refine-plan rejects --no-interpret on non-exact input
+ok 219 - flow:refine-plan rejects --no-interpret on non-exact input
+  ---
+  duration_ms: 0.0255
+  type: 'test'
+  ...
+# Subtest: flow:execute exact routing sends the exact prompt once
+ok 220 - flow:execute exact routing sends the exact prompt once
+  ---
+  duration_ms: 0.037875
+  type: 'test'
+  ...
+# Subtest: flow:execute interpreted routing sends the interpreted prompt once
+ok 221 - flow:execute interpreted routing sends the interpreted prompt once
+  ---
+  duration_ms: 0.026459
+  type: 'test'
+  ...
+# Subtest: flow:execute rejects --exact on non-exact input
+ok 222 - flow:execute rejects --exact on non-exact input
+  ---
+  duration_ms: 0.026792
+  type: 'test'
+  ...
+# Subtest: flow:execute rejects --no-interpret on non-exact input
+ok 223 - flow:execute rejects --no-interpret on non-exact input
+  ---
+  duration_ms: 0.023791
+  type: 'test'
+  ...
+# Subtest: flow:refine-code exact routing sends the exact prompt once
+ok 224 - flow:refine-code exact routing sends the exact prompt once
+  ---
+  duration_ms: 0.024167
+  type: 'test'
+  ...
+# Subtest: flow:refine-code interpreted routing sends the interpreted prompt once
+ok 225 - flow:refine-code interpreted routing sends the interpreted prompt once
+  ---
+  duration_ms: 0.021792
+  type: 'test'
+  ...
+# Subtest: flow:refine-code rejects --exact on non-exact input
+ok 226 - flow:refine-code rejects --exact on non-exact input
+  ---
+  duration_ms: 0.025042
+  type: 'test'
+  ...
+# Subtest: flow:refine-code rejects --no-interpret on non-exact input
+ok 227 - flow:refine-code rejects --no-interpret on non-exact input
+  ---
+  duration_ms: 0.023416
+  type: 'test'
+  ...
+# Subtest: flow:fastlane exact routing sends the exact prompt once
+ok 228 - flow:fastlane exact routing sends the exact prompt once
+  ---
+  duration_ms: 0.030458
+  type: 'test'
+  ...
+# Subtest: flow:fastlane interpreted routing sends the interpreted prompt once
+ok 229 - flow:fastlane interpreted routing sends the interpreted prompt once
+  ---
+  duration_ms: 0.798041
+  type: 'test'
+  ...
+# Subtest: flow:fastlane rejects --exact on non-exact input
+ok 230 - flow:fastlane rejects --exact on non-exact input
+  ---
+  duration_ms: 0.053209
+  type: 'test'
+  ...
+# Subtest: flow:fastlane rejects --no-interpret on non-exact input
+ok 231 - flow:fastlane rejects --no-interpret on non-exact input
+  ---
+  duration_ms: 0.031875
+  type: 'test'
+  ...
+1..231
+# tests 253
+# suites 0
+# pass 253
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1968.948667
+$ node --experimental-strip-types scripts/run-helper-tests.ts
+......................................................................................................................................................................................................................................................................................................................................
+----------------------------------------------------------------------
+Ran 326 tests in 11.846s
+
+OK
+.......................................
+----------------------------------------------------------------------
+Ran 39 tests in 4.135s
+
+OK
+.......................................................................................................................................................................................................
+----------------------------------------------------------------------
+Ran 199 tests in 6.917s
+
+OK
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.146s
+
+OK
+......................................................
+----------------------------------------------------------------------
+Ran 54 tests in 1.579s
+
+OK
+/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <_TemporaryFileWrapper file=<_io.TextIOWrapper name='/var/folders/32/33v_wbcd6rv1sqvqs6v7qcvw0000gp/T/tmp7abpey70.md' mode='w' encoding='UTF-8'>>
+  _warnings.warn(self.warn_message, ResourceWarning)
+./opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <_TemporaryFileWrapper file=<_io.TextIOWrapper name='/var/folders/32/33v_wbcd6rv1sqvqs6v7qcvw0000gp/T/tmpctz8hvam.md' mode='w' encoding='UTF-8'>>
+  _warnings.warn(this.warn_message, ResourceWarning)
+./opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <_TemporaryFileWrapper file=<_io.TextIOWrapper name='/var/folders/32/33v_wbcd6rv1sqvqs6v7qcvw0000gp/T/tmpqcva5ig_.md' mode='w' encoding='UTF-8'>>
+  _warnings.warn(this.warn_message, ResourceWarning)
+../opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <_TemporaryFileWrapper file=<_io.TextIOWrapper name='/var/folders/32/33v_wbcd6rv1sqvqs6v7qcvw0000gp/T/tmp44qomnnx.md' mode='w' encoding='UTF-8'>>
+  _warnings.warn(this.warn_message, ResourceWarning)
+./opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <_TemporaryFileWrapper file=<_io.TextFileWrapper name='/var/folders/32/33v_wbcd6rv1sqvqs6v7qcvw0000gp/T/tmppuw62l7e.md' mode='w' encoding='UTF-8'>>
+  _warnings.warn(this.warn_message, ResourceWarning)
+./opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <_TemporaryFileWrapper file=<_io.TextIOWrapper name='/var/folders/32/33v_wbcd6rv1sqvqs6v7qcvw0000gp/T/tmpwobew814.md' mode='w' encoding='UTF-8'>>
+  _warnings.warn(this.warn_message, ResourceWarning)
+../opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <_TemporaryFileWrapper file=<_io.TextIOWrapper name='/var/folders/32/33v_wbcd6rv1sqvqs6v7qcvw0000gp/T/tmp9w3_hrj5.md' mode='w' encoding='UTF-8'>>
+  _warnings.warn(this.warn_message, ResourceWarning)
+./opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <_TemporaryFileWrapper file=<_io.TextIOWrapper name='/var/folders/32/33v_wbcd6rv1sqvqs6v7qcvw0000gp/T/tmp3ofi2auk.md' mode='w' encoding='UTF-8'>>
+  _warnings.warn(this.warn_message, ResourceWarning)
+.............................
+----------------------------------------------------------------------
+Ran 38 tests in 1.577s
+
+OK
+EXIT_CODE=0
