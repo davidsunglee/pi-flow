@@ -151,6 +151,15 @@ class TestToolFirstPhrasesPresent(unittest.TestCase):
                         msg=f"{rel_path} is missing DONE_MESSAGE contract phrase {phrase!r}",
                     )
 
+    def test_every_runtime_file_references_shared_source(self):
+        for rel_path in ALL_RUNTIME_FILES:
+            body = read(rel_path)
+            with self.subTest(file=rel_path):
+                self.assertIn(
+                    SHARED_SNIPPET, body,
+                    msg=f"{rel_path} must reference the shared completion protocol source",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

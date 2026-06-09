@@ -1,5 +1,7 @@
 # Plan Generation Task
 
+<!-- Completion source: packages/pi-flow-core/skills/_shared/completion-protocol.md -->
+
 Analyze the codebase at `{WORKING_DIR}` and produce a structured implementation plan.
 
 ## Task

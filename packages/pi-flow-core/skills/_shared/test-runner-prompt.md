@@ -1,5 +1,7 @@
 # Test Runner Prompt
 
+<!-- Completion source: packages/pi-flow-core/skills/_shared/completion-protocol.md -->
+
 Prompt template dispatched to `test-runner` subagents for executing a test suite and capturing failing-test identifiers. Fill placeholders before sending. Do not add sections beyond what this template defines.
 
 ## Test Command

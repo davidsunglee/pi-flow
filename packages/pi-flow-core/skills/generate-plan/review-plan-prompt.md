@@ -1,5 +1,7 @@
 # Plan Review Agent
 
+<!-- Completion source: packages/pi-flow-core/skills/_shared/completion-protocol.md -->
+
 You are reviewing a generated implementation plan for structural correctness before execution begins.
 
 **Your task:**

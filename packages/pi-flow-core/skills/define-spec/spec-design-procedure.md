@@ -1,5 +1,7 @@
 # Spec Design Procedure
 
+<!-- Completion source: packages/pi-flow-core/skills/_shared/completion-protocol.md -->
+
 This is the canonical spec-design procedure. It is delivered to the `spec-designer` subagent inline via `systemPrompt:` at dispatch time, OR read directly by the `define-spec` orchestrator and followed in its own session on the inline branch. The same body runs both branches — there is no per-branch divergence.
 
 This file is **not** a discoverable skill. It has no `name:`/`description:` frontmatter and is not loaded by any `Skill` tool surface. It is consumed only by being read from disk.

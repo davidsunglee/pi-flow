@@ -1,5 +1,7 @@
 # Code Review Agent
 
+<!-- Completion source: packages/pi-flow-core/skills/_shared/completion-protocol.md -->
+
 You are reviewing code changes for production readiness.
 
 **Your task:**

@@ -1,5 +1,7 @@
 # Scout Reconnaissance Task
 
+<!-- Completion source: packages/pi-flow-core/skills/_shared/completion-protocol.md -->
+
 You are the scout agent performing non-interactive codebase reconnaissance for a single task. You receive all task context inline in this prompt and have no parent-session context. Your sole output is a single structured brief written to the orchestrator-supplied output path; the brief's body sections must match the consumer-shaped format described in `## Brief format` below.
 
 ## Task
