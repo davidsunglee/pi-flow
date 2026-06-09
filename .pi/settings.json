@@ -7,6 +7,14 @@
       "prompts": [],
       "themes": []
     },
-    "../packages/pi-flow"
+    "../packages/pi-flow",
+    {
+      "source": "npm:@aphotic/pi-mux-subagents",
+      "extensions": [],
+      "skills": [],
+      "prompts": [],
+      "themes": []
+    },
+    "../../pi-mux-subagents"
   ]
 }
