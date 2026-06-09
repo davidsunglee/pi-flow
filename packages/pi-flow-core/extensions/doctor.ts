@@ -8,7 +8,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createRequire } from "node:module";
-import type { SetupScope } from "./setup.ts";
+import type { SetupConflict, SetupScope } from "./setup.ts";
 import {
   type PiFlowCorePackage,
   realpathOrNull,
@@ -595,6 +595,162 @@ export async function buildDiagnosis(
   const hasSkew = skewKinds.length > 0;
 
   return { active, scope, surfaces, hasSkew, skewKinds };
+}
+
+export interface ReconcileTargetResult {
+  kind: "ok" | "ambiguous";
+  target?: PiFlowCorePackage; // when kind === "ok"
+  candidates?: PiFlowCorePackage[]; // distinct roots when kind === "ambiguous"
+}
+
+/**
+ * Reconcile target = the single distinct pi-flow-core root among the active
+ * package plus every declared/loaded resolvable root. Exactly one distinct root
+ * (by .root) => ok (target = active). More than one => ambiguous (caller must
+ * require --source). Dedupe by root.
+ */
+export function resolveReconcileTarget(args: {
+  active: PiFlowCorePackage;
+  declaredOrLoaded: PiFlowCorePackage[];
+}): ReconcileTargetResult {
+  const { active, declaredOrLoaded } = args;
+  const distinct: PiFlowCorePackage[] = [];
+  const seen = new Set<string>();
+  for (const pkg of [active, ...declaredOrLoaded]) {
+    if (seen.has(pkg.root)) continue;
+    seen.add(pkg.root);
+    distinct.push(pkg);
+  }
+  if (distinct.length <= 1) return { kind: "ok", target: active };
+  return { kind: "ambiguous", candidates: distinct };
+}
+
+export interface TargetValidation {
+  ok: boolean;
+  target?: PiFlowCorePackage;
+  error?: string; // actionable, when ok === false
+}
+
+/**
+ * Validate an explicit --source <raw> target. Accepts: an absolute or
+ * cwd-relative path that is a pi-flow-core root; OR a directory that contains a
+ * single resolvable core at "packages/pi-flow-core" or
+ * "node_modules/@aphotic/pi-flow-core" (descend). Emits actionable errors.
+ */
+export async function validateExplicitTarget(
+  raw: string,
+  cwd: string,
+): Promise<TargetValidation> {
+  const abs = path.isAbsolute(raw) ? raw : path.resolve(cwd, raw);
+  const rp = await realpathOrNull(abs);
+  if (rp == null) {
+    return { ok: false, error: `target path does not exist: ${raw}` };
+  }
+
+  const direct = await readPiFlowCorePackage(rp);
+  if (direct) return { ok: true, target: direct };
+
+  const descents: PiFlowCorePackage[] = [];
+  for (const candidate of [
+    path.join(rp, "packages", "pi-flow-core"),
+    path.join(rp, "node_modules", "@aphotic", "pi-flow-core"),
+  ]) {
+    const core = await readPiFlowCorePackage(candidate);
+    if (core) descents.push(core);
+  }
+
+  if (descents.length === 1) return { ok: true, target: descents[0] };
+  if (descents.length === 0) {
+    return {
+      ok: false,
+      error: `not a usable @aphotic/pi-flow-core package: ${raw} (expected a directory with bin/pi-flow.mjs and package.json name @aphotic/pi-flow-core)`,
+    };
+  }
+  return {
+    ok: false,
+    error: `multiple pi-flow-core packages under ${raw}; name one directly`,
+  };
+}
+
+export type RepairOutcome =
+  | "created" // link was absent; created
+  | "skipped" // already points at the desired target
+  | "repaired" // was a stale-skew symlink; repointed to the target
+  | "preserved-other" // points at a local-dev override; refused to clobber
+  | "conflict"; // real file/dir, or a divergent symlink we will not touch
+
+export interface RepairResult {
+  path: string;
+  outcome: RepairOutcome;
+  to: string; // desired absolute target
+  from?: string; // previous realpath, for repaired/preserved-other
+  conflict?: SetupConflict;
+}
+
+/** Repoint a single managed symlink, honoring setup's never-overwrite posture. */
+export async function repairLink(args: {
+  linkPath: string;
+  desiredTarget: string; // absolute path the symlink must point at
+  activeRoot: string;
+  cwd: string;
+}): Promise<RepairResult> {
+  const { linkPath, desiredTarget, cwd } = args;
+  const dir = path.dirname(linkPath);
+
+  let st: Awaited<ReturnType<typeof fs.lstat>>;
+  try {
+    st = await fs.lstat(linkPath);
+  } catch (err: any) {
+    if (err && err.code === "ENOENT") {
+      await fs.mkdir(dir, { recursive: true });
+      await fs.symlink(desiredTarget, linkPath);
+      return { path: linkPath, outcome: "created", to: desiredTarget };
+    }
+    throw err;
+  }
+
+  if (st.isSymbolicLink()) {
+    const link = await fs.readlink(linkPath);
+    const resolvedActual = path.resolve(dir, link);
+    if (resolvedActual === desiredTarget) {
+      return { path: linkPath, outcome: "skipped", to: desiredTarget };
+    }
+    const enclosing = await findEnclosingCoreRoot(resolvedActual);
+    if (enclosing && isLocalDevCheckout(enclosing.root, cwd)) {
+      return {
+        path: linkPath,
+        outcome: "preserved-other",
+        to: desiredTarget,
+        from: resolvedActual,
+        conflict: {
+          path: linkPath,
+          reason: "local-dev override — refusing to clobber",
+          expected: desiredTarget,
+          actual: resolvedActual,
+        },
+      };
+    }
+    await fs.unlink(linkPath);
+    await fs.symlink(desiredTarget, linkPath);
+    return {
+      path: linkPath,
+      outcome: "repaired",
+      to: desiredTarget,
+      from: resolvedActual,
+    };
+  }
+
+  return {
+    path: linkPath,
+    outcome: "conflict",
+    to: desiredTarget,
+    conflict: {
+      path: linkPath,
+      reason: st.isDirectory()
+        ? "directory at target — refusing to overwrite"
+        : "real file at target — refusing to overwrite",
+    },
+  };
 }
 
 const TAGS: Record<Classification, string> = {

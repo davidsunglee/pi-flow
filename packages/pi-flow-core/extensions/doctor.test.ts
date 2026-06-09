@@ -12,7 +12,11 @@ import {
   resolveBinToCore,
   buildDiagnosis,
   renderReport,
+  resolveReconcileTarget,
+  validateExplicitTarget,
+  repairLink,
 } from "./doctor.ts";
+import type { PiFlowCorePackage } from "./package-resolution.ts";
 
 function mkSandbox(prefix: string): string {
   return realpathSync(mkdtempSync(path.join(os.tmpdir(), prefix)));
@@ -262,6 +266,223 @@ test("resolveBinToCore: follows an aggregate wrapper .bin symlink to the delegat
   assert.equal(res.core.version, "0.8.0");
   assert.ok(res.viaAggregate);
   assert.equal(res.viaAggregate.name, "@aphotic/pi-flow");
+});
+
+// --- resolveReconcileTarget -------------------------------------------------
+
+test("resolveReconcileTarget: a single distinct root returns ok with the active target", () => {
+  const active: PiFlowCorePackage = {
+    root: "/proj/active",
+    name: "@aphotic/pi-flow-core",
+    version: "1.0.0",
+  };
+  // Same root declared again (e.g. resolved via a different surface).
+  const result = resolveReconcileTarget({
+    active,
+    declaredOrLoaded: [{ ...active }],
+  });
+  assert.equal(result.kind, "ok");
+  assert.equal(result.target, active);
+  assert.equal(result.candidates, undefined);
+});
+
+test("resolveReconcileTarget: two distinct roots (npm + checkout) returns ambiguous with both candidates", () => {
+  const active: PiFlowCorePackage = {
+    root: "/proj/.pi/npm/node_modules/@aphotic/pi-flow-core",
+    name: "@aphotic/pi-flow-core",
+    version: "0.8.0",
+  };
+  const checkout: PiFlowCorePackage = {
+    root: "/proj/packages/pi-flow-core",
+    name: "@aphotic/pi-flow-core",
+    version: "2.0.0-dev",
+  };
+  const result = resolveReconcileTarget({
+    active,
+    declaredOrLoaded: [checkout],
+  });
+  assert.equal(result.kind, "ambiguous");
+  assert.equal(result.target, undefined);
+  assert.deepEqual(result.candidates, [active, checkout]);
+});
+
+// --- validateExplicitTarget -------------------------------------------------
+
+test("validateExplicitTarget: accepts a seeded core root", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-vet-ok-");
+  const coreRoot = path.join(sandbox, "core");
+  await seedCore(coreRoot, "1.2.3");
+
+  const result = await validateExplicitTarget(coreRoot, sandbox);
+  assert.equal(result.ok, true);
+  assert.equal(result.target?.root, realpathSync(coreRoot));
+  assert.equal(result.target?.version, "1.2.3");
+});
+
+test("validateExplicitTarget: accepts a directory with a single descent core", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-vet-descend-");
+  const coreRoot = path.join(sandbox, "packages", "pi-flow-core");
+  await seedCore(coreRoot, "3.0.0");
+
+  const result = await validateExplicitTarget(sandbox, sandbox);
+  assert.equal(result.ok, true);
+  assert.equal(result.target?.root, realpathSync(coreRoot));
+});
+
+test("validateExplicitTarget: a non-existent path reports target path does not exist", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-vet-missing-");
+  const result = await validateExplicitTarget(
+    path.join(sandbox, "nope"),
+    sandbox,
+  );
+  assert.equal(result.ok, false);
+  assert.ok(result.error?.includes("target path does not exist"));
+});
+
+test("validateExplicitTarget: a dir that is not a core with no descents reports not usable", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-vet-noncore-");
+  const result = await validateExplicitTarget(sandbox, sandbox);
+  assert.equal(result.ok, false);
+  assert.ok(result.error?.includes("not a usable @aphotic/pi-flow-core package"));
+});
+
+test("validateExplicitTarget: a dir with two descent cores reports multiple pi-flow-core packages", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-vet-multi-");
+  await seedCore(path.join(sandbox, "packages", "pi-flow-core"), "1.0.0");
+  await seedCore(
+    path.join(sandbox, "node_modules", "@aphotic", "pi-flow-core"),
+    "2.0.0",
+  );
+
+  const result = await validateExplicitTarget(sandbox, sandbox);
+  assert.equal(result.ok, false);
+  assert.ok(result.error?.includes("multiple pi-flow-core packages"));
+});
+
+// --- repairLink -------------------------------------------------------------
+
+test("repairLink: an absent link is created and points at the target", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-repair-create-");
+  const target = path.join(sandbox, "active", "agents", "flow.md");
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.writeFile(target, "# flow\n");
+  const linkPath = path.join(sandbox, "home", "agents", "flow.md");
+
+  const result = await repairLink({
+    linkPath,
+    desiredTarget: target,
+    activeRoot: path.join(sandbox, "active"),
+    cwd: sandbox,
+  });
+
+  assert.equal(result.outcome, "created");
+  assert.equal(result.to, target);
+  const st = await fs.lstat(linkPath);
+  assert.ok(st.isSymbolicLink());
+  assert.equal(realpathSync(linkPath), realpathSync(target));
+});
+
+test("repairLink: an already-correct link is skipped", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-repair-skip-");
+  const target = path.join(sandbox, "active", "agents", "flow.md");
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.writeFile(target, "# flow\n");
+  const linkPath = path.join(sandbox, "home", "agents", "flow.md");
+  await fs.mkdir(path.dirname(linkPath), { recursive: true });
+  await fs.symlink(target, linkPath);
+
+  const result = await repairLink({
+    linkPath,
+    desiredTarget: target,
+    activeRoot: path.join(sandbox, "active"),
+    cwd: sandbox,
+  });
+
+  assert.equal(result.outcome, "skipped");
+});
+
+test("repairLink: a stale-skew symlink is repaired and repointed at the target", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-repair-repaired-");
+  const activeRoot = path.join(sandbox, "active");
+  await seedCore(activeRoot, "1.0.0");
+  const staleRoot = path.join(
+    sandbox,
+    "proj",
+    ".pi",
+    "npm",
+    "node_modules",
+    "@aphotic",
+    "pi-flow-core",
+  );
+  await seedCore(staleRoot, "0.5.0");
+
+  const target = path.join(activeRoot, "agents", "flow.md");
+  const linkPath = path.join(sandbox, "home", "agents", "flow.md");
+  await fs.mkdir(path.dirname(linkPath), { recursive: true });
+  await fs.symlink(path.join(staleRoot, "agents", "flow.md"), linkPath);
+
+  const result = await repairLink({
+    linkPath,
+    desiredTarget: target,
+    activeRoot,
+    cwd: path.join(sandbox, "proj"),
+  });
+
+  assert.equal(result.outcome, "repaired");
+  assert.equal(result.from, realpathSync(path.join(staleRoot, "agents", "flow.md")));
+  assert.equal(realpathSync(linkPath), realpathSync(target));
+});
+
+test("repairLink: a symlink into a local-dev checkout is preserved and left unchanged", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-repair-preserved-");
+  const cwd = path.join(sandbox, "proj");
+  const activeRoot = path.join(sandbox, "active");
+  await seedCore(activeRoot, "1.0.0");
+  const checkoutRoot = path.join(cwd, "packages", "pi-flow-core");
+  await seedCore(checkoutRoot, "2.0.0-dev");
+
+  const target = path.join(activeRoot, "agents", "flow.md");
+  const checkoutLink = path.join(checkoutRoot, "agents", "flow.md");
+  const linkPath = path.join(sandbox, "home", "agents", "flow.md");
+  await fs.mkdir(path.dirname(linkPath), { recursive: true });
+  await fs.symlink(checkoutLink, linkPath);
+
+  const result = await repairLink({
+    linkPath,
+    desiredTarget: target,
+    activeRoot,
+    cwd,
+  });
+
+  assert.equal(result.outcome, "preserved-other");
+  assert.equal(result.from, realpathSync(checkoutLink));
+  // Link UNCHANGED — still points at the checkout.
+  assert.equal(await fs.readlink(linkPath), checkoutLink);
+  assert.equal(realpathSync(linkPath), realpathSync(checkoutLink));
+});
+
+test("repairLink: a real file at the path is a conflict and its contents are unchanged", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-repair-conflict-");
+  const target = path.join(sandbox, "active", "agents", "flow.md");
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.writeFile(target, "# flow\n");
+  const linkPath = path.join(sandbox, "home", "agents", "flow.md");
+  await fs.mkdir(path.dirname(linkPath), { recursive: true });
+  await fs.writeFile(linkPath, "DO NOT TOUCH\n");
+
+  const result = await repairLink({
+    linkPath,
+    desiredTarget: target,
+    activeRoot: path.join(sandbox, "active"),
+    cwd: sandbox,
+  });
+
+  assert.equal(result.outcome, "conflict");
+  assert.ok(result.conflict);
+  // File contents UNCHANGED.
+  const st = await fs.lstat(linkPath);
+  assert.ok(st.isFile());
+  assert.equal(await fs.readFile(linkPath, "utf8"), "DO NOT TOUCH\n");
 });
 
 test("buildDiagnosis: node-bin through aggregate wrapper reports the delegated core, never non-pi-flow", async () => {
