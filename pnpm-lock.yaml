@@ -40,8 +40,8 @@ importers:
         version: link:../pi-ideas
     devDependencies:
       '@aphotic/pi-mux-subagents':
-        specifier: ^0.2.0
-        version: 0.2.0(@earendil-works/pi-coding-agent@0.78.0(@modelcontextprotocol/sdk@1.29.0)(ws@8.21.0)(zod@4.4.3))(@earendil-works/pi-tui@0.78.0)(typebox@1.1.39)
+        specifier: ^0.3.0
+        version: 0.3.0(@earendil-works/pi-coding-agent@0.78.0(@modelcontextprotocol/sdk@1.29.0)(ws@8.21.0)(zod@4.4.3))(@earendil-works/pi-tui@0.78.0)(typebox@1.1.39)
       '@earendil-works/pi-coding-agent':
         specifier: ^0.78.0
         version: 0.78.0(@modelcontextprotocol/sdk@1.29.0)(ws@8.21.0)(zod@4.4.3)
@@ -82,12 +82,12 @@ packages:
       zod:
         optional: true
 
-  '@aphotic/pi-mux-subagents@0.2.0':
-    resolution: {integrity: sha512-H9xJFIQVUYdBt/TS8GLWCwrJcDLiu0tzZ1jK7iYOZJiulOcMLeRqMBpuJlcYmNpASw7I5QaP9nZJL+lXFAiNtQ==}
+  '@aphotic/pi-mux-subagents@0.3.0':
+    resolution: {integrity: sha512-LBrRWYVvPhkGxWAt/s8Hd1kznJzGXF16FteXPe32p0N4kKwzJwpWPI/0ON6xfRmNbug5O/qealCUvlaJqClMBw==}
     hasBin: true
     peerDependencies:
-      '@earendil-works/pi-coding-agent': '*'
-      '@earendil-works/pi-tui': '*'
+      '@earendil-works/pi-coding-agent': '>=0.78.0'
+      '@earendil-works/pi-tui': '>=0.78.0'
       typebox: '*'
 
   '@aws-crypto/crc32@5.2.0':
@@ -1323,7 +1323,7 @@ snapshots:
     optionalDependencies:
       zod: 4.4.3
 
-  '@aphotic/pi-mux-subagents@0.2.0(@earendil-works/pi-coding-agent@0.78.0(@modelcontextprotocol/sdk@1.29.0)(ws@8.21.0)(zod@4.4.3))(@earendil-works/pi-tui@0.78.0)(typebox@1.1.39)':
+  '@aphotic/pi-mux-subagents@0.3.0(@earendil-works/pi-coding-agent@0.78.0(@modelcontextprotocol/sdk@1.29.0)(ws@8.21.0)(zod@4.4.3))(@earendil-works/pi-tui@0.78.0)(typebox@1.1.39)':
     dependencies:
       '@earendil-works/pi-coding-agent': 0.78.0(@modelcontextprotocol/sdk@1.29.0)(ws@8.21.0)(zod@4.4.3)
       '@earendil-works/pi-tui': 0.78.0

@@ -17,14 +17,14 @@
     "@aphotic/pi-ideas": "workspace:*"
   },
   "peerDependencies": {
-    "@aphotic/pi-mux-subagents": ">=0.1.0",
+    "@aphotic/pi-mux-subagents": ">=0.3.0",
     "@earendil-works/pi-coding-agent": ">=0.78.0",
     "@earendil-works/pi-tui": ">=0.78.0"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.78.0",
     "@earendil-works/pi-tui": "^0.78.0",
-    "@aphotic/pi-mux-subagents": "^0.2.0"
+    "@aphotic/pi-mux-subagents": "^0.3.0"
   },
   "pi": {
     "skills": ["skills/*/SKILL.md"],
