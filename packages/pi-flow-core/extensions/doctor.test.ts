@@ -15,8 +15,12 @@ import {
   resolveReconcileTarget,
   validateExplicitTarget,
   repairLink,
+  parseDoctorArgs,
+  helpText,
+  runDoctorFix,
 } from "./doctor.ts";
 import type { PiFlowCorePackage } from "./package-resolution.ts";
+import { readPiFlowCorePackage } from "./package-resolution.ts";
 
 function mkSandbox(prefix: string): string {
   return realpathSync(mkdtempSync(path.join(os.tmpdir(), prefix)));
@@ -483,6 +487,117 @@ test("repairLink: a real file at the path is a conflict and its contents are unc
   const st = await fs.lstat(linkPath);
   assert.ok(st.isFile());
   assert.equal(await fs.readFile(linkPath, "utf8"), "DO NOT TOUCH\n");
+});
+
+// --- parseDoctorArgs --------------------------------------------------------
+
+test("parseDoctorArgs: an empty string yields all flags false and no source", () => {
+  assert.deepEqual(parseDoctorArgs(""), { help: false, fix: false });
+});
+
+test("parseDoctorArgs: --fix sets fix only", () => {
+  const r = parseDoctorArgs("--fix");
+  assert.equal(r.fix, true);
+  assert.equal(r.help, false);
+  assert.equal(r.source, undefined);
+});
+
+test("parseDoctorArgs: --fix --source pkg/x sets fix and captures the source value", () => {
+  const r = parseDoctorArgs("--fix --source pkg/x");
+  assert.equal(r.fix, true);
+  assert.equal(r.source, "pkg/x");
+  assert.equal(r.help, false);
+});
+
+test("parseDoctorArgs: --help (and -h) set help; unknown flags are ignored", () => {
+  assert.equal(parseDoctorArgs("--help").help, true);
+  assert.equal(parseDoctorArgs("-h").help, true);
+  assert.deepEqual(parseDoctorArgs("--bogus"), { help: false, fix: false });
+});
+
+// --- helpText ---------------------------------------------------------------
+
+test("helpText: documents --source, names the core package, and states the never-edit-settings boundary", () => {
+  const t = helpText();
+  assert.ok(t.includes("--source"));
+  assert.ok(t.includes("@aphotic/pi-flow-core"));
+  assert.ok(t.includes("never edits"));
+});
+
+// --- runDoctorFix -----------------------------------------------------------
+
+test("runDoctorFix: repoints the helper shim and agent links to the target and never writes settings.json", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-fix-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const targetRoot = path.join(sandbox, "active");
+  await seedCore(targetRoot, "1.0.0");
+  const target = (await readPiFlowCorePackage(targetRoot))!;
+
+  const staleRoot = path.join(
+    cwd,
+    ".pi",
+    "npm",
+    "node_modules",
+    "@aphotic",
+    "pi-flow-core",
+  );
+  await seedCore(staleRoot, "0.5.0");
+
+  // The shim currently points at the stale core.
+  const shimPath = path.join(home, ".pi", "agent", "bin", "pi-flow");
+  await fs.mkdir(path.dirname(shimPath), { recursive: true });
+  await fs.symlink(path.join(staleRoot, "bin", "pi-flow.mjs"), shimPath);
+
+  // The agents dir holds a stale flow.md link.
+  const agentsDir = path.join(home, ".pi", "agent", "agents");
+  await fs.mkdir(agentsDir, { recursive: true });
+  await fs.symlink(
+    path.join(staleRoot, "agents", "flow.md"),
+    path.join(agentsDir, "flow.md"),
+  );
+
+  // Seed a settings.json and snapshot its bytes.
+  const settingsPath = path.join(cwd, ".pi", "settings.json");
+  await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+  await fs.writeFile(
+    settingsPath,
+    JSON.stringify({ packages: ["../active"] }, null, 2) + "\n",
+  );
+  const before = await fs.readFile(settingsPath);
+
+  const r = await runDoctorFix({
+    target,
+    effectiveTarget: "user",
+    shimPath,
+    agentsDir,
+    activeRoot: targetRoot,
+    cwd,
+    declaredSpecsForTarget: [],
+  });
+
+  assert.equal(r.shim?.outcome, "repaired");
+  assert.equal(
+    realpathSync(shimPath),
+    realpathSync(path.join(targetRoot, "bin", "pi-flow.mjs")),
+  );
+
+  const flowAgent = r.agents.find((a) => a.path.endsWith("flow.md"));
+  assert.equal(flowAgent?.outcome, "repaired");
+  assert.equal(
+    realpathSync(path.join(agentsDir, "flow.md")),
+    realpathSync(path.join(targetRoot, "agents", "flow.md")),
+  );
+
+  // No declared spec names the target → settings guidance is emitted.
+  assert.ok(r.guidance.some((g) => g.includes("doctor does not edit settings")));
+
+  // settings.json is byte-for-byte unchanged (never-write-settings guarantee).
+  const after = await fs.readFile(settingsPath);
+  assert.ok(before.equals(after));
 });
 
 test("buildDiagnosis: node-bin through aggregate wrapper reports the delegated core, never non-pi-flow", async () => {

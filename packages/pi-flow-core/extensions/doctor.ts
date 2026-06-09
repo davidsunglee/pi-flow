@@ -6,9 +6,20 @@
  */
 
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
-import type { SetupConflict, SetupScope } from "./setup.ts";
+import type {
+  ExtensionAPI,
+  ExtensionCommandContext,
+  SlashCommandInfo,
+} from "@earendil-works/pi-coding-agent";
+import {
+  resolveScope,
+  type DurableTarget,
+  type SetupConflict,
+  type SetupScope,
+} from "./setup.ts";
 import {
   type PiFlowCorePackage,
   realpathOrNull,
@@ -781,4 +792,393 @@ export function renderReport(d: DoctorDiagnosis): string {
       : "OK — all managed pi-flow surfaces resolve to the active package.",
   );
   return lines.join("\n");
+}
+
+export interface DoctorArgs {
+  help: boolean;
+  fix: boolean;
+  source?: string; // value following --source
+}
+
+/** Parse "/flow:doctor" args. Recognizes --help|-h, --fix, --source <value>. */
+export function parseDoctorArgs(raw: string): DoctorArgs {
+  const tokens = raw.split(/\s+/).filter((t) => t.length > 0);
+  const args: DoctorArgs = { help: false, fix: false };
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (t === "--help" || t === "-h") {
+      args.help = true;
+    } else if (t === "--fix") {
+      args.fix = true;
+    } else if (t === "--source") {
+      if (i + 1 < tokens.length) {
+        args.source = tokens[i + 1];
+        i++;
+      }
+    }
+    // Unknown flags are ignored.
+  }
+  return args;
+}
+
+/** Help block for /flow:doctor: the three invocations, the --source forms, and
+ * the mutation boundary. */
+export function helpText(): string {
+  return [
+    "/flow:doctor — diagnose pi-flow surface skew and optionally repoint links.",
+    "",
+    "Invocations:",
+    "  /flow:doctor",
+    "      inventory the managed surfaces and report version skew (read-only).",
+    "  /flow:doctor --fix",
+    "      repoint the helper shim and agent symlinks at the reconcile target.",
+    "  /flow:doctor --fix --source <target>",
+    "      repoint at an explicitly named target (required when ambiguous).",
+    "",
+    "--source <target> forms:",
+    "  1. An absolute path to an @aphotic/pi-flow-core root — a directory with",
+    "     bin/pi-flow.mjs and a package.json whose name is @aphotic/pi-flow-core.",
+    "       e.g. --source /Users/me/src/pi-flow/packages/pi-flow-core",
+    "  2. A cwd-relative path to the same kind of @aphotic/pi-flow-core root.",
+    "       e.g. --source ./packages/pi-flow-core",
+    "  3. A checkout root or @aphotic/pi-flow meta-install that contains a single",
+    "     resolvable core at packages/pi-flow-core or",
+    "     node_modules/@aphotic/pi-flow-core.",
+    "       e.g. --source ./node_modules/@aphotic/pi-flow",
+    "",
+    "doctor never edits .pi/settings.json, never installs, and never creates a",
+    "pin file; to make a repoint durable, edit the packages entry in",
+    ".pi/settings.json yourself.",
+  ].join("\n");
+}
+
+export interface DoctorFixReport {
+  shim: RepairResult | null; // null when scope is project and shim is absent (guidance instead)
+  agents: RepairResult[];
+  guidance: string[]; // settings-alignment advice; never an edit
+}
+
+/** Run the repair against a resolved target. Pure over injected dirs. */
+export async function runDoctorFix(args: {
+  target: PiFlowCorePackage;
+  effectiveTarget: DurableTarget; // "user" | "project" (from scope)
+  shimPath: string; // <home>/.pi/agent/bin/pi-flow
+  agentsDir: string; // <home>/.pi/agent/agents OR <cwd>/.pi/agents
+  activeRoot: string;
+  cwd: string;
+  declaredSpecsForTarget: string[]; // declared specs that already name this target (may be empty)
+}): Promise<DoctorFixReport> {
+  const {
+    target,
+    effectiveTarget,
+    shimPath,
+    agentsDir,
+    activeRoot,
+    cwd,
+    declaredSpecsForTarget,
+  } = args;
+
+  const shimTarget = path.join(target.root, "bin", "pi-flow.mjs");
+  const guidance: string[] = [];
+
+  let shim: RepairResult | null;
+  if (effectiveTarget === "project") {
+    let absent = false;
+    try {
+      await fs.lstat(shimPath);
+    } catch (err: any) {
+      if (err && err.code === "ENOENT") absent = true;
+      else throw err;
+    }
+    if (absent) {
+      shim = null;
+      guidance.push(
+        `no helper shim at ${shimPath}; run /flow:setup --target user (or re-run from a user-scope install) to create it.`,
+      );
+    } else {
+      shim = await repairLink({
+        linkPath: shimPath,
+        desiredTarget: shimTarget,
+        activeRoot,
+        cwd,
+      });
+    }
+  } else {
+    shim = await repairLink({
+      linkPath: shimPath,
+      desiredTarget: shimTarget,
+      activeRoot,
+      cwd,
+    });
+  }
+
+  const agents: RepairResult[] = [];
+  let agentNames: string[] = [];
+  try {
+    agentNames = await fs.readdir(path.join(target.root, "agents"));
+  } catch {
+    agentNames = [];
+  }
+  for (const name of agentNames) {
+    if (!name.endsWith(".md")) continue;
+    agents.push(
+      await repairLink({
+        linkPath: path.join(agentsDir, name),
+        desiredTarget: path.join(target.root, "agents", name),
+        activeRoot,
+        cwd,
+      }),
+    );
+  }
+
+  if (declaredSpecsForTarget.length === 0) {
+    guidance.push(
+      "the repointed target is not named in .pi/settings.json packages; add or update an entry so the change survives reinstall — doctor does not edit settings.",
+    );
+  }
+
+  return { shim, agents, guidance };
+}
+
+const REPAIR_WORD: Record<RepairOutcome, string> = {
+  created: "created",
+  skipped: "skipped",
+  repaired: "repaired",
+  "preserved-other": "preserved",
+  conflict: "conflict",
+};
+
+/** Derive the target root from a repair report's outcomes (both shim and agent
+ * desired targets sit two levels under the package root). */
+function fixReportTargetRoot(r: DoctorFixReport): string | undefined {
+  if (r.shim) return path.dirname(path.dirname(r.shim.to));
+  if (r.agents.length > 0) return path.dirname(path.dirname(r.agents[0].to));
+  return undefined;
+}
+
+/** Render a DoctorFixReport into a human-readable report string. */
+export function renderFixReport(r: DoctorFixReport): string {
+  const root = fixReportTargetRoot(r) ?? "(unknown)";
+  const lines: string[] = [`/flow:doctor --fix (target: ${root}):`];
+
+  const outcomes: RepairResult[] = [];
+  if (r.shim) outcomes.push(r.shim);
+  outcomes.push(...r.agents);
+
+  let mutations = 0;
+  for (const o of outcomes) {
+    let line = `  ${REPAIR_WORD[o.outcome]}: ${o.path} -> ${o.to}`;
+    if (
+      (o.outcome === "repaired" || o.outcome === "preserved-other") &&
+      o.from
+    ) {
+      line += ` (was ${o.from})`;
+    }
+    lines.push(line);
+    if (o.outcome === "created" || o.outcome === "repaired") mutations++;
+  }
+
+  for (const g of r.guidance) {
+    lines.push(`  note: ${g}`);
+  }
+
+  if (mutations > 0) {
+    lines.push("Reload Pi or run /reload to pick up the repointed links.");
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Resolve a single declared/loaded path into a pi-flow-core package, accepting
+ * a direct core root or a checkout/meta-install with a single descent core.
+ * Mirrors validateExplicitTarget's acceptance for the reconcile candidate set.
+ */
+async function resolveCandidateRoot(
+  abs: string,
+  cwd: string,
+): Promise<PiFlowCorePackage | null> {
+  const v = await validateExplicitTarget(abs, cwd);
+  return v.ok && v.target ? v.target : null;
+}
+
+/** Read and parse declared local-spec roots from <cwd>/.pi/settings.json. */
+async function readDeclaredLocalSpecs(
+  cwd: string,
+): Promise<{ spec: string; abs: string }[]> {
+  const settingsPath = path.join(cwd, ".pi", "settings.json");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await fs.readFile(settingsPath, "utf8"));
+  } catch {
+    return [];
+  }
+  const settingsDir = path.dirname(settingsPath);
+  const out: { spec: string; abs: string }[] = [];
+  for (const declared of parseDeclaredPackages(parsed)) {
+    if (declared.kind !== "local") continue;
+    out.push({ spec: declared.spec, abs: path.resolve(settingsDir, declared.spec) });
+  }
+  return out;
+}
+
+/** Gather unique-by-root reconcile candidates: declared local roots plus the
+ * roots of loaded flow: commands. (The active package is added by the caller.) */
+async function gatherDeclaredOrLoaded(opts: {
+  cwd: string;
+  commands: SlashCommandInfo[];
+}): Promise<PiFlowCorePackage[]> {
+  const { cwd, commands } = opts;
+  const byRoot = new Map<string, PiFlowCorePackage>();
+
+  for (const { abs } of await readDeclaredLocalSpecs(cwd)) {
+    const core = await resolveCandidateRoot(abs, cwd);
+    if (core) byRoot.set(core.root, core);
+  }
+
+  for (const entry of commands) {
+    if (!entry.name.startsWith("flow:")) continue;
+    const baseDir = entry.sourceInfo?.baseDir;
+    if (!baseDir) continue;
+    const rp = await realpathOrNull(baseDir);
+    if (!rp) continue;
+    const core = await findEnclosingCoreRoot(rp);
+    if (core) byRoot.set(core.root, core);
+  }
+
+  return [...byRoot.values()];
+}
+
+/** Declared specs whose resolved root equals the chosen target root. */
+async function declaredSpecsNamingTarget(
+  cwd: string,
+  targetRoot: string,
+): Promise<string[]> {
+  const out: string[] = [];
+  for (const { spec, abs } of await readDeclaredLocalSpecs(cwd)) {
+    const core = await resolveCandidateRoot(abs, cwd);
+    if (core && core.root === targetRoot) out.push(spec);
+  }
+  return out;
+}
+
+export function registerDoctor(pi: ExtensionAPI): void {
+  pi.registerCommand("flow:doctor", {
+    description:
+      "Diagnose pi-flow surface skew and, with --fix, repoint the helper shim and agent symlinks at the active package.",
+    handler: async (args: string, ctx: ExtensionCommandContext) => {
+      try {
+        const ownPackageRoot = await fs.realpath(
+          path.resolve(import.meta.dirname, ".."),
+        );
+        const active = await readPiFlowCorePackage(ownPackageRoot);
+        if (!active) {
+          ctx.ui.notify(
+            "doctor could not resolve its own pi-flow-core package",
+            "error",
+          );
+          return;
+        }
+
+        const { scope } = await resolveScope({
+          ownPackageRoot,
+          commands: pi.getCommands(),
+          homeDir: os.homedir(),
+          cwd: ctx.cwd,
+        });
+
+        const parsed = parseDoctorArgs(args);
+        if (parsed.help) {
+          ctx.ui.notify(helpText(), "info");
+          return;
+        }
+
+        const diagnosis = await buildDiagnosis({
+          activeRoot: ownPackageRoot,
+          cwd: ctx.cwd,
+          homeDir: os.homedir(),
+          scope,
+        });
+
+        if (!parsed.fix) {
+          ctx.ui.notify(
+            renderReport(diagnosis),
+            diagnosis.hasSkew ? "error" : "info",
+          );
+          return;
+        }
+
+        // --fix: resolve the target.
+        let target: PiFlowCorePackage;
+        if (parsed.source) {
+          const validation = await validateExplicitTarget(parsed.source, ctx.cwd);
+          if (!validation.ok || !validation.target) {
+            ctx.ui.notify(
+              `${validation.error ?? "invalid --source target"}\n${helpText()}`,
+              "error",
+            );
+            return;
+          }
+          target = validation.target;
+        } else {
+          const declaredOrLoaded = await gatherDeclaredOrLoaded({
+            cwd: ctx.cwd,
+            commands: pi.getCommands(),
+          });
+          const reconcile = resolveReconcileTarget({ active, declaredOrLoaded });
+          if (reconcile.kind === "ambiguous") {
+            const list = (reconcile.candidates ?? [])
+              .map((c) => `  - ${c.root} (${c.name}@${c.version})`)
+              .join("\n");
+            ctx.ui.notify(
+              `multiple candidate pi-flow-core packages:\n${list}\nre-run with --source <one-of-these>`,
+              "error",
+            );
+            return;
+          }
+          target = reconcile.target!;
+        }
+
+        const effectiveTarget: DurableTarget =
+          scope === "temporary" ? "user" : scope;
+        const shimPath = path.join(
+          os.homedir(),
+          ".pi",
+          "agent",
+          "bin",
+          "pi-flow",
+        );
+        const agentsDir =
+          effectiveTarget === "user"
+            ? path.join(os.homedir(), ".pi", "agent", "agents")
+            : path.join(ctx.cwd, ".pi", "agents");
+
+        const declaredSpecsForTarget = await declaredSpecsNamingTarget(
+          ctx.cwd,
+          target.root,
+        );
+
+        const report = await runDoctorFix({
+          target,
+          effectiveTarget,
+          shimPath,
+          agentsDir,
+          activeRoot: ownPackageRoot,
+          cwd: ctx.cwd,
+          declaredSpecsForTarget,
+        });
+
+        const hasConflict =
+          report.shim?.outcome === "conflict" ||
+          report.agents.some((a) => a.outcome === "conflict");
+        ctx.ui.notify(
+          renderFixReport(report),
+          hasConflict ? "error" : "info",
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        ctx.ui.notify(`/flow:doctor failed: ${message}`, "error");
+      }
+    },
+  });
 }
