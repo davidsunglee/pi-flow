@@ -727,7 +727,24 @@ export async function repairLink(args: {
       return { path: linkPath, outcome: "skipped", to: desiredTarget };
     }
     const enclosing = await findEnclosingCoreRoot(resolvedActual);
-    if (enclosing && isLocalDevCheckout(enclosing.root, cwd)) {
+    if (!enclosing) {
+      const resolvedRealpath = await realpathOrNull(resolvedActual);
+      return {
+        path: linkPath,
+        outcome: "conflict",
+        to: desiredTarget,
+        from: resolvedRealpath ?? resolvedActual,
+        conflict: {
+          path: linkPath,
+          reason: resolvedRealpath
+            ? "non-pi-flow symlink target — refusing to overwrite"
+            : "unresolved symlink target — refusing to overwrite",
+          expected: desiredTarget,
+          actual: resolvedActual,
+        },
+      };
+    }
+    if (isLocalDevCheckout(enclosing.root, cwd)) {
       return {
         path: linkPath,
         outcome: "preserved-other",

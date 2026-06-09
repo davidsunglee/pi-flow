@@ -465,6 +465,34 @@ test("repairLink: a symlink into a local-dev checkout is preserved and left unch
   assert.equal(realpathSync(linkPath), realpathSync(checkoutLink));
 });
 
+test("repairLink: a symlink to a non-pi-flow target is a conflict and left unchanged", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-repair-non-pi-flow-");
+  const activeRoot = path.join(sandbox, "active");
+  await seedCore(activeRoot, "1.0.0");
+
+  const target = path.join(activeRoot, "agents", "flow.md");
+  const foreignTarget = path.join(sandbox, "other-package", "flow.md");
+  await fs.mkdir(path.dirname(foreignTarget), { recursive: true });
+  await fs.writeFile(foreignTarget, "# not pi-flow\n");
+
+  const linkPath = path.join(sandbox, "home", "agents", "flow.md");
+  await fs.mkdir(path.dirname(linkPath), { recursive: true });
+  await fs.symlink(foreignTarget, linkPath);
+
+  const result = await repairLink({
+    linkPath,
+    desiredTarget: target,
+    activeRoot,
+    cwd: sandbox,
+  });
+
+  assert.equal(result.outcome, "conflict");
+  assert.equal(result.from, realpathSync(foreignTarget));
+  assert.ok(result.conflict);
+  assert.equal(await fs.readlink(linkPath), foreignTarget);
+  assert.equal(realpathSync(linkPath), realpathSync(foreignTarget));
+});
+
 test("repairLink: a real file at the path is a conflict and its contents are unchanged", async () => {
   const sandbox = mkSandbox("pi-flow-doctor-repair-conflict-");
   const target = path.join(sandbox, "active", "agents", "flow.md");
