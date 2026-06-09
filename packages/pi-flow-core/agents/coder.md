@@ -94,4 +94,8 @@ End-of-task checklist (do these in order, then stop):
 3. Then call `subagent_done()` as your terminal tool action, with no `message` argument, so the parent receives the full structured status report from the transcript's last assistant message.
 4. Do NOT perform additional work, additional file edits, or additional output after the `subagent_done` call.
 
-Negative instruction: do not merely describe completion in prose, and do not end the session by sending a final answer alone. The visible report alone is not completion — the `subagent_done` tool call is the only signal the parent treats as completion, and a report without that tool call will be observed as "still running".
+Negative instruction: do not merely describe completion in prose; a report without the tool call will be observed as "still running".
+
+<!-- BEGIN completion-protocol:report-core (generated from packages/pi-flow-core/skills/_shared/completion-protocol.md; regenerate with skills/_shared/scripts/sync-completion-protocol.py --apply) -->
+The `subagent_done` tool call is the completion signal: the visible report alone is not completion. Do not end the session by sending a final answer alone, and do not emit further output after `subagent_done`.
+<!-- END completion-protocol:report-core -->

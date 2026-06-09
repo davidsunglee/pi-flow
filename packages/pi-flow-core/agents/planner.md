@@ -264,4 +264,8 @@ End-of-task checklist (do these in order, then stop):
    - Edit-mode pass: `subagent_done()` with no `message` argument, so the parent receives your full edit summary from the transcript's last assistant message.
 4. Do NOT emit any further output after the `subagent_done` call.
 
-Negative instruction: do not merely describe completion in prose, and do not end the session by sending a final answer alone. The `subagent_done` tool call is the completion signal and the only signal the parent treats as completion — visible output alone is not completion and will be observed as "still running". If this environment's `subagent_done` tool has no `message` argument, call `subagent_done()` immediately after the visible completion output.
+Negative instruction: do not merely describe completion in prose; visible output alone will be observed as "still running".
+
+<!-- BEGIN completion-protocol:marker-core (generated from packages/pi-flow-core/skills/_shared/completion-protocol.md; regenerate with skills/_shared/scripts/sync-completion-protocol.py --apply) -->
+The `subagent_done` tool call is the completion signal: the visible marker line alone is not completion. Do not end the session by sending a final answer alone, and do not emit further output after `subagent_done`. If this environment's `subagent_done` tool has no `message` argument, call `subagent_done()` immediately after the visible marker line.
+<!-- END completion-protocol:marker-core -->

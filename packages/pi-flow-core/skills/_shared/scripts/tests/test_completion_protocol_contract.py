@@ -16,6 +16,7 @@ These tests enforce the tool-first contract defined in the shared snippet
 
 Tests assert string presence/absence rather than dispatching real subagents.
 """
+import importlib.util
 import os
 import re
 import unittest
@@ -24,6 +25,16 @@ import unittest
 REPO_ROOT = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..", "..")
 )
+
+# Load the sync helper as a module so the guardrail re-renders runtime regions
+# from the canonical source and proves byte-coupling, not just phrase presence.
+_SYNC_PATH = os.path.join(
+    REPO_ROOT,
+    "packages/pi-flow-core/skills/_shared/scripts/sync-completion-protocol.py",
+)
+_sync_spec = importlib.util.spec_from_file_location("sync_completion_protocol", _SYNC_PATH)
+sync = importlib.util.module_from_spec(_sync_spec)
+_sync_spec.loader.exec_module(sync)
 
 SHARED_SNIPPET = "packages/pi-flow-core/skills/_shared/completion-protocol.md"
 
@@ -161,6 +172,73 @@ class TestToolFirstPhrasesPresent(unittest.TestCase):
                     SHARED_SNIPPET, body,
                     msg=f"{rel_path} must reference the shared completion protocol source",
                 )
+
+
+class TestRuntimeRegionsGeneratedFromCanonicalSource(unittest.TestCase):
+    """Prove the runtime completion wording is *produced* from the shared source.
+
+    Phrase-presence alone cannot detect a hand-edited copy drifting from the
+    canonical snippet. These tests render each runtime file's managed region from
+    `completion-protocol.md`'s canonical blocks and assert byte-equality, so any
+    hand-edit of a region (or of the canonical block) that leaves them out of sync
+    fails the suite.
+    """
+
+    def test_sync_helper_reports_no_drift(self):
+        problems = sync.check_all()
+        self.assertEqual(
+            problems, [],
+            msg=(
+                "managed completion-protocol regions drifted from the canonical "
+                "source; run sync-completion-protocol.py --apply:\n"
+                + "\n".join(problems)
+            ),
+        )
+
+    def test_every_runtime_file_is_registered_for_a_canonical_block(self):
+        # The coupling guarantee only holds if every guarded runtime file actually
+        # carries a managed region. Keep the sync registry and the contract lists
+        # in lockstep.
+        self.assertEqual(
+            sorted(sync.FILE_VARIANTS),
+            sorted(ALL_RUNTIME_FILES),
+            msg="sync-completion-protocol.py FILE_VARIANTS must cover exactly the "
+                "runtime files guarded by this contract",
+        )
+
+    def test_each_region_matches_its_canonical_block_byte_for_byte(self):
+        blocks = sync.parse_canonical_blocks(read(SHARED_SNIPPET))
+        for rel_path, block_id in sync.FILE_VARIANTS.items():
+            with self.subTest(file=rel_path, block=block_id):
+                region = sync.extract_region(read(rel_path), block_id)
+                self.assertIsNotNone(
+                    region,
+                    msg=f"{rel_path} is missing the completion-protocol:{block_id} region",
+                )
+                self.assertIn(
+                    block_id, blocks,
+                    msg=f"{SHARED_SNIPPET} is missing canonical block {block_id!r}",
+                )
+                self.assertEqual(
+                    region, blocks[block_id],
+                    msg=f"{rel_path} completion-protocol:{block_id} region is not "
+                        f"byte-equal to the canonical block in {SHARED_SNIPPET}",
+                )
+
+    def test_canonical_blocks_carry_tool_first_safety_sentences(self):
+        blocks = sync.parse_canonical_blocks(read(SHARED_SNIPPET))
+        for block_id in ("marker-core", "report-core"):
+            with self.subTest(block=block_id):
+                self.assertIn(block_id, blocks)
+                body = blocks[block_id]
+                self.assertIn("completion signal", body)
+                self.assertIn("alone is not completion", body)
+                self.assertIn("final answer alone", body)
+                for _label, pattern in FORBIDDEN_PATTERNS:
+                    self.assertIsNone(
+                        pattern.search(body),
+                        msg=f"canonical block {block_id} reintroduced final-answer-first wording",
+                    )
 
 
 if __name__ == "__main__":

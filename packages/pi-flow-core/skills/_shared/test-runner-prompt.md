@@ -46,3 +46,9 @@ Do not emit any other structured markers in your response (no `STATUS:`, no othe
 - Do NOT classify the run as pass/fail. Reconciliation is the caller's responsibility.
 - Do NOT modify any source file; do NOT run `git` commands; do NOT run any command other than the supplied test command from `## Test Command`.
 - Visible output ends with the DONE_MESSAGE marker line `TEST_RESULT_ARTIFACT: <absolute path>` emitted immediately before the tool call, AND `subagent_done(message=DONE_MESSAGE)` is the terminal tool call. Both strings byte-equal. The tool call is the completion signal; the visible marker line alone is not completion. No other structured markers anywhere in the response.
+
+## Completion protocol
+
+<!-- BEGIN completion-protocol:marker-core (generated from packages/pi-flow-core/skills/_shared/completion-protocol.md; regenerate with skills/_shared/scripts/sync-completion-protocol.py --apply) -->
+The `subagent_done` tool call is the completion signal: the visible marker line alone is not completion. Do not end the session by sending a final answer alone, and do not emit further output after `subagent_done`. If this environment's `subagent_done` tool has no `message` argument, call `subagent_done()` immediately after the visible marker line.
+<!-- END completion-protocol:marker-core -->

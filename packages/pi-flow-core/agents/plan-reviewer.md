@@ -105,4 +105,8 @@ End-of-task checklist (do these in order, then stop):
 3. Then call `subagent_done` as your terminal tool action. Use `subagent_done(message=DONE_MESSAGE)` byte-equal to the visible marker line when `{REVIEW_OUTPUT_PATH}` is non-empty; call `subagent_done()` with no `message` argument otherwise so the parent receives the full review body.
 4. Do NOT emit any further output after the `subagent_done` call.
 
-Negative instruction: do not merely describe completion in prose, do not assume printing the review body is itself a completion signal, and do not end the session by sending a final answer alone. Visible output alone is not completion — the `subagent_done` tool call is the only signal the parent treats as completion. If this environment's `subagent_done` tool has no `message` argument, call `subagent_done()` immediately after the visible completion output.
+Negative instruction: do not merely describe completion in prose, and do not assume printing the review body is itself a completion signal.
+
+<!-- BEGIN completion-protocol:marker-core (generated from packages/pi-flow-core/skills/_shared/completion-protocol.md; regenerate with skills/_shared/scripts/sync-completion-protocol.py --apply) -->
+The `subagent_done` tool call is the completion signal: the visible marker line alone is not completion. Do not end the session by sending a final answer alone, and do not emit further output after `subagent_done`. If this environment's `subagent_done` tool has no `message` argument, call `subagent_done()` immediately after the visible marker line.
+<!-- END completion-protocol:marker-core -->

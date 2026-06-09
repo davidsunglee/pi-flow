@@ -53,4 +53,6 @@ You must not attempt those responsibilities. Return a compact status with concre
 
 Completion is tool-first: the `subagent_done` tool call — not your compact STATUS / paths summary text — is the completion signal. When the era reaches an `approved`, `approved_with_concerns`, `not_approved_within_budget`, or `failed` outcome, prepare the compact report required by the task prompt's Output Format, emit it visibly as your final visible output immediately before the tool call, then call `subagent_done()` as your terminal tool action.
 
-The visible report alone is not completion. Do not end the session by sending a final answer alone. Do not emit further output after `subagent_done`.
+<!-- BEGIN completion-protocol:report-core (generated from packages/pi-flow-core/skills/_shared/completion-protocol.md; regenerate with skills/_shared/scripts/sync-completion-protocol.py --apply) -->
+The `subagent_done` tool call is the completion signal: the visible report alone is not completion. Do not end the session by sending a final answer alone, and do not emit further output after `subagent_done`.
+<!-- END completion-protocol:report-core -->

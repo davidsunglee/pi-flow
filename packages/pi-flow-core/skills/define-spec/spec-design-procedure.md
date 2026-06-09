@@ -200,7 +200,11 @@ After Step 8's file write/edit tool returns successfully:
 
 3. Then call `subagent_done(message=DONE_MESSAGE)` — i.e. `subagent_done(message="SPEC_ARTIFACT: <absolute path>")` — as your terminal tool action. The `message` argument must be byte-equal to the visible marker line.
 
-The visible marker line alone is not completion, and the file write tool result alone is insufficient. Do not end the session by sending a final answer alone, and do not emit further output after `subagent_done`. The orchestrator's watcher prefers the `subagent_done` sentinel when present, then falls back to the transcript's last assistant message; emitting both channels ensures the marker reaches the parent and drives its review-and-commit gate. If this environment's `subagent_done` tool has no `message` argument, call `subagent_done()` immediately after the visible marker line.
+The file write tool result alone is insufficient. The orchestrator's watcher prefers the `subagent_done` sentinel when present, then falls back to the transcript's last assistant message; emitting both channels ensures the marker reaches the parent and drives its review-and-commit gate.
+
+<!-- BEGIN completion-protocol:marker-core (generated from packages/pi-flow-core/skills/_shared/completion-protocol.md; regenerate with skills/_shared/scripts/sync-completion-protocol.py --apply) -->
+The `subagent_done` tool call is the completion signal: the visible marker line alone is not completion. Do not end the session by sending a final answer alone, and do not emit further output after `subagent_done`. If this environment's `subagent_done` tool has no `message` argument, call `subagent_done()` immediately after the visible marker line.
+<!-- END completion-protocol:marker-core -->
 
 The file write target is `{SPEC_OUTPUT_PATH}` (always absolute, supplied by the orchestrator). The marker line emitted in both channels of `SPEC_ARTIFACT:` MUST be byte-equal to `{SPEC_OUTPUT_PATH}`. There is no branch-specific handling — the orchestrator pre-computes `{SPEC_OUTPUT_PATH}` for all three input shapes, so the same emission rule applies uniformly.
 

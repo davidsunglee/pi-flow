@@ -100,4 +100,8 @@ After the brief write succeeds:
 
 3. Then call `subagent_done(message=DONE_MESSAGE)` — i.e. `subagent_done(message="BRIEF_ARTIFACT: {OUTPUT_PATH}")` — as your terminal tool action. The `message` argument must be byte-equal to the visible marker line.
 
-The visible marker line alone is not completion, and the file write tool result alone is insufficient. Do not end the session by sending a final answer alone, and do not emit further output after `subagent_done`. The orchestrator's watcher prefers the `subagent_done` sentinel when present, then falls back to the transcript's last assistant message; emitting both channels ensures the marker reaches the parent and drives its review-and-commit gate. If this environment's `subagent_done` tool has no `message` argument, call `subagent_done()` immediately after the visible marker line.
+The file write tool result alone is insufficient. The orchestrator's watcher prefers the `subagent_done` sentinel when present, then falls back to the transcript's last assistant message; emitting both channels ensures the marker reaches the parent and drives its review-and-commit gate.
+
+<!-- BEGIN completion-protocol:marker-core (generated from packages/pi-flow-core/skills/_shared/completion-protocol.md; regenerate with skills/_shared/scripts/sync-completion-protocol.py --apply) -->
+The `subagent_done` tool call is the completion signal: the visible marker line alone is not completion. Do not end the session by sending a final answer alone, and do not emit further output after `subagent_done`. If this environment's `subagent_done` tool has no `message` argument, call `subagent_done()` immediately after the visible marker line.
+<!-- END completion-protocol:marker-core -->

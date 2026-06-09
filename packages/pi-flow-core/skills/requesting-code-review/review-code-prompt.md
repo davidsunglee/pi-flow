@@ -153,6 +153,10 @@ When `{REVIEW_OUTPUT_PATH}` is empty (standalone use):
 
 Output your review visibly, in the format defined by `## Output Format` above, immediately before the tool call. Do not write to disk. Do not emit a `REVIEW_ARTIFACT:` marker, and do not call `subagent_done` with a structured marker message; then call `subagent_done()` with no `message` argument as your terminal tool action, so the standalone path returns the review verbatim from the transcript's last assistant message.
 
+<!-- BEGIN completion-protocol:marker-core (generated from packages/pi-flow-core/skills/_shared/completion-protocol.md; regenerate with skills/_shared/scripts/sync-completion-protocol.py --apply) -->
+The `subagent_done` tool call is the completion signal: the visible marker line alone is not completion. Do not end the session by sending a final answer alone, and do not emit further output after `subagent_done`. If this environment's `subagent_done` tool has no `message` argument, call `subagent_done()` immediately after the visible marker line.
+<!-- END completion-protocol:marker-core -->
+
 ## Example Output
 
 ```
