@@ -26,9 +26,11 @@ Write the artifact exactly once to the path in `## Artifact Output Path` using t
 
 ## Output
 
-End your final assistant message with exactly one anchored line on its own line, as the very last line of your output: `TEST_RESULT_ARTIFACT: <absolute path>` where `<absolute path>` is character-for-character identical to the path in `## Artifact Output Path`.
+Completion is tool-first: the `subagent_done` tool call — not the artifact write, not the visible marker line — is the completion signal.
 
-Then, as your terminal tool action, call `subagent_done(message="TEST_RESULT_ARTIFACT: <absolute path>")`. The `message` argument MUST be byte-equal to the final-assistant-message marker line above. Emitting both channels ensures the marker reaches the orchestrator regardless of which channel the watcher reads.
+Set DONE_MESSAGE to `TEST_RESULT_ARTIFACT: <absolute path>` where `<absolute path>` is character-for-character identical to the path in `## Artifact Output Path`. Emit DONE_MESSAGE visibly as exactly one anchored line on its own line, as the very last visible line of your output, immediately before the tool call.
+
+Then call `subagent_done(message=DONE_MESSAGE)` — i.e. `subagent_done(message="TEST_RESULT_ARTIFACT: <absolute path>")` — as your terminal tool action. The `message` argument MUST be byte-equal to the visible marker line. The visible marker line alone is not completion. Do not end the session by sending a final answer alone, and do not emit further output after `subagent_done`. Emitting both channels ensures the marker reaches the orchestrator regardless of which channel the watcher reads. If this environment's `subagent_done` tool has no `message` argument, call `subagent_done()` immediately after the visible marker line.
 
 Do not emit any other structured markers in your response (no `STATUS:`, no other anchored lines).
 
@@ -41,4 +43,4 @@ Do not emit any other structured markers in your response (no `STATUS:`, no othe
 - Record any failure that has no stable suite-native identifier under NON_RECONCILABLE_FAILURES per the contract — never as a raw line in FAILING_IDENTIFIERS.
 - Do NOT classify the run as pass/fail. Reconciliation is the caller's responsibility.
 - Do NOT modify any source file; do NOT run `git` commands; do NOT run any command other than the supplied test command from `## Test Command`.
-- Final assistant message ends with `TEST_RESULT_ARTIFACT: <absolute path>`, AND `subagent_done(message="TEST_RESULT_ARTIFACT: <absolute path>")` is the terminal tool call. Both strings byte-equal. No other structured markers anywhere in the response.
+- Visible output ends with the DONE_MESSAGE marker line `TEST_RESULT_ARTIFACT: <absolute path>` emitted immediately before the tool call, AND `subagent_done(message=DONE_MESSAGE)` is the terminal tool call. Both strings byte-equal. The tool call is the completion signal; the visible marker line alone is not completion. No other structured markers anywhere in the response.

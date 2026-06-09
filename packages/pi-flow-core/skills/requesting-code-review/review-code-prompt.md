@@ -143,13 +143,13 @@ When `{REVIEW_OUTPUT_PATH}` is non-empty:
 2. The first non-empty line of the file MUST be exactly `{REVIEWER_PROVENANCE}` — copy it verbatim. Do not normalize whitespace, do not add backticks, do not insert any other content above it.
 3. Follow the provenance line with a single blank line, then the review body in the format defined by `## Output Format` above.
 4. Perform exactly one write per dispatch.
-5a. End your final assistant message with exactly one anchored line on its own line, as the very last line of your output: `REVIEW_ARTIFACT: <absolute path>` where `<absolute path>` is character-for-character identical to `{REVIEW_OUTPUT_PATH}`.
-5b. Call `subagent_done(message="REVIEW_ARTIFACT: <absolute path>")` as your terminal tool action. The `message` argument MUST be byte-equal to the final-assistant-message marker line in 5a. Emitting both channels ensures the marker reaches the refiner regardless of which channel the watcher reads.
+5a. Set DONE_MESSAGE to `REVIEW_ARTIFACT: <absolute path>` where `<absolute path>` is character-for-character identical to `{REVIEW_OUTPUT_PATH}`. Emit DONE_MESSAGE visibly as exactly one anchored line on its own line, as the very last visible line of your output, immediately before the tool call.
+5b. Then call `subagent_done(message=DONE_MESSAGE)` — i.e. `subagent_done(message="REVIEW_ARTIFACT: <absolute path>")` — as your terminal tool action. The `message` argument MUST be byte-equal to the visible marker line in 5a. The tool call is the completion signal; the visible marker line alone is not completion. Do not end the session by sending a final answer alone. Emitting both channels ensures the marker reaches the refiner regardless of which channel the watcher reads. If this environment's `subagent_done` tool has no `message` argument, call `subagent_done()` immediately after the visible marker line.
 6. Do not emit any other structured markers; the on-disk file is the sole source of truth for the refiner.
 
 When `{REVIEW_OUTPUT_PATH}` is empty (standalone use):
 
-Output your review as your final assistant message in the format defined by `## Output Format` above. Do not write to disk. Do not emit a `REVIEW_ARTIFACT:` marker. Do not call `subagent_done` with a structured marker message; the standalone path returns the review verbatim as the final assistant message.
+Output your review visibly, in the format defined by `## Output Format` above, immediately before the tool call. Do not write to disk. Do not emit a `REVIEW_ARTIFACT:` marker, and do not call `subagent_done` with a structured marker message; then call `subagent_done()` with no `message` argument as your terminal tool action, so the standalone path returns the review verbatim from the transcript's last assistant message.
 
 ## Example Output
 

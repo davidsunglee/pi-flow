@@ -51,14 +51,14 @@ Your task prompt may include a designated output artifact path and a verbatim pr
 1. Write the full review to the absolute path supplied as `{REVIEW_OUTPUT_PATH}`. The first non-empty line of the file MUST be exactly the line supplied as `{REVIEWER_PROVENANCE}` — no edits, no normalization, no additional prefix or suffix on that line.
 2. The provenance line is followed by a single blank line, then the review body (Outcome, Strengths, Issues by severity, Recommendations as defined in your prompt template's Output Format).
 3. Perform a single write per iteration. Do not re-write the file later in the same dispatch.
-4a. End your final assistant message with exactly one anchored line on its own line, as the very last line of your output: `REVIEW_ARTIFACT: <absolute path>` where `<absolute path>` is character-for-character identical to `{REVIEW_OUTPUT_PATH}`.
-4b. Call `subagent_done(message="REVIEW_ARTIFACT: <absolute path>")` as your terminal tool action. The `message` argument MUST be byte-equal to the final-assistant-message marker line in 4a.
+4a. Set DONE_MESSAGE to `REVIEW_ARTIFACT: <absolute path>` where `<absolute path>` is character-for-character identical to `{REVIEW_OUTPUT_PATH}`. Emit DONE_MESSAGE visibly as the final visible line of your output, immediately before the tool call.
+4b. Then call `subagent_done(message=DONE_MESSAGE)` — i.e. `subagent_done(message="REVIEW_ARTIFACT: <absolute path>")` — as your terminal tool action. The `message` argument MUST be byte-equal to the visible marker line in 4a. The tool call is the completion signal; the visible marker line alone is not completion.
 5. Do not emit any other structured markers in your response. The on-disk file is the sole source of truth for verdict, severity counts, and findings — the refiner reads the file from disk; the marker exists only to convey the path.
-6. The marker line MUST be the final non-empty line of your assistant message, anchored at column 1 (no leading whitespace, quote markers, or backticks). No prose, Markdown, or other content may follow the marker line on subsequent lines. The same exact string MUST be emitted as the `message` argument to `subagent_done`.
+6. The visible marker line MUST be the final non-empty line of your output, anchored at column 1 (no leading whitespace, quote markers, or backticks). No prose, Markdown, or other content may follow the marker line on subsequent lines. The same exact string MUST be emitted as the `message` argument to `subagent_done`.
 
 **When `{REVIEW_OUTPUT_PATH}` is empty** (standalone or non-refiner dispatch):
 
-Output the full review as your final assistant message in the format defined by your prompt template's Output Format. Do not write to any path. Do not emit a `REVIEW_ARTIFACT:` marker. The standalone path returns the review verbatim as the final assistant message — there is no structured marker on this path. However, you MUST still call `subagent_done` as your terminal tool action so the mux terminal session signals completion to the parent: call `subagent_done()` with no `message` argument, so the parent receives the full review body from your final assistant message.
+Output the full review visibly, in the format defined by your prompt template's Output Format, immediately before the tool call. Do not write to any path. Do not emit a `REVIEW_ARTIFACT:` marker — there is no structured marker on this path. Then call `subagent_done()` with no `message` argument as your terminal tool action, so the parent receives the full review body from the transcript's last assistant message. The visible review alone is not completion — the `subagent_done` tool call is the completion signal.
 
 Failure to follow this contract when `{REVIEW_OUTPUT_PATH}` is non-empty will be caught by the refiner's fail-fast validation (path-equality, file-existence-and-non-empty, on-disk first-line provenance) and surface as a `STATUS: failed` outcome with a specific reason naming the failed check.
 
@@ -69,8 +69,8 @@ Regardless of mode, you MUST end every dispatch by calling the `subagent_done` t
 End-of-task checklist (do these in order, then stop):
 
 1. Verify the review work is complete: verdict line emitted, findings categorized, and (when `{REVIEW_OUTPUT_PATH}` is non-empty) the on-disk review file written with the correct provenance line.
-2. Emit your final assistant message: the `REVIEW_ARTIFACT: <absolute path>` anchored marker line when `{REVIEW_OUTPUT_PATH}` is non-empty, otherwise the verbatim review body.
-3. Call `subagent_done` as your terminal tool action. Use `message="REVIEW_ARTIFACT: <absolute path>"` byte-equal to the final marker when `{REVIEW_OUTPUT_PATH}` is non-empty; call `subagent_done()` with no `message` argument otherwise so the parent receives the full review body.
+2. Emit your completion output visibly, immediately before the tool call: the DONE_MESSAGE marker line `REVIEW_ARTIFACT: <absolute path>` as the final visible line when `{REVIEW_OUTPUT_PATH}` is non-empty, otherwise the verbatim review body.
+3. Then call `subagent_done` as your terminal tool action. Use `subagent_done(message=DONE_MESSAGE)` byte-equal to the visible marker line when `{REVIEW_OUTPUT_PATH}` is non-empty; call `subagent_done()` with no `message` argument otherwise so the parent receives the full review body.
 4. Do NOT emit any further output after the `subagent_done` call.
 
-Negative instruction: do not merely describe completion in prose, and do not assume printing the review body is itself a completion signal. The `subagent_done` tool call is the only signal the parent treats as completion.
+Negative instruction: do not merely describe completion in prose, do not assume printing the review body is itself a completion signal, and do not end the session by sending a final answer alone. Visible output alone is not completion — the `subagent_done` tool call is the only signal the parent treats as completion. If this environment's `subagent_done` tool has no `message` argument, call `subagent_done()` immediately after the visible completion output.

@@ -120,12 +120,12 @@ If the overall verdict is `FAIL`, the orchestrator routes the task into its fail
 
 ## Completion Reporting
 
-You MUST end every dispatch by calling the `subagent_done` tool as your terminal tool action, AFTER your final assistant message containing the Report Format above has been emitted. This is a tool invocation, not a printed line — printing "done", emitting `VERDICT: PASS` alone, or simply ending the response is NOT sufficient. The mux terminal session relies on this tool call to signal completion to the parent orchestrator; omitting it leaves the parent waiting.
+Completion is tool-first: the `subagent_done` tool call — not your report text — is the completion signal. You MUST end every dispatch by calling the `subagent_done` tool as your terminal tool action. This is a tool invocation, not a printed line — printing "done", emitting `VERDICT: PASS` alone, or simply ending the response is NOT sufficient. The mux terminal session relies on this tool call to signal completion to the parent orchestrator; omitting it leaves the parent waiting.
 
 End-of-task checklist (do these in order, then stop):
 
-1. Confirm all Phase 1 evidence blocks and all Phase 2 per-criterion verdicts are emitted in the exact Report Format shape above, ending with the `VERDICT: <PASS | FAIL>` line and one-paragraph summary.
-2. Call `subagent_done()` as your terminal tool action, with no `message` argument, so the parent receives the full verifier report from your final assistant message.
+1. Prepare your full report in the exact Report Format shape above — all Phase 1 evidence blocks and all Phase 2 per-criterion verdicts, ending with the `VERDICT: <PASS | FAIL>` line and one-paragraph summary — and emit it visibly as your final visible output, immediately before the tool call.
+2. Then call `subagent_done()` as your terminal tool action, with no `message` argument, so the parent receives the full verifier report from the transcript's last assistant message.
 3. Do NOT run any further commands, read any further files, or emit any further output after the `subagent_done` call.
 
-Negative instruction: do not merely print the verdict in prose. The `subagent_done` tool call is the only signal the parent treats as completion — a final assistant message without that tool call will be observed as "still running" and may strand the dispatch.
+Negative instruction: do not merely print the verdict in prose, and do not end the session by sending a final answer alone. The visible report alone is not completion — the `subagent_done` tool call is the only signal the parent treats as completion, and a report without that tool call will be observed as "still running" and may strand the dispatch.

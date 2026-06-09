@@ -82,17 +82,20 @@ Additional rules:
 
 ## Completion contract
 
-After the brief write succeeds, your final assistant message MUST end with a single anchored line on its own line as the very last line of output:
+Completion is tool-first: the `subagent_done` tool call — not the file write, not the visible marker line — is the completion signal.
 
-```
-BRIEF_ARTIFACT: {OUTPUT_PATH}
-```
+After the brief write succeeds:
 
-Requirements for this line:
-- No surrounding backticks on the line itself.
-- No trailing commentary on the same line.
-- The path is character-for-character identical to the supplied `{OUTPUT_PATH}` above.
+1. Set DONE_MESSAGE to:
 
-In addition to the final-assistant-message marker line above, call `subagent_done(message="BRIEF_ARTIFACT: {OUTPUT_PATH}")` as your terminal tool action. The two strings — the final-assistant-message marker line and the `subagent_done` message — must be byte-equal. The orchestrator's watcher prefers the `subagent_done` sentinel when present, then falls back to the transcript's last assistant message; emitting both ensures the marker reaches the parent regardless of which channel the watcher reads.
+   ```
+   BRIEF_ARTIFACT: {OUTPUT_PATH}
+   ```
 
-The orchestrator parses this line to drive its review-and-commit gate. The file write tool result alone is insufficient — the marker line in your final assistant message is required.
+   The path is character-for-character identical to the supplied `{OUTPUT_PATH}` above.
+
+2. Emit DONE_MESSAGE visibly on its own line as the very last visible line of your output — no surrounding backticks on the line itself, no trailing commentary on the same line — immediately before the tool call.
+
+3. Then call `subagent_done(message=DONE_MESSAGE)` — i.e. `subagent_done(message="BRIEF_ARTIFACT: {OUTPUT_PATH}")` — as your terminal tool action. The `message` argument must be byte-equal to the visible marker line.
+
+The visible marker line alone is not completion, and the file write tool result alone is insufficient. Do not end the session by sending a final answer alone, and do not emit further output after `subagent_done`. The orchestrator's watcher prefers the `subagent_done` sentinel when present, then falls back to the transcript's last assistant message; emitting both channels ensures the marker reaches the parent and drives its review-and-commit gate. If this environment's `subagent_done` tool has no `message` argument, call `subagent_done()` immediately after the visible marker line.

@@ -182,17 +182,23 @@ How this step terminates depends on which branch is running this procedure.
 
 ### Subagent / mux branch (you are the `spec-designer` subagent)
 
-After Step 8's file write/edit tool returns successfully, you must send one final assistant message. Do **not** make the file write/edit tool call your final action — the orchestrator parses your final text message, not the tool-result side effect.
+Completion is tool-first: the `subagent_done` tool call — not the file write, not the visible marker line — is the completion signal. Do **not** make the file write/edit tool call your final action.
 
-That final assistant message must contain exactly this line, anchored on its own line, as your last output:
+After Step 8's file write/edit tool returns successfully:
 
-```
-SPEC_ARTIFACT: <absolute path>
-```
+1. Set DONE_MESSAGE to:
 
-Where `<absolute path>` is the full filesystem path of the spec file you just wrote. No backticks, no trailing commentary on the same line, no abbreviation. Then exit. The orchestrator parses this line to drive its review-and-commit gate.
+   ```
+   SPEC_ARTIFACT: <absolute path>
+   ```
 
-In addition to the final-assistant-message marker line above, call `subagent_done(message="SPEC_ARTIFACT: <absolute path>")` as your terminal tool action. The two strings — the final-assistant-message marker line and the `subagent_done` message — must be byte-equal. The orchestrator's watcher prefers the `subagent_done` sentinel when present, then falls back to the transcript's last assistant message; emitting both ensures the marker reaches the parent regardless of which channel the watcher reads.
+   Where `<absolute path>` is the full filesystem path of the spec file you just wrote. No backticks, no trailing commentary on the same line, no abbreviation.
+
+2. Emit DONE_MESSAGE visibly, anchored on its own line as the very last visible line of your output, immediately before the tool call.
+
+3. Then call `subagent_done(message=DONE_MESSAGE)` — i.e. `subagent_done(message="SPEC_ARTIFACT: <absolute path>")` — as your terminal tool action. The `message` argument must be byte-equal to the visible marker line.
+
+The visible marker line alone is not completion, and the file write tool result alone is insufficient. Do not end the session by sending a final answer alone, and do not emit further output after `subagent_done`. The orchestrator's watcher prefers the `subagent_done` sentinel when present, then falls back to the transcript's last assistant message; emitting both channels ensures the marker reaches the parent and drives its review-and-commit gate. If this environment's `subagent_done` tool has no `message` argument, call `subagent_done()` immediately after the visible marker line.
 
 The file write target is `{SPEC_OUTPUT_PATH}` (always absolute, supplied by the orchestrator). The marker line emitted in both channels of `SPEC_ARTIFACT:` MUST be byte-equal to `{SPEC_OUTPUT_PATH}`. There is no branch-specific handling — the orchestrator pre-computes `{SPEC_OUTPUT_PATH}` for all three input shapes, so the same emission rule applies uniformly.
 

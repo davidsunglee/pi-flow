@@ -231,17 +231,19 @@ Fix issues inline. If a requirement has no task, add the task.
 
 This output contract applies to the **initial-generation pass only** — when you are dispatched with the `generate-plan-prompt.md` task body. Edit-mode dispatches (driven by `edit-plan-prompt.md`) do NOT emit a marker; the `PLAN_ARTIFACT` from initial generation already names the file and edit mode reuses it.
 
-After saving the plan in initial-generation mode:
+After saving the plan in initial-generation mode, completion is tool-first:
 
-1. End your final assistant message with a single anchored line on its own line, as the very last line of your output:
+1. Set DONE_MESSAGE to:
 
    ```
    PLAN_ARTIFACT: <absolute path>
    ```
 
-   Where `<absolute path>` is character-for-character identical to the `{OUTPUT_PATH}` supplied in your task prompt. No surrounding backticks, no trailing commentary on the same line. The marker line MUST be the final non-empty line of your assistant message; no further prose, Markdown, or content may follow it on subsequent lines.
+   Where `<absolute path>` is character-for-character identical to the `{OUTPUT_PATH}` supplied in your task prompt.
 
-2. Call `subagent_done(message="PLAN_ARTIFACT: <absolute path>")` as your terminal tool action. The `message` argument must be byte-equal to the final-assistant-message marker line.
+2. Emit DONE_MESSAGE visibly as the final visible line of your output — anchored at column 1 on its own line, no surrounding backticks, no trailing commentary, with no further prose, Markdown, or content after it on subsequent lines — immediately before the tool call.
+
+3. Then call `subagent_done(message=DONE_MESSAGE)` — i.e. `subagent_done(message="PLAN_ARTIFACT: <absolute path>")` — as your terminal tool action. The `message` argument must be byte-equal to the visible marker line. The tool call is the completion signal; the visible marker line alone is not completion.
 
 The orchestrator validates the marker via `parse-artifact-handoff.py --marker PLAN_ARTIFACT --expected-path <absolute output path> --check-existence --check-non-empty` before handing off to refine-plan. Do NOT ask about execution mode, pacing, or wave configuration — that is `execute-plan`'s responsibility.
 
@@ -252,12 +254,12 @@ You MUST end every dispatch — initial-generation pass AND edit-mode pass — b
 End-of-task checklist (do these in order, then stop):
 
 1. Verify the plan work is complete: plan file written to `{OUTPUT_PATH}` (initial generation) or edited in place at the existing `Plan artifact:` path (edit mode), self-review performed, and all required sections present.
-2. Emit your final assistant message:
-   - Initial-generation pass: the `PLAN_ARTIFACT: <absolute path>` anchored marker line as the final line.
+2. Emit your completion output visibly, immediately before the tool call:
+   - Initial-generation pass: the DONE_MESSAGE marker line `PLAN_ARTIFACT: <absolute path>` as the final visible line of your output.
    - Edit-mode pass: a short status summary (no `PLAN_ARTIFACT:` marker — the marker exists only on the initial-generation pass).
-3. Call `subagent_done` as your terminal tool action:
-   - Initial-generation pass: `subagent_done(message="PLAN_ARTIFACT: <absolute path>")` byte-equal to the final marker line.
-   - Edit-mode pass: `subagent_done()` with no `message` argument, so the parent receives your full edit summary from the final assistant message.
+3. Then call `subagent_done` as your terminal tool action:
+   - Initial-generation pass: `subagent_done(message=DONE_MESSAGE)` byte-equal to the visible marker line.
+   - Edit-mode pass: `subagent_done()` with no `message` argument, so the parent receives your full edit summary from the transcript's last assistant message.
 4. Do NOT emit any further output after the `subagent_done` call.
 
-Negative instruction: do not merely describe completion in prose. The `subagent_done` tool call is the only signal the parent treats as completion — a final assistant message without that tool call will be observed as "still running".
+Negative instruction: do not merely describe completion in prose, and do not end the session by sending a final answer alone. The `subagent_done` tool call is the completion signal and the only signal the parent treats as completion — visible output alone is not completion and will be observed as "still running". If this environment's `subagent_done` tool has no `message` argument, call `subagent_done()` immediately after the visible completion output.
