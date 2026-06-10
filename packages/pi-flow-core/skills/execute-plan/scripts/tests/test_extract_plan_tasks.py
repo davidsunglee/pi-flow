@@ -70,8 +70,8 @@ class TestCleanPlan(unittest.TestCase):
             self.assertTrue(criterion["text"], "criterion text is empty")
             self.assertTrue(criterion["verify"], "criterion verify is empty")
 
-    def test_task1_model_recommendation(self):
-        self.assertEqual(self.data["tasks"][0]["model_recommendation"], "cheap")
+    def test_task1_model_tier(self):
+        self.assertEqual(self.data["tasks"][0]["model_tier"], "efficient")
 
     def test_task1_dependencies_empty(self):
         self.assertEqual(self.data["tasks"][0]["dependencies"], [])
@@ -162,16 +162,16 @@ class TestMissingModel(unittest.TestCase):
         result = run_script("--plan", str(FIXTURES / "plan-missing-model.md"))
         self.assertNotEqual(result.returncode, 0)
 
-    def test_stderr_has_missing_model_recommendation_error(self):
+    def test_stderr_has_missing_model_tier_error(self):
         result = run_script("--plan", str(FIXTURES / "plan-missing-model.md"))
         errors = json.loads(result.stderr)["errors"]
         kinds = [e["kind"] for e in errors]
-        self.assertIn("missing_model_recommendation", kinds)
+        self.assertIn("missing_model_tier", kinds)
 
     def test_error_references_task1(self):
         result = run_script("--plan", str(FIXTURES / "plan-missing-model.md"))
         errors = json.loads(result.stderr)["errors"]
-        mm_errors = [e for e in errors if e["kind"] == "missing_model_recommendation"]
+        mm_errors = [e for e in errors if e["kind"] == "missing_model_tier"]
         task_nums = [e.get("task_number") for e in mm_errors]
         self.assertIn(1, task_nums)
 
@@ -181,20 +181,31 @@ class TestInvalidModel(unittest.TestCase):
         result = run_script("--plan", str(FIXTURES / "plan-invalid-model.md"))
         self.assertNotEqual(result.returncode, 0)
 
-    def test_stderr_has_missing_model_recommendation_error(self):
+    def test_stderr_has_missing_model_tier_error(self):
         result = run_script("--plan", str(FIXTURES / "plan-invalid-model.md"))
         errors = json.loads(result.stderr)["errors"]
         kinds = [e["kind"] for e in errors]
-        self.assertIn("missing_model_recommendation", kinds)
+        self.assertIn("missing_model_tier", kinds)
 
     def test_error_detail_mentions_offending_token(self):
         result = run_script("--plan", str(FIXTURES / "plan-invalid-model.md"))
         errors = json.loads(result.stderr)["errors"]
-        mm_errors = [e for e in errors if e["kind"] == "missing_model_recommendation"]
+        mm_errors = [e for e in errors if e["kind"] == "missing_model_tier"]
         self.assertTrue(
             any("premium" in (e.get("detail") or "") for e in mm_errors),
             "detail does not mention the offending token 'premium'",
         )
+
+
+class TestFrontierModelTier(unittest.TestCase):
+    def test_frontier_value_parses_and_is_accepted(self):
+        task_section = _make_task(1, "Frontier task", model="frontier")
+        plan = _make_plan(task_section=task_section)
+        result, data, errors = _parse_plan_str(plan)
+        self.assertEqual(result.returncode, 0, f"frontier model tier should be accepted: {errors}")
+        self.assertEqual(data["tasks"][0]["model_tier"], "frontier")
+        kinds = [e.get("kind") for e in errors]
+        self.assertNotIn("missing_model_tier", kinds)
 
 
 class TestOutOfOrder(unittest.TestCase):
@@ -407,7 +418,7 @@ class TestInlineBoldSectionLabelsTolerance(unittest.TestCase):
             "**Steps:**\n- [ ] **Step 1:** Read the plan file\n\n"
             "**Acceptance criteria:**\n"
             "- The script exits zero.\n  Verify: run it.\n\n"
-            "**Model recommendation:** cheap\n\n"
+            "**Model tier:** efficient\n\n"
             "## Dependencies\n\n"
             "## Risk Assessment\nLow risk.\n\n"
             "## Test Command\n```bash\necho hi\n```\n"
@@ -571,7 +582,7 @@ class TestFencedHeadingsMinimal(unittest.TestCase):
 
 
 class TestFencedHeadingsRealistic(unittest.TestCase):
-    """Verify that fenced markdown content doesn't break parsing and model recommendation is preserved."""
+    """Verify that fenced markdown content doesn't break parsing and model tier is preserved."""
 
     def setUp(self):
         self.result = run_script("--plan", str(FIXTURES / "plan-fenced-headings-realistic.md"))
@@ -587,11 +598,11 @@ class TestFencedHeadingsRealistic(unittest.TestCase):
         self.assertIsNotNone(self.data)
         self.assertEqual(len(self.data["tasks"]), 1)
 
-    def test_model_recommendation_after_fence(self):
+    def test_model_tier_after_fence(self):
         self.assertIsNotNone(self.data)
         task = self.data["tasks"][0]
-        self.assertEqual(task["model_recommendation"], "standard",
-                         "Model recommendation after fence should be preserved")
+        self.assertEqual(task["model_tier"], "standard",
+                         "Model tier after fence should be preserved")
 
     def test_task_spec_contains_post_fence_text(self):
         self.assertIsNotNone(self.data)
@@ -599,11 +610,11 @@ class TestFencedHeadingsRealistic(unittest.TestCase):
         self.assertIn("The above block demonstrates", task_spec,
                       "Text after fence should be in task_spec")
 
-    def test_task_spec_contains_literal_model_recommendation_line(self):
+    def test_task_spec_contains_literal_model_tier_line(self):
         self.assertIsNotNone(self.data)
         task_spec = self.data["tasks"][0]["task_spec"]
-        self.assertIn("**Model recommendation:** standard", task_spec,
-                      "Literal model recommendation line should be in task_spec")
+        self.assertIn("**Model tier:** standard", task_spec,
+                      "Literal model tier line should be in task_spec")
 
 
 class TestFencedFakeRequiredSection(unittest.TestCase):
@@ -679,7 +690,7 @@ More content.
 - Test passes.
   Verify: run it.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ## Dependencies
 
@@ -727,7 +738,7 @@ More content.
 - Test passes.
   Verify: run it.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ## Dependencies
 
@@ -775,7 +786,7 @@ More content.
 - Test passes.
   Verify: run it.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ## Dependencies
 
@@ -823,7 +834,7 @@ More content.
 - Test passes.
   Verify: run it.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ## Dependencies
 
@@ -871,7 +882,7 @@ More content.
 - Test passes.
   Verify: run it.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ## Dependencies
 
@@ -931,16 +942,16 @@ More content here inside the fence.
 - Still inside fence.
   Verify: run it.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 """
         result, data = self._parse_inline_fixture(content)
         # The fence opens at the ``` and should NOT be closed by the ~~~
         # (different marker type). Since there's no closing ``` the fence
         # remains open to EOF, suppressing the parsing of any structure inside it.
-        # Since **Model recommendation:** is inside the unclosed fence, it won't be
-        # parsed, causing the task to fail validation (missing model_recommendation).
+        # Since **Model tier:** is inside the unclosed fence, it won't be
+        # parsed, causing the task to fail validation (missing model_tier).
         self.assertNotEqual(result.returncode, 0,
-                            "Unclosed fence suppressing model recommendation should cause validation errors")
+                            "Unclosed fence suppressing model tier should cause validation errors")
 
     def test_unclosed_fence_suppresses_to_eof(self):
         """Unclosed fence should suppress structure parsing to EOF."""
@@ -973,7 +984,7 @@ More content here.
 - Still inside fence.
   Verify: run it.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ## Dependencies
 
@@ -987,7 +998,7 @@ test
 """
         result, data = self._parse_inline_fixture(content)
         # With an unclosed fence suppressing all content to EOF,
-        # we should get validation errors for missing sections or model recommendation
+        # we should get validation errors for missing sections or model tier
         self.assertNotEqual(result.returncode, 0,
                             "Unclosed fence suppressing content should cause validation errors")
 
@@ -1020,7 +1031,7 @@ Python.
 - Test passes.
   Verify: run it.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ## Dependencies
 
@@ -1144,9 +1155,9 @@ class TestSafeTildeOuterFence(unittest.TestCase):
         self.assertIsNotNone(self.data)
         self.assertIn("waves", self.data)
 
-    def test_model_recommendation_parsed(self):
+    def test_model_tier_parsed(self):
         self.assertIsNotNone(self.data)
-        self.assertEqual(self.data["tasks"][0]["model_recommendation"], "standard")
+        self.assertEqual(self.data["tasks"][0]["model_tier"], "standard")
 
 
 class TestSafeLongBacktickOuterFence(unittest.TestCase):
@@ -1167,9 +1178,9 @@ class TestSafeLongBacktickOuterFence(unittest.TestCase):
         self.assertIsNotNone(self.data)
         self.assertIn("waves", self.data)
 
-    def test_model_recommendation_parsed(self):
+    def test_model_tier_parsed(self):
         self.assertIsNotNone(self.data)
-        self.assertEqual(self.data["tasks"][0]["model_recommendation"], "standard")
+        self.assertEqual(self.data["tasks"][0]["model_tier"], "standard")
 
 
 def _make_plan(
@@ -1203,7 +1214,7 @@ def _make_plan(
     return "\n".join(parts)
 
 
-def _make_task(number, title, sep=":", model="cheap", extra_files=None, criterion_prefix="", verify_prefix=""):
+def _make_task(number, title, sep=":", model="efficient", extra_files=None, criterion_prefix="", verify_prefix=""):
     """Build a single task block."""
     files_line = extra_files or f"- Create: file{number}.py"
     crit_verify = f"  {verify_prefix}Verify: run it." if not verify_prefix else f"  {verify_prefix}run it."
@@ -1216,7 +1227,7 @@ def _make_task(number, title, sep=":", model="cheap", extra_files=None, criterio
         f"**Acceptance criteria:**\n"
         f"- {criterion_prefix}Some criterion.\n"
         f"{crit_verify}\n\n"
-        f"**Model recommendation:** {model}"
+        f"**Model tier:** {model}"
     )
 
 
@@ -1258,7 +1269,7 @@ class TestMalformedTaskHeading(unittest.TestCase):
             f"**Files:**\n- Create: file.py\n\n"
             f"**Steps:**\n- [ ] **Step 1:** Do something\n\n"
             f"**Acceptance criteria:**\n- Some criterion.\n  Verify: run it.\n\n"
-            f"**Model recommendation:** cheap"
+            f"**Model tier:** efficient"
         )
         return _make_plan(task_section=task_section)
 
@@ -1331,7 +1342,7 @@ class TestUnrelaxedSectionHeadingsStayStrict(unittest.TestCase):
 class TestLabelCaseTolerance(unittest.TestCase):
     def _make_plan_with_labels(self, files_label="**Files:**", steps_label="**Steps:**",
                                 criteria_label="**Acceptance criteria:**",
-                                model_label="**Model recommendation:**",
+                                model_label="**Model tier:**",
                                 verify_prefix="Verify:"):
         task_section = (
             "### Task 1: Title case labels\n\n"
@@ -1342,19 +1353,19 @@ class TestLabelCaseTolerance(unittest.TestCase):
             f"{criteria_label}\n"
             "- Some criterion.\n"
             f"  {verify_prefix} run it.\n\n"
-            f"{model_label} cheap"
+            f"{model_label} efficient"
         )
         return _make_plan(task_section=task_section)
 
-    def test_title_case_acceptance_criteria_and_model_recommendation(self):
+    def test_title_case_acceptance_criteria_and_model_tier(self):
         plan = self._make_plan_with_labels(
             criteria_label="**Acceptance Criteria:**",
-            model_label="**Model Recommendation:**",
+            model_label="**Model Tier:**",
         )
         result, data, errors = _parse_plan_str(plan)
         self.assertEqual(result.returncode, 0, f"Title-case labels failed: {errors}")
         self.assertTrue(len(data["tasks"][0]["criteria"]) > 0, "criteria should be populated")
-        self.assertEqual(data["tasks"][0]["model_recommendation"], "cheap")
+        self.assertEqual(data["tasks"][0]["model_tier"], "efficient")
 
     def test_lowercase_verify(self):
         plan = self._make_plan_with_labels(verify_prefix="verify:")
@@ -1376,7 +1387,7 @@ class TestFilePrefixCaseTolerance(unittest.TestCase):
             "**Acceptance criteria:**\n"
             "- Some criterion.\n"
             "  Verify: run it.\n\n"
-            "**Model recommendation:** cheap"
+            "**Model tier:** efficient"
         )
         return _make_plan(task_section=task_section)
 
@@ -1437,7 +1448,7 @@ class TestFencedVariantsIgnored(unittest.TestCase):
             "**Acceptance criteria:**\n"
             "- Criterion.\n"
             "  Verify: run it.\n\n"
-            "**Model recommendation:** cheap"
+            "**Model tier:** efficient"
         )
         plan = _make_plan(task_section=task_section)
         result, data, errors = _parse_plan_str(plan)

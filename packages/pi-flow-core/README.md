@@ -18,7 +18,7 @@ Workflow skills, bundled agent definitions, slash commands, and helper runner fo
 
 ```sh
 # Run a shared Python helper
-pi-flow helper _shared/resolve-model-dispatch --tier modelTiers.capable --agent coder
+pi-flow helper _shared/resolve-model-dispatch --model-tier modelTiers.capable --agent coder
 
 # Run a skill-specific helper
 pi-flow helper execute-plan/extract-plan-tasks --plan plan.md

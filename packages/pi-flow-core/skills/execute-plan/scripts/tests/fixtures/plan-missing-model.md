@@ -40,7 +40,7 @@ Python 3, argparse, json
 - The script emits valid JSON with a tasks array.
   Verify: Parse the output as JSON and check that tasks is a list.
 
-**Model recommendation:** standard
+**Model tier:** standard
 
 ## Dependencies
 

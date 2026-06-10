@@ -4,7 +4,7 @@ Test fence-aware parsing with realistic markdown content inside code blocks.
 
 ## Architecture summary
 
-A plan with a task that documents markdown structure in a fenced code block, with the model recommendation appearing after the fence closure.
+A plan with a task that documents markdown structure in a fenced code block, with the model tier appearing after the fence closure.
 
 ## Tech stack
 
@@ -48,9 +48,9 @@ The above block demonstrates how our parser handles nested markdown.
 - The task is parsed correctly despite the fenced markdown block.
   Verify: run the parser and confirm Task 1 is extracted completely.
 - Content after the fence is still parsed.
-  Verify: assert the `task_spec` contains `The above block demonstrates` and the model recommendation line.
+  Verify: assert the `task_spec` contains `The above block demonstrates` and the model tier line.
 
-**Model recommendation:** standard
+**Model tier:** standard
 
 ## Dependencies
 

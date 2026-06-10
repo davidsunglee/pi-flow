@@ -106,7 +106,7 @@ pi-flow helper _shared/reconcile-test-run --artifact artifact.md --mode capture
 pi-flow helper _shared/resolve-coordinator-dispatch --agent plan-refiner
 
 # Resolve the dispatch model for a given tier
-pi-flow helper _shared/resolve-model-dispatch --tier modelTiers.capable --agent coder
+pi-flow helper _shared/resolve-model-dispatch --model-tier modelTiers.capable --agent coder
 
 # Validate provenance preambles inside a review document
 pi-flow helper _shared/validate-review-provenance --review-file review.md --allowed-tiers modelTiers.capable

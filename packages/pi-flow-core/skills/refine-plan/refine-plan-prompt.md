@@ -46,7 +46,7 @@ Model tier assignments:
 
 ### Dispatch resolution
 
-Resolve each subagent dispatch via `pi-flow helper _shared/resolve-model-dispatch --tier <tier> --agent <agent>`, whose envelope includes `model`, `cli`, and `executionPolicy`. The tier assignments are listed above — `crossProviderModelTiers.capable` is the primary plan-reviewer tier, `modelTiers.capable` is the fallback plan-reviewer tier, and `modelTiers.capable` is also the planner edit-pass tier. On any of the five documented failure conditions (script exits non-zero), emit the corresponding canonical template byte-equal and emit `STATUS: failed` with the appropriate reason from the `## Failure Modes` list — never silently fall back. Always pass `cli` and `executionPolicy` explicitly on every `subagent_run_serial` task.
+Resolve each subagent dispatch via `pi-flow helper _shared/resolve-model-dispatch --model-tier <tier> --agent <agent>`, whose envelope includes `model`, `cli`, and `executionPolicy`. The tier assignments are listed above — `crossProviderModelTiers.capable` is the primary plan-reviewer tier, `modelTiers.capable` is the fallback plan-reviewer tier, and `modelTiers.capable` is also the planner edit-pass tier. On any of the five documented failure conditions (script exits non-zero), emit the corresponding canonical template byte-equal and emit `STATUS: failed` with the appropriate reason from the `## Failure Modes` list — never silently fall back. Always pass `cli` and `executionPolicy` explicitly on every `subagent_run_serial` task.
 
 ## Protocol
 
@@ -104,7 +104,7 @@ When `{CARRY_OVER_REVIEW}` is empty (first-era runs, etc.), skip the carry-over 
 
 1. **Verify the plan file** at `{PLAN_PATH}` exists and is non-empty. If the file is missing or empty, emit `STATUS: failed` with reason `input artifact missing or empty: plan file at iteration start` and exit immediately.
 
-2. **Resolve the primary reviewer dispatch** by running `resolve-model-dispatch.py --tier crossProviderModelTiers.capable --agent plan-reviewer`.
+2. **Resolve the primary reviewer dispatch** by running `resolve-model-dispatch.py --model-tier crossProviderModelTiers.capable --agent plan-reviewer`.
 
 3. **Prepare the primary review prompt** by running `pi-flow helper refine-plan/prepare-plan-review-prompt --plan-path "{PLAN_PATH}" --task-artifact "{TASK_ARTIFACT line or empty}" --source-idea "{SOURCE_IDEA line or empty}" --source-spec "{SOURCE_SPEC line or empty}" --scout-brief "{SCOUT_BRIEF line or empty}" --original-spec-inline <path-or-stdin> --structural-only-note <path-or-stdin> --review-output-path "{REVIEW_OUTPUT_PATH}" --working-dir "{WORKING_DIR}" --current-era <CURRENT_ERA> --reviewer-model <primary model> --reviewer-cli <primary cli>`. On non-zero exit, emit `STATUS: failed` with reason `worker dispatch failed: plan-reviewer` and exit. Read `.prompt_path`, `.review_path`, and `.reviewer_provenance` from stdout JSON. The helper owns temp-file creation, absolute review-path construction (`{WORKING_DIR}/{REVIEW_OUTPUT_PATH}-v<CURRENT_ERA>.md`), and the exact `**Reviewer:** <provider>/<model> via <cli>` line.
 
@@ -112,7 +112,7 @@ When `{CARRY_OVER_REVIEW}` is empty (first-era runs, etc.), skip the carry-over 
 
    On dispatch error, retry **once** with the fallback tier `capable`. The fallback MUST NOT reuse the primary helper output because the embedded reviewer-provenance line would still name the primary model. Perform these substeps in order:
 
-   - **4a. Resolve the fallback reviewer dispatch.** Run `resolve-model-dispatch.py --tier modelTiers.capable --agent plan-reviewer`.
+   - **4a. Resolve the fallback reviewer dispatch.** Run `resolve-model-dispatch.py --model-tier modelTiers.capable --agent plan-reviewer`.
    - **4b. Re-run `prepare-plan-review-prompt.py`** with the fallback `model` and `cli`, keeping every non-reviewer input identical (same current era, same review-output base path). On non-zero exit, emit `STATUS: failed` with reason `worker dispatch failed: plan-reviewer` and exit.
    - **4c. Dispatch the fallback** with the helper's fresh `.prompt_path` and `.reviewer_provenance`.
 

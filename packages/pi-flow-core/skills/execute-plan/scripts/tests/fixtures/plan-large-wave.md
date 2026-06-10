@@ -26,7 +26,7 @@ Python 3, argparse, json
 - Something works.
   Verify: Run the script and confirm it works.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ### Task 2: Task two
 
@@ -40,7 +40,7 @@ Python 3, argparse, json
 - Something works.
   Verify: Run the script and confirm it works.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ### Task 3: Task three
 
@@ -54,7 +54,7 @@ Python 3, argparse, json
 - Something works.
   Verify: Run the script and confirm it works.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ### Task 4: Task four
 
@@ -68,7 +68,7 @@ Python 3, argparse, json
 - Something works.
   Verify: Run the script and confirm it works.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ### Task 5: Task five
 
@@ -82,7 +82,7 @@ Python 3, argparse, json
 - Something works.
   Verify: Run the script and confirm it works.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ### Task 6: Task six
 
@@ -96,7 +96,7 @@ Python 3, argparse, json
 - Something works.
   Verify: Run the script and confirm it works.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ### Task 7: Task seven
 
@@ -110,7 +110,7 @@ Python 3, argparse, json
 - Something works.
   Verify: Run the script and confirm it works.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ### Task 8: Task eight
 
@@ -124,7 +124,7 @@ Python 3, argparse, json
 - Something works.
   Verify: Run the script and confirm it works.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ### Task 9: Task nine
 
@@ -138,7 +138,7 @@ Python 3, argparse, json
 - Something works.
   Verify: Run the script and confirm it works.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ### Task 10: Task ten
 
@@ -152,7 +152,7 @@ Python 3, argparse, json
 - Something works.
   Verify: Run the script and confirm it works.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ## Dependencies
 

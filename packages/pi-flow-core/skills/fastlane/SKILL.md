@@ -58,7 +58,7 @@ Initialize run state:
 
 | Field | Default | Allowed values | Consumed by |
 | --- | --- | --- | --- |
-| `coder_tier` | `capable` | `cheap`, `standard`, `capable` | Step 4 coder dispatch |
+| `model_tier` | `capable` | `efficient`, `standard`, `capable`, `frontier` | Step 4 coder dispatch |
 | `refine_max_iterations` | `3` | integers `1`–`5` | Step 9 refine-code |
 
 Render the top-level confirmation menu:
@@ -99,7 +99,7 @@ Choose a setting to change:
 
 | Option | Behavior |
 | --- | --- |
-| `(t)` | Prompt for `cheap|standard|capable`; write the value to `coder_tier`; re-render Settings before returning to this submenu. |
+| `(t)` | Prompt for `efficient|standard|capable|frontier`; write the value to `model_tier`; re-render Settings before returning to this submenu. |
 | `(r)` | Prompt for an integer `1`–`5`; write it to `refine_max_iterations`; re-render Settings. |
 | `(m)` | Return to the top-level confirmation menu. |
 
@@ -145,10 +145,10 @@ No worktree creation. Fastlane operates in the current workspace only.
 Resolve `(model, cli, executionPolicy)` with:
 
 ~~~
-pi-flow helper _shared/resolve-model-dispatch --tier modelTiers.<coder_tier> --agent coder
+pi-flow helper _shared/resolve-model-dispatch --model-tier modelTiers.<model_tier> --agent coder
 ~~~
 
-`<coder_tier>` is the Step 2 run-state alias (`cheap`/`standard`/`capable`) mapped into the `modelTiers` section. On non-zero exit, surface the helper's stderr (canonical templates (1)–(5)) byte-equal and stop.
+`<model_tier>` is the Step 2 run-state alias (`efficient`/`standard`/`capable`/`frontier`) mapped into the `modelTiers` section. On non-zero exit, surface the helper's stderr (canonical templates (1)–(5)) byte-equal and stop.
 
 Build the prompt:
 

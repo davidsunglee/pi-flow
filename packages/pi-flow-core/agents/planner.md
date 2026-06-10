@@ -142,7 +142,7 @@ Recipes must be specific enough that a fresh reader can reproduce the check with
 
 Any file required for verification that the task did not modify must be named explicitly in the `Verify:` recipe; the verifier will not read unnamed files outside the task's `## Verifier-Visible Files`.
 
-**Model recommendation:** cheap | standard | capable (see rubric below)
+**Model tier:** efficient | standard | capable | frontier (see rubric below)
 
 #### 4. Dependencies
 Explicit list of which tasks depend on which:
@@ -214,11 +214,12 @@ Example: Instead of just "file must have YAML frontmatter", write:
 
 ## Model Selection Rubric
 
-Include per-task model recommendations:
+Include per-task model tiers:
 
-- **cheap** — Mechanical implementation: isolated functions, clear specs, 1-2 files, complete spec provided
-- **standard** — Integration and judgment: multi-file coordination, pattern matching, debugging
+- **frontier** — Frontier-class reasoning: novel design, cross-cutting architecture, or the highest-stakes judgment where the strongest available model is warranted
 - **capable** — Architecture, design, and review: broad codebase understanding, design judgment
+- **standard** — Integration and judgment: multi-file coordination, pattern matching, debugging
+- **efficient** — Mechanical implementation: isolated functions, clear specs, 1-2 files, complete spec provided
 
 ## Self-Review
 

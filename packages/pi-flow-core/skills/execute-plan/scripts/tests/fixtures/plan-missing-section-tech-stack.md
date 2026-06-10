@@ -23,7 +23,7 @@ Single-script Python tool that parses markdown and emits JSON.
 - The script exits 0 on a clean plan.
   Verify: Run the script and check exit code is zero.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ### Task 2: Emit JSON output
 
@@ -37,7 +37,7 @@ Single-script Python tool that parses markdown and emits JSON.
 - The script emits valid JSON with a tasks array.
   Verify: Parse the output as JSON and check that tasks is a list.
 
-**Model recommendation:** standard
+**Model tier:** standard
 
 ## Dependencies
 

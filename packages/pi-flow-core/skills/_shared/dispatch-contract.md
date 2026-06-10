@@ -13,14 +13,16 @@ Expected JSON shape:
 ```json
 {
   "modelTiers": {
+    "frontier": "<non-empty model string>",
     "capable":  "<non-empty model string>",
     "standard": "<non-empty model string>",
-    "cheap":    "<non-empty model string>"
+    "efficient": "<non-empty model string>"
   },
   "crossProviderModelTiers": {
+    "frontier": "<non-empty model string>",
     "capable":  "<non-empty model string>",
     "standard": "<non-empty model string>",
-    "cheap":    "<non-empty model string>"
+    "efficient": "<non-empty model string>"
   },
   "subagentDispatch": {
     "<provider-prefix>": "<cli-name>",
@@ -34,8 +36,8 @@ Expected JSON shape:
 }
 ```
 
-- `modelTiers` is required when consumed: each tier key (`capable`, `standard`, `cheap`) maps to a non-empty model string.
-- The optional `crossProviderModelTiers` object has the same three tier names, each mapping to a non-empty model string.
+- `modelTiers` is required when consumed: each tier key (`frontier`, `capable`, `standard`, `efficient`) maps to a non-empty model string.
+- The optional `crossProviderModelTiers` object has the same four tier names, each mapping to a non-empty model string.
 - The required `subagentDispatch` object maps provider prefixes (e.g., `anthropic`, `openai-codex`) to CLI names (e.g., `claude`, `codex`).
 - The `coordinatorSubagentDispatch` object is read only by coordinator dispatch (see `## Coordinator dispatch procedure` below): `modelChain` entries are ordered exact model identifiers, not tier aliases. There is no `cli` key — the coordinator CLI is a system invariant (`pi`).
 - `executionPolicy` is required and must be exactly `"guarded"` or `"unrestricted"`. There is no silent default.
@@ -54,7 +56,7 @@ Per-site extras (e.g., fastlane's `thinking: "high"`, define-spec's `systemPromp
 
 ### Leaf dispatch
 
-Run `pi-flow helper _shared/resolve-model-dispatch --tier <tier> --agent <agent>`. The helper resolves the section-qualified tier path to `model`, extracts the provider prefix, looks up `subagentDispatch[<prefix>]` for `cli`, validates `executionPolicy`, and prints `{"model", "cli", "provider", "tier", "executionPolicy"}` — the complete envelope. The site copies `model`, `cli`, and `executionPolicy` into its task entry with no second config read.
+Run `pi-flow helper _shared/resolve-model-dispatch --model-tier <tier> --agent <agent>`. The helper resolves the section-qualified tier path to `model`, extracts the provider prefix, looks up `subagentDispatch[<prefix>]` for `cli`, validates `executionPolicy`, and prints `{"model", "cli", "provider", "tier", "executionPolicy"}` — the complete envelope. The site copies `model`, `cli`, and `executionPolicy` into its task entry with no second config read.
 
 ### Coordinator dispatch
 
@@ -66,7 +68,7 @@ Every pi-flow workflow dispatch task entry passes the resolved `executionPolicy`
 
 ## Primitive operations
 
-1. **Tier-path resolution** — given a section-qualified tier path (`modelTiers.capable`, `modelTiers.standard`, `modelTiers.cheap`, `crossProviderModelTiers.capable`, `crossProviderModelTiers.standard`, `crossProviderModelTiers.cheap`), look up the corresponding non-empty model string from the parsed JSON.
+1. **Tier-path resolution** — given a section-qualified tier path (`modelTiers.frontier`, `modelTiers.capable`, `modelTiers.standard`, `modelTiers.efficient`, `crossProviderModelTiers.frontier`, `crossProviderModelTiers.capable`, `crossProviderModelTiers.standard`, `crossProviderModelTiers.efficient`), look up the corresponding non-empty model string from the parsed JSON.
 
 2. **Provider-prefix extraction** — given a model string of shape `<provider>/<model-name>`, return the substring before the first `/` (e.g., `anthropic/claude-opus-4` → `anthropic`).
 
@@ -130,7 +132,7 @@ flow.json coordinatorSubagentDispatch has no usable modelChain — cannot dispat
 coordinator-dispatch: all coordinatorSubagentDispatch.modelChain models failed; last attempt: <model> via pi — <error>
 ```
 
-Parameters `<agent>`, `<tier>`, `<provider>`, `<model>`, and `<error>` are substituted verbatim by the consumer. `<tier>` is a section-qualified path like `crossProviderModelTiers.cheap` and is substituted as-is — for example, Template (2) becomes `flow.json has no usable "crossProviderModelTiers.cheap" model — cannot dispatch test-runner.` for the test-runner site.
+Parameters `<agent>`, `<tier>`, `<provider>`, `<model>`, and `<error>` are substituted verbatim by the consumer. `<tier>` is a section-qualified path like `crossProviderModelTiers.efficient` and is substituted as-is — for example, Template (2) becomes `flow.json has no usable "crossProviderModelTiers.efficient" model — cannot dispatch test-runner.` for the test-runner site.
 
 ## Coordinator dispatch procedure
 

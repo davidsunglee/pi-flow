@@ -7,11 +7,11 @@ description: "Non-interactive task-scoped codebase reconnaissance. Dispatches th
 
 This skill orchestrates a fresh-context scout subagent that writes a structured brief to `docs/briefs/`. The brief slots into the existing `Scout brief:` provenance contract that `define-spec`, `generate-plan`, `planner`, and `plan-reviewer` already consume.
 
-## Step 1: Detect input shape and parse --tier
+## Step 1: Detect input shape and parse --model-tier
 
 ### Input shape detection
 
-Examine the user's slash-command input (excluding any `--tier` argument) and classify it as one of two shapes:
+Examine the user's slash-command input (excluding any `--model-tier` argument) and classify it as one of two shapes:
 
 **Idea branch** — after trimming surrounding whitespace and lowercasing the input, the result matches the regex `^IDEA-([0-9a-f]{8})$` case-insensitively (so `IDEA-BBE89373`, `idea-bbe89373`, and `IDEA-bbe89373` all match, resolving to canonical lowercase `bbe89373`). The captured raw id is the 8-char lowercase hex segment.
 
@@ -25,15 +25,15 @@ Examine the user's slash-command input (excluding any `--tier` argument) and cla
 - Set the brief output path to `docs/briefs/<YYYY-MM-DD>-<slug>-brief.md` using today's date in UTC (e.g., `2026-05-06`).
 - Use the seed text as the task body.
 
-### `--tier` parsing
+### `--model-tier` parsing
 
-Scan the slash-command input for an optional `--tier <name>` argument at any position. Recognized values: `cheap`, `standard`, `capable`. Default tier is `standard` when the argument is absent or the input is empty. The parsed alias maps to tier path `modelTiers.<name>` (default `modelTiers.standard` when absent).
+Scan the slash-command input for an optional `--model-tier <name>` argument at any position. Recognized values: `efficient`, `standard`, `capable`, `frontier`. Default tier is `standard` when the argument is absent or the input is empty. The parsed alias maps to tier path `modelTiers.<name>` (default `modelTiers.standard` when absent).
 
-If `--tier` is present with a value not in the recognized set, the value is passed through as `modelTiers.<value>` and fails at resolution with Template (2).
+If `--model-tier` is present with a value not in the recognized set, the value is passed through as `modelTiers.<value>` and fails at resolution with Template (2).
 
 ## Step 2: Resolve model and CLI
 
-Run `pi-flow helper _shared/resolve-model-dispatch --tier modelTiers.<tier> --agent scout` (where `<tier>` is the value parsed in Step 1, defaulting to `standard`). The full resolution procedure is documented in [`skills/_shared/dispatch-contract.md`](../_shared/dispatch-contract.md). On any failure the script exits non-zero and prints the appropriate byte-equal canonical failure message; surface that output verbatim and stop. Do **not** silently fall back to `pi` or any other CLI default. The helper's envelope includes `executionPolicy`, consumed in Step 5.
+Run `pi-flow helper _shared/resolve-model-dispatch --model-tier modelTiers.<tier> --agent scout` (where `<tier>` is the value parsed in Step 1, defaulting to `standard`). The full resolution procedure is documented in [`skills/_shared/dispatch-contract.md`](../_shared/dispatch-contract.md). On any failure the script exits non-zero and prints the appropriate byte-equal canonical failure message; surface that output verbatim and stop. Do **not** silently fall back to `pi` or any other CLI default. The helper's envelope includes `executionPolicy`, consumed in Step 5.
 
 ## Step 3: Pre-existing-brief check
 

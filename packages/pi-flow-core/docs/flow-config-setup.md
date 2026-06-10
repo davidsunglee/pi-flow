@@ -27,14 +27,16 @@ Edit the copied file to match your actual model subscriptions and CLI setup befo
 ```json
 {
   "modelTiers": {
+    "frontier": "<non-empty model string>",
     "capable":  "<non-empty model string>",
     "standard": "<non-empty model string>",
-    "cheap":    "<non-empty model string>"
+    "efficient": "<non-empty model string>"
   },
   "crossProviderModelTiers": {
+    "frontier": "<non-empty model string>",
     "capable":  "<non-empty model string>",
     "standard": "<non-empty model string>",
-    "cheap":    "<non-empty model string>"
+    "efficient": "<non-empty model string>"
   },
   "subagentDispatch": {
     "<provider-prefix>": "<cli-name>",
@@ -48,8 +50,8 @@ Edit the copied file to match your actual model subscriptions and CLI setup befo
 }
 ```
 
-- `modelTiers` — required when consumed by leaf dispatch; each of the three tier names (`capable`, `standard`, `cheap`) must map to a non-empty model string.
-- `crossProviderModelTiers` — optional; same three tier names, each mapping to a non-empty model string for cross-provider model selection.
+- `modelTiers` — required when consumed by leaf dispatch; each of the four tier names (`frontier`, `capable`, `standard`, `efficient`) must map to a non-empty model string.
+- `crossProviderModelTiers` — optional; same four tier names, each mapping to a non-empty model string for cross-provider model selection.
 - `subagentDispatch` — required; maps provider prefixes (e.g. `anthropic`, `openai-codex`) to leaf-worker CLI names (e.g. `claude`, `codex`).
 - `coordinatorSubagentDispatch` — read only by coordinator dispatch (`refine-plan`, `refine-code`). Its `modelChain` is an ordered array of exact model identifier strings (not tier aliases); no `cli` key — the coordinator CLI is a system invariant (`pi`).
 - `executionPolicy` — required; must be exactly `"guarded"` or `"unrestricted"` with no silent default. pi-flow injects it explicitly on every workflow dispatch.
@@ -129,7 +131,7 @@ Parameters `<agent>`, `<tier>`, `<provider>`, `<model>`, and `<error>` are subst
 Run the leaf helper with a known tier and agent name:
 
 ```sh
-pi-flow helper _shared/resolve-model-dispatch --tier modelTiers.capable --agent coder
+pi-flow helper _shared/resolve-model-dispatch --model-tier modelTiers.capable --agent coder
 ```
 
 Expected output shape:
@@ -164,7 +166,7 @@ This is a one-time, user-performed migration — pi-flow provides no code assist
 
    | Legacy key | `flow.json` key |
    |---|---|
-   | top-level `capable` / `standard` / `cheap` | `modelTiers.capable` / `.standard` / `.cheap` |
+   | top-level `capable` / `standard` / `efficient` | `modelTiers.capable` / `.standard` / `.efficient` |
    | `crossProvider` | `crossProviderModelTiers` |
    | `dispatch` | `subagentDispatch` |
    | `coordinatorDispatch` | `coordinatorSubagentDispatch` |

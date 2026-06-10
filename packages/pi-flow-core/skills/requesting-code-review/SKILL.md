@@ -45,7 +45,7 @@ Fill these placeholders:
 
 ### 2b. Resolve model and dispatch
 
-Invoke pi-flow helper _shared/resolve-model-dispatch --tier modelTiers.capable --agent code-reviewer. On non-zero exit, surface the helper's stderr (byte-equal canonical failure message per `skills/_shared/dispatch-contract.md`) and stop.
+Invoke pi-flow helper _shared/resolve-model-dispatch --model-tier modelTiers.capable --agent code-reviewer. On non-zero exit, surface the helper's stderr (byte-equal canonical failure message per `skills/_shared/dispatch-contract.md`) and stop.
 
 ### 3. Dispatch the subagent
 

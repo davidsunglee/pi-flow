@@ -136,14 +136,15 @@ Map plan recommendations to tiers:
 |---|---|
 | `capable` | `modelTiers.capable` from `flow.json` |
 | `standard` | `modelTiers.standard` from `flow.json` |
-| `cheap` | `modelTiers.cheap` from `flow.json` |
+| `efficient` | `modelTiers.efficient` from `flow.json` |
+| `frontier` | `modelTiers.frontier` from `flow.json` |
 
 If a task has no tier, apply this rubric:
-- 1-2 files and a complete spec -> `cheap`.
+- 1-2 files and a complete spec -> `efficient`.
 - Multiple files or integration concerns -> `standard`.
 - Design judgment or broad codebase understanding -> `capable`.
 
-For each task, invoke `pi-flow helper _shared/resolve-model-dispatch --tier <mapped tier path> --agent coder` and pass the resolved `model`, `cli`, and `executionPolicy` on every orchestration call, even when `cli` is `pi`. On non-zero exit, surface the byte-equal canonical Templates (1)-(5) from [`../_shared/dispatch-contract.md`](../_shared/dispatch-contract.md) and stop.
+For each task, invoke `pi-flow helper _shared/resolve-model-dispatch --model-tier <mapped tier path> --agent coder` and pass the resolved `model`, `cli`, and `executionPolicy` on every orchestration call, even when `cli` is `pi`. On non-zero exit, surface the byte-equal canonical Templates (1)-(5) from [`../_shared/dispatch-contract.md`](../_shared/dispatch-contract.md) and stop.
 
 ## Step 7: Baseline test capture
 
@@ -288,14 +289,14 @@ Then ask per blocked task, one at a time:
 Task <N>: <task_title> (current tier: <tier>) — choose an intervention:
 (c) More context         — re-dispatch this task with additional context you supply
 (m) Better model         — re-dispatch this task with a more capable model tier
-                            [omit this line if current tier is already `capable`]
+                            [omit this line if current tier is already `frontier`]
 (s) Split into sub-tasks — break this task into smaller sub-tasks and dispatch them
 (x) Stop execution       — halt the plan; prior wave commits remain in git history
 ~~~
 
 Canonical interventions:
 - `(c) More context`: prompt for context; re-dispatch the original task plus `## Additional Context`. Keep the tier unless `(m)` is also chosen.
-- `(m) Better model`: only when current tier is `cheap` or `standard`; escalate `cheap` -> `standard` or `standard` -> `capable` and resolve per Step 6. Suppress this option at `capable`.
+- `(m) Better model`: only when current tier is `efficient`, `standard`, or `capable`; escalate `efficient` -> `standard`, `standard` -> `capable`, or `capable` -> `frontier` and resolve per Step 6. Suppress this option at `frontier`.
 - `(s) Split into sub-tasks`: decompose in-session. Sub-tasks must preserve the same output files and acceptance-criteria coverage. Dispatch as a mini-wave bounded by `MAX_PARALLEL_HARD_CAP` (sequential if naturally ordered). Replace the parent slot with the sub-tasks; each sub-task is classified independently. Split dispatches run pre-commit, so their changes must remain in the working tree at Step 11 (see the Step 11.2 compatibility file-set fallback). Retry budget follows Step 13.
 - `(x) Stop execution`: halt immediately; do not run Step 11/12 for this wave. Report via Step 14. Prior wave commits remain; `docs/test-runs/<plan-name>/` is preserved.
 

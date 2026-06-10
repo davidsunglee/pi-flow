@@ -19,7 +19,7 @@ Output shape (stdout, exit 0):
         "criteria": [
           {"text": "criterion text", "verify": "verify instruction"}
         ],
-        "model_recommendation": "cheap|standard|capable",
+        "model_tier": "efficient|standard|capable|frontier",
         "dependencies": [1, 2, ...]  # ints and/or suffixed strings
       }
     ],
@@ -46,7 +46,7 @@ Protocol-error kinds (stderr JSON, exit non-zero):
   missing_verify_recipe     — a criterion bullet has no trailing Verify: line
   duplicate_task_number     — two ### Task N: headings share the same N
   missing_files_block       — a task has no **Files:** block before **Steps:**/**Acceptance criteria:**
-  missing_model_recommendation — **Model recommendation:** is absent or its value is not cheap|standard|capable
+  missing_model_tier — **Model tier:** is absent or its value is not efficient|standard|capable|frontier
   out_of_order_task_number  — base task numbers are not strictly ascending from 1 with no gaps,
                               or a suffixed task ID was declared without its base integer task
   malformed_task_heading    — a "### Task N" heading does not use one of the accepted separators (:, —, –, -);
@@ -70,7 +70,7 @@ from fence_aware import compute_in_fence_lines, FENCE_RE  # noqa: E402
 from plan_fence_hardening import detect_ambiguous_nested_fences  # noqa: E402
 
 
-VALID_MODELS = {"cheap", "standard", "capable"}
+VALID_MODELS = {"efficient", "standard", "capable", "frontier"}
 
 TASK_ID_PATTERN = r"\d+[a-z]?"
 TASK_ID_FULL_RE = re.compile(rf"^({TASK_ID_PATTERN})$")
@@ -522,7 +522,7 @@ def parse_plan(text, max_parallel_hard_cap=MAX_PARALLEL_HARD_CAP):
         files = {"create": [], "modify": [], "test": []}
         steps = []
         criteria = []
-        model_recommendation = None
+        model_tier = None
 
         # Get fence awareness for this task block
         block_in_fence = compute_in_fence_lines(block_lines)
@@ -555,9 +555,9 @@ def parse_plan(text, max_parallel_hard_cap=MAX_PARALLEL_HARD_CAP):
                 j += 1
                 continue
 
-            if stripped.lower().startswith("**model recommendation:**"):
-                val = stripped[len("**model recommendation:**"):].strip()
-                model_recommendation = val
+            if stripped.lower().startswith("**model tier:**"):
+                val = stripped[len("**model tier:**"):].strip()
+                model_tier = val
                 state = "header"
                 j += 1
                 continue
@@ -616,20 +616,20 @@ def parse_plan(text, max_parallel_hard_cap=MAX_PARALLEL_HARD_CAP):
                 "detail": f"Task {tb['number']} has no **Files:** block",
             })
 
-        if model_recommendation is None:
+        if model_tier is None:
             task_errors.append({
-                "kind": "missing_model_recommendation",
+                "kind": "missing_model_tier",
                 "task_number": tb["number"],
                 "detail": "line absent",
             })
-        elif model_recommendation not in VALID_MODELS:
+        elif model_tier not in VALID_MODELS:
             task_errors.append({
-                "kind": "missing_model_recommendation",
+                "kind": "missing_model_tier",
                 "task_number": tb["number"],
-                "detail": f"invalid value: {model_recommendation!r}",
+                "detail": f"invalid value: {model_tier!r}",
             })
 
-        return files, steps, criteria, model_recommendation, task_errors
+        return files, steps, criteria, model_tier, task_errors
 
     # Build final task list (skip duplicates beyond first occurrence)
     final_tasks = []
@@ -638,7 +638,7 @@ def parse_plan(text, max_parallel_hard_cap=MAX_PARALLEL_HARD_CAP):
 
     for tb in task_blocks:
         num = tb["number"]
-        files, steps, criteria, model_rec, task_errs = parse_task_block(tb)
+        files, steps, criteria, model_tier, task_errs = parse_task_block(tb)
         all_task_errors.extend(task_errs)
 
         if num not in seen_for_output:
@@ -650,7 +650,7 @@ def parse_plan(text, max_parallel_hard_cap=MAX_PARALLEL_HARD_CAP):
                 "files": files,
                 "steps": steps,
                 "criteria": criteria,
-                "model_recommendation": model_rec,
+                "model_tier": model_tier,
                 "dependencies": dep_raw.get(num, []),
             })
 

@@ -37,7 +37,7 @@ This task demonstrates that fenced headings should not count toward required sec
 - The parser correctly rejects this plan because Architecture summary is inside a fence and doesn't count.
   Verify: The parser should emit a `missing_required_section` error for `architecture_summary`.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ## Dependencies
 

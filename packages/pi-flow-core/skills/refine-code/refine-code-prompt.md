@@ -36,7 +36,7 @@ Model tier assignments:
 
 ### Dispatch resolution
 
-For each subagent dispatch, run `pi-flow helper _shared/resolve-model-dispatch --tier <tier> --agent <agent>` to resolve the dispatch envelope `(model, cli, executionPolicy)`. Tier comes from the Model tier assignments above; `<agent>` is `code-reviewer` for review dispatches and `coder` for the remediator. On any of the five documented failure conditions (templates (1)–(5)), emit the canonical template byte-equal and `STATUS: failed` with the reason from `## Failure Modes`; never silently fall back to any CLI default. Always pass `cli` and `executionPolicy` explicitly on every `subagent_run_serial` task.
+For each subagent dispatch, run `pi-flow helper _shared/resolve-model-dispatch --model-tier <tier> --agent <agent>` to resolve the dispatch envelope `(model, cli, executionPolicy)`. Tier comes from the Model tier assignments above; `<agent>` is `code-reviewer` for review dispatches and `coder` for the remediator. On any of the five documented failure conditions (templates (1)–(5)), emit the canonical template byte-equal and `STATUS: failed` with the reason from `## Failure Modes`; never silently fall back to any CLI default. Always pass `cli` and `executionPolicy` explicitly on every `subagent_run_serial` task.
 
 ## Protocol
 

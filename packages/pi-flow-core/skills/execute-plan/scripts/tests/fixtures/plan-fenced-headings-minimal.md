@@ -46,7 +46,7 @@ Here is real content after the fence:
 - Content after the fence is included in the task.
   Verify: assert the `task_spec` for Task 1 contains `**Step 2:**`.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ## Dependencies
 

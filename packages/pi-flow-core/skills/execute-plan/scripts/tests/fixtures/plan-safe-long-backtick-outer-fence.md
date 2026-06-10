@@ -40,7 +40,7 @@ The above is the expected output structure.
 - The script exits 0 on a clean plan.
   Verify: run the script on a clean plan and check the exit code.
 
-**Model recommendation:** standard
+**Model tier:** standard
 
 ## Dependencies
 

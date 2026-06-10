@@ -30,7 +30,7 @@ Python 3, argparse, json
 - The script outputs valid JSON.
   Verify: Parse stdout as JSON and confirm no exception is raised.
 
-**Model recommendation:** cheap
+**Model tier:** efficient
 
 ### Task 2: Emit JSON output
 
@@ -44,7 +44,7 @@ Python 3, argparse, json
 - The script emits valid JSON with a tasks array.
   Verify: Parse the output as JSON and check that tasks is a list.
 
-**Model recommendation:** standard
+**Model tier:** standard
 
 ## Dependencies
 

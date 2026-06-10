@@ -310,17 +310,17 @@ test('recognizeExact IDEA-id with trailing boolean flag preserves flag verbatim'
 
 test('recognizeExact docs path with trailing value flag preserves flag verbatim', () => {
   assert.equal(
-    recognizeExact('execute-plan', 'docs/plans/x.md --tier capable'),
-    'docs/plans/x.md --tier capable'
+    recognizeExact('execute-plan', 'docs/plans/x.md --model-tier capable'),
+    'docs/plans/x.md --model-tier capable'
   );
 });
 
 test('recognizeExact flag-only input routes as empty for empty-allowed skill', () => {
-  assert.equal(recognizeExact('scout', '--tier capable'), '--tier capable');
+  assert.equal(recognizeExact('scout', '--model-tier capable'), '--model-tier capable');
 });
 
 test('recognizeExact flag-only input is rejected for skill that disallows empty', () => {
-  assert.equal(recognizeExact('execute-plan', '--tier capable'), undefined);
+  assert.equal(recognizeExact('execute-plan', '--model-tier capable'), undefined);
 });
 
 test('routeArgs --exact IDEA-id with flag routes as exact preserving flag', () => {
@@ -332,10 +332,10 @@ test('routeArgs --exact IDEA-id with flag routes as exact preserving flag', () =
 });
 
 test('routeArgs --exact docs path with value flag routes as exact preserving flag', () => {
-  const result = routeArgs('execute-plan', '--exact docs/plans/x.md --tier capable');
+  const result = routeArgs('execute-plan', '--exact docs/plans/x.md --model-tier capable');
   assert.deepEqual(result, {
     kind: 'exact',
-    prompt: 'Use the execute-plan skill. Argument: docs/plans/x.md --tier capable.',
+    prompt: 'Use the execute-plan skill. Argument: docs/plans/x.md --model-tier capable.',
   });
 });
 
@@ -349,47 +349,47 @@ test('routeArgs --exact with wrong artifact dir returns exact-required-but-non-e
 // Flags before artifacts / prose
 test('recognizeExact scout flag-before-prose returns undefined (prose remains)', () => {
   assert.equal(
-    recognizeExact('scout', '--tier capable investigate auth'),
+    recognizeExact('scout', '--model-tier capable investigate auth'),
     undefined
   );
 });
 
 test('recognizeExact execute-plan flag-before-artifact returns rest verbatim', () => {
   assert.equal(
-    recognizeExact('execute-plan', '--tier capable docs/plans/x.md'),
-    '--tier capable docs/plans/x.md'
+    recognizeExact('execute-plan', '--model-tier capable docs/plans/x.md'),
+    '--model-tier capable docs/plans/x.md'
   );
 });
 
 test('recognizeExact scout flag-before-artifact (briefs) returns rest verbatim', () => {
   assert.equal(
-    recognizeExact('scout', '--tier capable docs/briefs/x.md'),
-    '--tier capable docs/briefs/x.md'
+    recognizeExact('scout', '--model-tier capable docs/briefs/x.md'),
+    '--model-tier capable docs/briefs/x.md'
   );
 });
 
 test('recognizeExact scout flag-with-value then IDEA id returns rest verbatim', () => {
   assert.equal(
-    recognizeExact('scout', '--tier capable IDEA-abcd1234'),
-    '--tier capable IDEA-abcd1234'
+    recognizeExact('scout', '--model-tier capable IDEA-abcd1234'),
+    '--model-tier capable IDEA-abcd1234'
   );
 });
 
 test('routeArgs scout flag-before-prose routes as interpreted', () => {
-  const result = routeArgs('scout', '--tier capable investigate auth');
+  const result = routeArgs('scout', '--model-tier capable investigate auth');
   assert.equal(result.kind, 'interpreted');
 });
 
 test('routeArgs execute-plan --exact with flag-before-artifact routes as exact preserving flag', () => {
-  const result = routeArgs('execute-plan', '--exact --tier capable docs/plans/x.md');
+  const result = routeArgs('execute-plan', '--exact --model-tier capable docs/plans/x.md');
   assert.deepEqual(result, {
     kind: 'exact',
-    prompt: 'Use the execute-plan skill. Argument: --tier capable docs/plans/x.md.',
+    prompt: 'Use the execute-plan skill. Argument: --model-tier capable docs/plans/x.md.',
   });
 });
 
 test('routeArgs scout --exact with flag-before-prose returns exact-required-but-non-exact', () => {
-  const result = routeArgs('scout', '--exact --tier capable investigate auth');
+  const result = routeArgs('scout', '--exact --model-tier capable investigate auth');
   assert.equal(result.kind, 'exact-required-but-non-exact');
 });
 
