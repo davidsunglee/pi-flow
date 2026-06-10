@@ -42,7 +42,7 @@ class TestValidateReviewProvenance(unittest.TestCase):
         data = json.loads(result.stdout)
         self.assertEqual(data["matched_tier"], "crossProviderModelTiers.capable")
         self.assertEqual(data["provider_model"], "openai-codex/gpt-5.5")
-        self.assertEqual(data["cli"], "pi")
+        self.assertEqual(data["cli"], "codex")
 
     def test_good_review_fallback_capable(self):
         path = write_review("**Reviewer:** anthropic/claude-opus-4-7 via claude\n\n## Outcome\n\nGood.\n")

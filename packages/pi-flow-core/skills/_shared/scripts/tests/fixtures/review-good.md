@@ -1,4 +1,4 @@
-**Reviewer:** openai-codex/gpt-5.5 via pi
+**Reviewer:** openai-codex/gpt-5.5 via codex
 
 ## Outcome
 

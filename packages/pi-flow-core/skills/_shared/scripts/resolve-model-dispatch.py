@@ -3,7 +3,7 @@
 resolve-model-dispatch — look up the CLI and model string for a given tier and agent.
 
 Inputs:
-  --tier         Section-qualified dot path into flow.json
+  --model-tier   Section-qualified dot path into flow.json
                  (e.g. "modelTiers.capable", "crossProviderModelTiers.capable")
   --agent        Agent name used in error messages (e.g. "coder", "verifier")
   --flow-config  Path to flow config JSON file (default: ~/.pi/agent/flow.json)
@@ -59,8 +59,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--tier",
-        required=True,
+        "--model-tier",
+        default=None,
         help="Section-qualified tier path (e.g. 'modelTiers.capable', 'crossProviderModelTiers.capable')",
     )
     parser.add_argument(
@@ -73,7 +73,11 @@ def main():
         default="~/.pi/agent/flow.json",
         help="Path to flow config JSON file (default: ~/.pi/agent/flow.json)",
     )
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
+    if unknown:
+        parser.error(f"unrecognized arguments: {' '.join(unknown)}")
+    if args.model_tier is None:
+        parser.error("the following arguments are required: --model-tier")
 
     path = os.path.expanduser(args.flow_config)
     try:
@@ -83,14 +87,14 @@ def main():
         die(f"~/.pi/agent/flow.json missing or unreadable — cannot dispatch {args.agent}.")
 
     if not isinstance(data, dict):
-        die(f'flow.json has no usable "{args.tier}" model — cannot dispatch {args.agent}.')
+        die(f'flow.json has no usable "{args.model_tier}" model — cannot dispatch {args.agent}.')
 
-    model = resolve_tier(data, args.tier)
+    model = resolve_tier(data, args.model_tier)
     if not isinstance(model, str) or "/" not in model:
-        die(f'flow.json has no usable "{args.tier}" model — cannot dispatch {args.agent}.')
+        die(f'flow.json has no usable "{args.model_tier}" model — cannot dispatch {args.agent}.')
     provider, _, model_suffix = model.partition("/")
     if not provider or not model_suffix:
-        die(f'flow.json has no usable "{args.tier}" model — cannot dispatch {args.agent}.')
+        die(f'flow.json has no usable "{args.model_tier}" model — cannot dispatch {args.agent}.')
 
     dispatch = data.get("subagentDispatch")
     if not isinstance(dispatch, dict) or not dispatch:
@@ -100,7 +104,7 @@ def main():
     if not cli:
         die(
             f"flow.json has no subagentDispatch.{provider} mapping for "
-            f"{args.tier} model {model} — cannot dispatch {args.agent}."
+            f"{args.model_tier} model {model} — cannot dispatch {args.agent}."
         )
 
     policy = data.get("executionPolicy")
@@ -110,7 +114,7 @@ def main():
             f"— cannot dispatch {args.agent}."
         )
 
-    print(json.dumps({"model": model, "cli": cli, "provider": provider, "tier": args.tier, "executionPolicy": policy}))
+    print(json.dumps({"model": model, "cli": cli, "provider": provider, "tier": args.model_tier, "executionPolicy": policy}))
 
 
 if __name__ == "__main__":

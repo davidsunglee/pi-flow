@@ -46,7 +46,7 @@ test('helper-runner', (t) => {
   t.test('helper resolves known shared script and forwards exit code', () => {
     const r = run(
       'helper', '_shared/resolve-model-dispatch',
-      '--tier', 'nosuchtier',
+      '--model-tier', 'nosuchtier',
       '--agent', 'test',
       '--flow-config', FIXTURE_FLOW_CONFIG
     );

@@ -13,7 +13,7 @@
     },
     "subagentDispatch": {
         "anthropic": "claude",
-        "openai-codex": "pi"
+        "openai-codex": "codex"
     },
     "executionPolicy": "guarded"
 }

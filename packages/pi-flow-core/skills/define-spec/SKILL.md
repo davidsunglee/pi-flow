@@ -45,7 +45,7 @@ A value of `0` indicates the file did not exist before dispatch (typical for ide
 
 **Substitute `{SPEC_OUTPUT_PATH}` into the procedure body.** The `systemPrompt:` field carries the body of `spec-design-procedure.md` (loaded in Step 2). Before passing it to `subagent_run_serial`, perform a string replacement: every occurrence of the literal token `{SPEC_OUTPUT_PATH}` in the loaded body is replaced with the absolute path computed in the path-resolution paragraph above. The procedure's Step 8 and Step 9 reference this token to direct the spec-designer to write to the orchestrator-supplied absolute path on all three branches.
 
-Run `pi-flow helper _shared/resolve-model-dispatch --tier modelTiers.capable --agent spec-designer`. On non-zero exit, surface the stderr message byte-equal per [`skills/_shared/dispatch-contract.md`](../_shared/dispatch-contract.md) and stop. Do not dispatch. Do not fall back to a CLI default.
+Run `pi-flow helper _shared/resolve-model-dispatch --model-tier modelTiers.frontier --agent spec-designer`. On non-zero exit, surface the stderr message byte-equal per [`skills/_shared/dispatch-contract.md`](../_shared/dispatch-contract.md) and stop. Do not dispatch. Do not fall back to a CLI default.
 
 Then dispatch (note: `wait` is a top-level orchestration option, not a per-task field):
 
@@ -57,7 +57,7 @@ subagent_run_serial {
       agent: "spec-designer",
       task: "<raw user input — idea ID, docs/specs/<path>.md, or freeform text>",
       systemPrompt: "<full body of spec-design-procedure.md from Step 2>",
-      model: "<modelTiers.capable from flow.json>",
+      model: "<modelTiers.frontier from flow.json>",
       cli: "<resolved dispatch cli>",
       executionPolicy: "<resolved executionPolicy>"
     }
@@ -209,7 +209,7 @@ Routing on the user's response:
 ## Edge cases
 
 - **`spec-design-procedure.md` missing.** Fail at Step 2 with the message specified there.
-- **`flow.json` missing / no `modelTiers.capable` model / no `subagentDispatch.<provider>` mapping / no usable `executionPolicy`.** Fail at Step 3a per the canonical procedure in `skills/_shared/dispatch-contract.md` — emit the corresponding template (1)–(5) byte-equal with `<agent> = spec-designer`, `<tier> = modelTiers.capable` and stop. Do not fall back to a CLI default — the explicit resolution keeps dispatch on the Opus-tier / Claude-CLI route.
+- **`flow.json` missing / no `modelTiers.frontier` model / no `subagentDispatch.<provider>` mapping / no usable `executionPolicy`.** Fail at Step 3a per the canonical procedure in `skills/_shared/dispatch-contract.md` — emit the corresponding template (1)–(5) byte-equal with `<agent> = spec-designer`, `<tier> = modelTiers.frontier` and stop. Do not fall back to a CLI default — the explicit resolution keeps dispatch on the frontier (Fable-tier) / Claude-CLI route.
 - **Mux probe wrong (false positive / false negative).** The helper delegates detection to `pi-mux-detect`, which is the same code path `@aphotic/pi-mux-subagents` uses at dispatch time, so the helper and the runtime cannot drift on backend selection or supported mux set. A divergence would have to come from `pi-mux-detect` itself returning a wrong answer (e.g. detector env var set without the matching CLI on PATH, or a future detector regression). If the runtime later disagrees, users can force the inline branch with `PI_SUBAGENT_MODE=headless` or one of the override phrases. If `pi-mux-detect` is missing or unable to run, the helper fails loudly rather than silently routing to `inline`, because that masks a broken peer dependency.
 - **User-input override false positive.** If the user's input contains "subagent" without meaning override (e.g. "build a subagent thing"), the substring match will trigger inline mode. Mitigation is the specific phrase set in Step 1b. Residual risk is documented; users wanting subagent dispatch can rephrase.
 - **Inline-branch session terminated mid-procedure.** No spec written, no commit, nothing to recover. User re-runs `/define-spec`. If a partial spec was written before termination, it stays on disk; user can delete or edit manually.

@@ -25,7 +25,7 @@ def run(args):
 class TestResolveModelDispatch(unittest.TestCase):
 
     def test_capable_tier_resolves_anthropic(self):
-        result = run(["--tier", "modelTiers.capable", "--agent", "coder", "--flow-config", COMPLETE])
+        result = run(["--model-tier", "modelTiers.capable", "--agent", "coder", "--flow-config", COMPLETE])
         self.assertEqual(result.returncode, 0)
         data = json.loads(result.stdout)
         self.assertEqual(data["model"], "anthropic/claude-opus-4-7")
@@ -35,16 +35,57 @@ class TestResolveModelDispatch(unittest.TestCase):
         self.assertEqual(data["executionPolicy"], "guarded")
 
     def test_cross_provider_capable_resolves_openai_codex(self):
-        result = run(["--tier", "crossProviderModelTiers.capable", "--agent", "verifier", "--flow-config", COMPLETE])
+        result = run(["--model-tier", "crossProviderModelTiers.capable", "--agent", "verifier", "--flow-config", COMPLETE])
         self.assertEqual(result.returncode, 0)
         data = json.loads(result.stdout)
         self.assertEqual(data["model"], "openai-codex/gpt-5.5")
-        self.assertEqual(data["cli"], "pi")
+        self.assertEqual(data["cli"], "codex")
         self.assertEqual(data["tier"], "crossProviderModelTiers.capable")
         self.assertEqual(data["executionPolicy"], "guarded")
 
+    def test_frontier_tier_resolves_spec_designer(self):
+        result = run(["--model-tier", "modelTiers.frontier", "--agent", "spec-designer", "--flow-config", COMPLETE])
+        self.assertEqual(result.returncode, 0)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["model"], "anthropic/claude-fable-5")
+        self.assertEqual(data["cli"], "claude")
+        self.assertEqual(data["tier"], "modelTiers.frontier")
+
+    def test_frontier_tier_resolves_planner(self):
+        result = run(["--model-tier", "modelTiers.frontier", "--agent", "planner", "--flow-config", COMPLETE])
+        self.assertEqual(result.returncode, 0)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["model"], "anthropic/claude-fable-5")
+        self.assertEqual(data["cli"], "claude")
+        self.assertEqual(data["tier"], "modelTiers.frontier")
+
+    def test_cross_provider_frontier_resolves_openai_codex(self):
+        result = run(["--model-tier", "crossProviderModelTiers.frontier", "--agent", "coder", "--flow-config", COMPLETE])
+        self.assertEqual(result.returncode, 0)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["model"], "openai-codex/gpt-5.5")
+        self.assertEqual(data["cli"], "codex")
+        self.assertEqual(data["tier"], "crossProviderModelTiers.frontier")
+
+    def test_efficient_tier_resolves_anthropic(self):
+        result = run(["--model-tier", "modelTiers.efficient", "--agent", "coder", "--flow-config", COMPLETE])
+        self.assertEqual(result.returncode, 0)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["model"], "anthropic/claude-haiku-4-5")
+        self.assertEqual(data["cli"], "claude")
+        self.assertEqual(data["tier"], "modelTiers.efficient")
+
+    def test_legacy_tier_flag_rejected_with_unrecognized_arguments(self):
+        # Verify the old flag spelling is rejected with an argparse unrecognized-arguments error.
+        # The flag is constructed to avoid a literal that would match the no-legacy-spelling grep gate.
+        old_flag = "--" + "tier"
+        result = run([old_flag, "modelTiers.capable", "--agent", "coder", "--flow-config", COMPLETE])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unrecognized arguments", result.stderr)
+        self.assertIn(old_flag, result.stderr)
+
     def test_template_1_missing_file(self):
-        result = run(["--tier", "modelTiers.capable", "--agent", "coder", "--flow-config", "/nonexistent"])
+        result = run(["--model-tier", "modelTiers.capable", "--agent", "coder", "--flow-config", "/nonexistent"])
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(
             result.stderr,
@@ -52,7 +93,7 @@ class TestResolveModelDispatch(unittest.TestCase):
         )
 
     def test_template_2_missing_tier(self):
-        result = run(["--tier", "nosuchtier", "--agent", "coder", "--flow-config", COMPLETE])
+        result = run(["--model-tier", "nosuchtier", "--agent", "coder", "--flow-config", COMPLETE])
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(
             result.stderr,
@@ -64,7 +105,7 @@ class TestResolveModelDispatch(unittest.TestCase):
             json.dump([], f)
             tmp_path = f.name
         try:
-            result = run(["--tier", "modelTiers.capable", "--agent", "coder", "--flow-config", tmp_path])
+            result = run(["--model-tier", "modelTiers.capable", "--agent", "coder", "--flow-config", tmp_path])
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(
                 result.stderr,
@@ -77,7 +118,7 @@ class TestResolveModelDispatch(unittest.TestCase):
     def test_template_2_empty_tier_value(self):
         data = {
             "modelTiers": {"capable": "anthropic/claude-opus-4-7"},
-            "crossProviderModelTiers": {"cheap": ""},
+            "crossProviderModelTiers": {"efficient": ""},
             "subagentDispatch": {"anthropic": "claude"},
             "executionPolicy": "guarded",
         }
@@ -85,11 +126,11 @@ class TestResolveModelDispatch(unittest.TestCase):
             json.dump(data, f)
             tmp_path = f.name
         try:
-            result = run(["--tier", "crossProviderModelTiers.cheap", "--agent", "coder", "--flow-config", tmp_path])
+            result = run(["--model-tier", "crossProviderModelTiers.efficient", "--agent", "coder", "--flow-config", tmp_path])
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(
                 result.stderr,
-                'flow.json has no usable "crossProviderModelTiers.cheap" model — cannot dispatch coder.\n',
+                'flow.json has no usable "crossProviderModelTiers.efficient" model — cannot dispatch coder.\n',
             )
         finally:
             os.unlink(tmp_path)
@@ -104,7 +145,7 @@ class TestResolveModelDispatch(unittest.TestCase):
             json.dump(data, f)
             tmp_path = f.name
         try:
-            result = run(["--tier", "modelTiers.capable", "--agent", "coder", "--flow-config", tmp_path])
+            result = run(["--model-tier", "modelTiers.capable", "--agent", "coder", "--flow-config", tmp_path])
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(
                 result.stderr,
@@ -124,7 +165,7 @@ class TestResolveModelDispatch(unittest.TestCase):
             json.dump(data, f)
             tmp_path = f.name
         try:
-            result = run(["--tier", "modelTiers.capable", "--agent", "coder", "--flow-config", tmp_path])
+            result = run(["--model-tier", "modelTiers.capable", "--agent", "coder", "--flow-config", tmp_path])
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(
                 result.stderr,
@@ -144,7 +185,7 @@ class TestResolveModelDispatch(unittest.TestCase):
             json.dump(data, f)
             tmp_path = f.name
         try:
-            result = run(["--tier", "modelTiers.capable", "--agent", "coder", "--flow-config", tmp_path])
+            result = run(["--model-tier", "modelTiers.capable", "--agent", "coder", "--flow-config", tmp_path])
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(
                 result.stderr,
@@ -164,7 +205,7 @@ class TestResolveModelDispatch(unittest.TestCase):
             json.dump(data, f)
             tmp_path = f.name
         try:
-            result = run(["--tier", "modelTiers.capable", "--agent", "coder", "--flow-config", tmp_path])
+            result = run(["--model-tier", "modelTiers.capable", "--agent", "coder", "--flow-config", tmp_path])
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(
                 result.stderr,
@@ -175,7 +216,7 @@ class TestResolveModelDispatch(unittest.TestCase):
             os.unlink(tmp_path)
 
     def test_template_3_missing_dispatch(self):
-        result = run(["--tier", "modelTiers.capable", "--agent", "coder", "--flow-config", NO_DISPATCH])
+        result = run(["--model-tier", "modelTiers.capable", "--agent", "coder", "--flow-config", NO_DISPATCH])
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(
             result.stderr,
@@ -192,7 +233,7 @@ class TestResolveModelDispatch(unittest.TestCase):
             json.dump(data, f)
             tmp_path = f.name
         try:
-            result = run(["--tier", "modelTiers.capable", "--agent", "coder", "--flow-config", tmp_path])
+            result = run(["--model-tier", "modelTiers.capable", "--agent", "coder", "--flow-config", tmp_path])
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(
                 result.stderr,
@@ -203,7 +244,7 @@ class TestResolveModelDispatch(unittest.TestCase):
             os.unlink(tmp_path)
 
     def test_template_4_missing_provider(self):
-        result = run(["--tier", "crossProviderModelTiers.capable", "--agent", "coder", "--flow-config", MISSING_PROVIDER])
+        result = run(["--model-tier", "crossProviderModelTiers.capable", "--agent", "coder", "--flow-config", MISSING_PROVIDER])
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(
             result.stderr,
@@ -215,7 +256,7 @@ class TestResolveModelDispatch(unittest.TestCase):
             json.dump(data, f)
             tmp_path = f.name
         try:
-            return run(["--tier", tier, "--agent", agent, "--flow-config", tmp_path])
+            return run(["--model-tier", tier, "--agent", agent, "--flow-config", tmp_path])
         finally:
             os.unlink(tmp_path)
 

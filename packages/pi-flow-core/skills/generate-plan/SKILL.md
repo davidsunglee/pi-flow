@@ -44,10 +44,10 @@ Use the text as-is.
 
 ## Step 2: Resolve model tiers
 
-Tier-role assignment: plan generation uses `modelTiers.capable`. Run the model-dispatch helper:
+Tier-role assignment: plan generation uses `modelTiers.frontier`. Run the model-dispatch helper:
 
 ```bash
-pi-flow helper _shared/resolve-model-dispatch --tier modelTiers.capable --agent planner
+pi-flow helper _shared/resolve-model-dispatch --model-tier modelTiers.frontier --agent planner
 ```
 
 On non-zero exit, surface its stderr output byte-equal (canonical Templates (1)–(5) from `_shared/dispatch-contract.md`) and stop.

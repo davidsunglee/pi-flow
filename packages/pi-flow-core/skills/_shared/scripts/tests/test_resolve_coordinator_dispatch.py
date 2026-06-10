@@ -214,7 +214,7 @@ class TestResolveCoordinatorDispatch(unittest.TestCase):
 
     def test_leaf_resolution_unaffected_by_coordinator_section(self):
         result = run(
-            ["--tier", "modelTiers.capable", "--agent", "coder", "--flow-config", COORDINATOR],
+            ["--model-tier", "modelTiers.capable", "--agent", "coder", "--flow-config", COORDINATOR],
             script=LEAF_SCRIPT,
         )
         self.assertEqual(result.returncode, 0)
@@ -224,7 +224,7 @@ class TestResolveCoordinatorDispatch(unittest.TestCase):
 
         result = run(
             [
-                "--tier",
+                "--model-tier",
                 "crossProviderModelTiers.capable",
                 "--agent",
                 "verifier",
