@@ -1123,6 +1123,88 @@ VERDICT: PASS
             os.unlink(path)
 
 
+class TestTolerantOverallVerdictConflicts(unittest.TestCase):
+    """The tolerant pass must not recover an overall PASS when the report
+    carries conflicting or duplicate overall VERDICT: lines. A case-only
+    per-criterion verdict routes each report through the tolerant classifier;
+    the overall section then decides the outcome."""
+
+    def test_duplicate_overall_pass_stays_fail(self):
+        # Two non-fenced `VERDICT: PASS` lines is ambiguous evidence.
+        content = """## Phase 1 Evidence
+
+## Per-Criterion Verdicts
+
+[Criterion 1] pass
+reason: ok
+
+## Overall Verdict
+
+VERDICT: PASS
+VERDICT: PASS
+"""
+        path = write_temp_report(content)
+        try:
+            rc, data, _, _ = run_script(
+                "--report", path, "--criteria-count", "1"
+            )
+            self.assertEqual(rc, 1)
+            self.assertEqual(data["verdict"], "FAIL")
+            self.assertNotEqual(data["verdict"], "PASS_WITH_PROTOCOL_WARNINGS")
+        finally:
+            os.unlink(path)
+
+    def test_overall_pass_followed_by_fail_stays_fail(self):
+        # The finding's reproduction: `VERDICT: pass` then `VERDICT: FAIL`.
+        content = """## Phase 1 Evidence
+
+## Per-Criterion Verdicts
+
+[Criterion 1] PASS
+reason: ok
+
+## Overall Verdict
+
+VERDICT: pass
+VERDICT: FAIL
+"""
+        path = write_temp_report(content)
+        try:
+            rc, data, _, _ = run_script(
+                "--report", path, "--criteria-count", "1"
+            )
+            self.assertEqual(rc, 1)
+            self.assertEqual(data["verdict"], "FAIL")
+            self.assertNotEqual(data["verdict"], "PASS_WITH_PROTOCOL_WARNINGS")
+        finally:
+            os.unlink(path)
+
+    def test_overall_fail_followed_by_pass_stays_fail(self):
+        # Routed to the tolerant pass via a case-only per-criterion verdict.
+        content = """## Phase 1 Evidence
+
+## Per-Criterion Verdicts
+
+[Criterion 1] pass
+reason: ok
+
+## Overall Verdict
+
+VERDICT: FAIL
+VERDICT: PASS
+"""
+        path = write_temp_report(content)
+        try:
+            rc, data, _, _ = run_script(
+                "--report", path, "--criteria-count", "1"
+            )
+            self.assertEqual(rc, 1)
+            self.assertEqual(data["verdict"], "FAIL")
+            self.assertNotEqual(data["verdict"], "PASS_WITH_PROTOCOL_WARNINGS")
+        finally:
+            os.unlink(path)
+
+
 class TestOutcomeDistinguishability(unittest.TestCase):
     def test_strict_pass_has_no_protocol_warnings_key(self):
         rc, data, _, _ = run_script(

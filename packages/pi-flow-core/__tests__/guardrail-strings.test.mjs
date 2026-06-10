@@ -221,6 +221,41 @@ test('execute-plan tolerant-verifier routing strings are present', () => {
   );
 });
 
+test('execute-plan success/precondition/retry/pacing gates accept PASS_WITH_PROTOCOL_WARNINGS, not only literal VERDICT: PASS', () => {
+  const skill = readFileSync(skillPath('execute-plan'), 'utf8');
+
+  // Stale PASS-only success-gate wording must be gone, or a literal
+  // orchestrator could reject/loop on a valid PASS_WITH_PROTOCOL_WARNINGS result.
+  for (const stale of [
+    'every task in the wave has `VERDICT: PASS`',
+    'reports `VERDICT: PASS` for every task in the wave',
+    'produces `VERDICT: PASS` for every failed task',
+    'retried to `VERDICT: PASS`',
+    'every task has `VERDICT: PASS`',
+    '`VERDICT: PASS` is required before Step 12',
+  ]) {
+    assert.ok(
+      !skill.includes(stale),
+      `execute-plan SKILL.md must not retain stale PASS-only gate wording: '${stale}'`
+    );
+  }
+
+  // The success/precondition/retry/pacing gates must describe parser-passing
+  // outcomes (PASS or PASS_WITH_PROTOCOL_WARNINGS).
+  for (const phrase of [
+    'a parser-passing verdict (`PASS` or `PASS_WITH_PROTOCOL_WARNINGS`) is required before Step 12',
+    'Step 11 exits successfully only when every task in the wave has a parser-passing verdict (`PASS` or `PASS_WITH_PROTOCOL_WARNINGS`)',
+    'Step 11 reports a parser-passing verdict (`PASS` or `PASS_WITH_PROTOCOL_WARNINGS`) for every task in the wave',
+    'must be retried to a parser-passing verdict (`PASS` or `PASS_WITH_PROTOCOL_WARNINGS`) or stopped',
+    'every task has a parser-passing verdict (`PASS` or `PASS_WITH_PROTOCOL_WARNINGS`)',
+  ]) {
+    assert.ok(
+      skill.includes(phrase),
+      `execute-plan SKILL.md must contain parser-passing gate wording: '${phrase}'`
+    );
+  }
+});
+
 test('legacy flow configuration naming is absent from package source', () => {
   // Split literals so this test file itself never contains the banned strings.
   const LEGACY_FILE_NAME = new RegExp('model' + '-tier', 'i');

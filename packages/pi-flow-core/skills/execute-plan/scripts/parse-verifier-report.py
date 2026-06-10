@@ -416,29 +416,43 @@ def classify_report_tolerant(
         if n not in recovered_pass:
             substantive = True
 
-    # 2. Overall recovery (fence-aware).
+    # 2. Overall recovery (fence-aware). Collect every non-fenced overall
+    # VERDICT: line; a recoverable PASS requires exactly one such line whose
+    # token is PASS-like. A duplicate overall verdict, any FAIL-like token, or
+    # any unrecognized token is substantive contrary evidence — accepting the
+    # first PASS-like token and ignoring a later conflicting FAIL would break
+    # the fail-closed posture.
     overall_lines = overall_section.splitlines()
     overall_in_fence = compute_in_fence_lines(overall_lines)
-    overall_pass = False
+    overall_verdicts = []  # list of token-lists, one per non-fenced VERDICT: line
     for idx, line in enumerate(overall_lines):
         if idx in overall_in_fence:
             continue
         m = re.match(r"^VERDICT:\s*(.*)$", line.strip())
         if m:
-            val = m.group(1).strip()
-            tokens = val.split()
-            first = tokens[0] if tokens else ""
-            if first.upper() == "PASS":
-                overall_pass = True
-                if first != "PASS":
-                    protocol_warnings.append(
-                        f"overall verdict token '{first}' differs only in case from PASS"
-                    )
-                if tokens[1:]:
-                    protocol_warnings.append(
-                        f"overall verdict has trailing annotation: {' '.join(tokens[1:])}"
-                    )
-            break
+            overall_verdicts.append(m.group(1).strip().split())
+
+    overall_pass = False
+    if len(overall_verdicts) != 1:
+        # Zero overall verdicts (none recoverable) or duplicates (ambiguous)
+        # are both substantive.
+        substantive = True
+    else:
+        tokens = overall_verdicts[0]
+        first = tokens[0] if tokens else ""
+        if first.upper() == "PASS":
+            overall_pass = True
+            if first != "PASS":
+                protocol_warnings.append(
+                    f"overall verdict token '{first}' differs only in case from PASS"
+                )
+            if tokens[1:]:
+                protocol_warnings.append(
+                    f"overall verdict has trailing annotation: {' '.join(tokens[1:])}"
+                )
+        else:
+            # FAIL-like or otherwise unrecognized overall token.
+            substantive = True
     if not overall_pass:
         substantive = True
 

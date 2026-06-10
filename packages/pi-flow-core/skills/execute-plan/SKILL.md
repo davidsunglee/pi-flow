@@ -9,7 +9,7 @@ description: 'Use when executing an existing structured plan under docs/plans/.'
 
 - Run the git/worktree preflight, plan validation, settings menu, and existing-output gate before any worker dispatch.
 - Execute dependency waves only through `coder` subagents, then route `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, and `BLOCKED` mechanically through Steps 9-13.
-- Verify task acceptance only with fresh `verifier` subagents and `pi-flow helper execute-plan/parse-verifier-report`; `VERDICT: PASS` is required before Step 12.
+- Verify task acceptance only with fresh `verifier` subagents and `pi-flow helper execute-plan/parse-verifier-report`; a parser-passing verdict (`PASS` or `PASS_WITH_PROTOCOL_WARNINGS`) is required before Step 12.
 - Run integration suites only through `test-runner` artifacts under `docs/test-runs/<plan-name>/`; reconcile via `current_failing_stable`, `current_non_reconcilable`, `current_non_baseline_stable`, and frozen `baseline_failures`.
 - Preserve all user checkpoints: dirty reused workspace, settings, existing output files, blocked tasks, concerns, verifier failures, integration failures, retry exhaustion, refine-code budget exhaustion, final gate, and branch completion.
 - After all waves, run `refine-code` with the configured iteration budget, enforce the final integration regression gate, clean artifacts, close linked ideas through the built-in `idea` tool, and offer branch completion.
@@ -357,11 +357,11 @@ Before dispatching a verifier, check that every acceptance criterion has a non-e
 
    The parser is the sole sanctioned classifier of protocol-only vs. substantive defects. The orchestrator may only run `parse-verifier-report.py` over the verifier-produced report and route its `.verdict`; it MUST NOT inspect implementation files, re-interpret an ambiguous or substantively-defective report as a pass, or synthesize evidence. A `FAIL` — missing, ambiguous, or substantively-defective evidence — never passes.
 
-Step 11 exits successfully only when every task in the wave has `VERDICT: PASS`. If any task has `VERDICT: FAIL`, Step 12 MUST NOT run until Step 13 produces `VERDICT: PASS` for every failed task.
+Step 11 exits successfully only when every task in the wave has a parser-passing verdict (`PASS` or `PASS_WITH_PROTOCOL_WARNINGS`). If any task has `VERDICT: FAIL`, Step 12 MUST NOT run until Step 13 produces a parser-passing verdict (`PASS` or `PASS_WITH_PROTOCOL_WARNINGS`) for every failed task.
 
 ## Step 12: Post-wave commit and integration tests
 
-Precondition: Step 10 has exited and Step 11 reports `VERDICT: PASS` for every task in the wave. If not, return to Step 10 or Step 13. Both commit and integration test run are withheld until the wave succeeds.
+Precondition: Step 10 has exited and Step 11 reports a parser-passing verdict (`PASS` or `PASS_WITH_PROTOCOL_WARNINGS`) for every task in the wave. If not, return to Step 10 or Step 13. Both commit and integration test run are withheld until the wave succeeds.
 
 1. **Commit wave changes.** Stage and commit all changes from the completed wave:
 
@@ -436,7 +436,7 @@ All re-dispatches from Step 10 blocked handling, Step 10 concerns remediation, S
 | Automatic retries | Retry automatically up to **3 times**, improving the prompt where possible. |
 | Shared counter | Exhaustion in one path exhausts the budget everywhere; later failures go directly to the exhaustion menu. |
 | Split rule | `(s) Split into sub-tasks` consumes 1 retry from the parent; each sub-task inherits the parent's remaining count, not a fresh budget. |
-| Verifier failures | Unresolved `VERDICT: FAIL` must be retried to `VERDICT: PASS` or stopped. |
+| Verifier failures | Unresolved `VERDICT: FAIL` must be retried to a parser-passing verdict (`PASS` or `PASS_WITH_PROTOCOL_WARNINGS`) or stopped. |
 
 After 3 failed retries, notify the user at the end of the wave and ask:
 
@@ -451,7 +451,7 @@ Options:
 
 `docs/test-runs/<plan-name>/` is preserved on `(x)`. There is no skip option.
 
-Apply wave pacing from Step 3 only after Step 10 has exited and every task has `VERDICT: PASS`; `BLOCKED`, unresolved concerns, and `VERDICT: FAIL` always pause regardless of pacing.
+Apply wave pacing from Step 3 only after Step 10 has exited and every task has a parser-passing verdict (`PASS` or `PASS_WITH_PROTOCOL_WARNINGS`); `BLOCKED`, unresolved concerns, and `VERDICT: FAIL` always pause regardless of pacing.
 
 ```
 Options:
