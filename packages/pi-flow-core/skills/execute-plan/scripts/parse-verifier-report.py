@@ -341,6 +341,156 @@ def _load_phase1_recipes(path):
     return recipes, []
 
 
+def classify_report_tolerant(
+    criteria_section, overall_section, evidence_blocks, evidence_errors,
+    k, recipes, recipes_provided,
+):
+    """Deterministic second pass: decide whether a strict-flagged report still
+    presents complete, unambiguous PASS evidence with only protocol-only defects.
+
+    Returns (semantic_pass, per_criterion, phase1_evidence, protocol_warnings).
+    `substantive = True` is set on any deviation that cannot be accounted for as
+    an enumerated protocol-only defect, forcing `semantic_pass = False`.
+    """
+    substantive = False
+    protocol_warnings = []
+
+    # 1. Criteria recovery (fence-aware).
+    crit_lines = criteria_section.splitlines()
+    crit_in_fence = compute_in_fence_lines(crit_lines)
+    recovered_pass = set()
+    seen = {}
+    reasons = {}
+
+    # Collect header positions to scope each criterion's reason block.
+    header_positions = []  # (line_idx, n)
+    for idx, line in enumerate(crit_lines):
+        if idx in crit_in_fence:
+            continue
+        m = re.match(r"^\[Criterion (\d+)\]\s*(.*)$", line.strip())
+        if m:
+            header_positions.append((idx, int(m.group(1)), m.group(2)))
+
+    for hi, (idx, n, rest) in enumerate(header_positions):
+        end = header_positions[hi + 1][0] if hi + 1 < len(header_positions) else len(crit_lines)
+        block_lines = crit_lines[idx + 1:end]
+        reasons[n] = _extract_reason(block_lines, idx + 1, crit_in_fence)
+
+        rest = rest.strip()
+        verdict_prefix = False
+        if rest.startswith("verdict:"):
+            verdict_prefix = True
+            rest = rest[len("verdict:"):].strip()
+        tokens = rest.split()
+        first = tokens[0] if tokens else ""
+        trailing = tokens[1:]
+
+        if n in seen:
+            substantive = True
+            continue
+        seen[n] = True
+        if n < 1 or n > k:
+            substantive = True
+            continue
+
+        if first.upper() == "PASS":
+            recovered_pass.add(n)
+            if first != "PASS":
+                protocol_warnings.append(
+                    f"criterion {n}: verdict token '{first}' differs only in case from PASS"
+                )
+            if trailing:
+                protocol_warnings.append(
+                    f"criterion {n}: trailing annotation after PASS verdict: {' '.join(trailing)}"
+                )
+            if verdict_prefix:
+                protocol_warnings.append(
+                    f"criterion {n}: forbidden 'verdict:' prefix before PASS verdict"
+                )
+        elif first.upper() == "FAIL":
+            substantive = True
+        else:
+            substantive = True
+
+    for n in range(1, k + 1):
+        if n not in recovered_pass:
+            substantive = True
+
+    # 2. Overall recovery (fence-aware).
+    overall_lines = overall_section.splitlines()
+    overall_in_fence = compute_in_fence_lines(overall_lines)
+    overall_pass = False
+    for idx, line in enumerate(overall_lines):
+        if idx in overall_in_fence:
+            continue
+        m = re.match(r"^VERDICT:\s*(.*)$", line.strip())
+        if m:
+            val = m.group(1).strip()
+            tokens = val.split()
+            first = tokens[0] if tokens else ""
+            if first.upper() == "PASS":
+                overall_pass = True
+                if first != "PASS":
+                    protocol_warnings.append(
+                        f"overall verdict token '{first}' differs only in case from PASS"
+                    )
+                if tokens[1:]:
+                    protocol_warnings.append(
+                        f"overall verdict has trailing annotation: {' '.join(tokens[1:])}"
+                    )
+            break
+    if not overall_pass:
+        substantive = True
+
+    # 3. Evidence classification.
+    label_missing_re = re.compile(
+        r"evidence block malformed at criterion \d+: (stdout|stderr) field missing"
+    )
+    for err in evidence_errors:
+        if label_missing_re.search(err):
+            protocol_warnings.append(err)
+        else:
+            substantive = True
+
+    if recipes_provided:
+        for n, recipe in recipes.items():
+            if n not in evidence_blocks:
+                substantive = True
+                continue
+            cmd = evidence_blocks[n].get("command", "")
+            if cmd.strip() == recipe.strip():
+                if cmd != recipe:
+                    protocol_warnings.append(
+                        f"criterion {n}: command has surrounding whitespace differing from recipe"
+                    )
+            else:
+                substantive = True
+            exit_raw = evidence_blocks[n].get("exit_code", "")
+            try:
+                if int(exit_raw) != 0:
+                    substantive = True
+            except (ValueError, TypeError):
+                substantive = True
+        allowed = {r.strip() for r in recipes.values()}
+        for n, block in evidence_blocks.items():
+            if n in recipes:
+                continue
+            if block.get("command", "").strip() not in allowed:
+                substantive = True
+
+    # 4. Decision.
+    semantic_pass = (not substantive) and (len(protocol_warnings) > 0)
+    per_criterion = []
+    phase1_evidence = {}
+    if semantic_pass:
+        per_criterion = [
+            {"criterion": n, "verdict": "PASS", "reason": reasons.get(n, "")}
+            for n in range(1, k + 1)
+        ]
+        phase1_evidence = evidence_blocks
+    return semantic_pass, per_criterion, phase1_evidence, protocol_warnings
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Parse a verifier report and emit structured JSON.",
@@ -417,25 +567,43 @@ Protocol-error labels:
     # Any per-criterion FAIL forces FAIL regardless of the overall line, so a
     # malformed/inconsistent report cannot let a failed criterion through.
     any_criterion_fail = any(c["verdict"] == "FAIL" for c in per_criterion)
-    if protocol_errors or any_criterion_fail:
-        final_verdict = "FAIL"
-    else:
+
+    strict_clean = (not protocol_errors) and (not any_criterion_fail)
+
+    if strict_clean:
         final_verdict = overall_verdict if overall_verdict else "FAIL"
+        result = {
+            "verdict": final_verdict,
+            "per_criterion": per_criterion,
+            "phase1_evidence": {str(n): block for n, block in evidence_blocks.items()},
+            "protocol_errors": protocol_errors,
+        }
+        print(json.dumps(result, indent=2))
+        sys.exit(0 if final_verdict == "PASS" else 1)
+
+    semantic_pass, tol_per_criterion, tol_evidence, protocol_warnings = classify_report_tolerant(
+        criteria_section, overall_section, evidence_blocks, evidence_errors,
+        k, recipes, bool(args.phase1_recipes_json),
+    )
+    if semantic_pass:
+        result = {
+            "verdict": "PASS_WITH_PROTOCOL_WARNINGS",
+            "per_criterion": tol_per_criterion,
+            "phase1_evidence": {str(n): block for n, block in tol_evidence.items()},
+            "protocol_errors": [],
+            "protocol_warnings": protocol_warnings,
+        }
+        print(json.dumps(result, indent=2))
+        sys.exit(0)
 
     result = {
-        "verdict": final_verdict,
+        "verdict": "FAIL",
         "per_criterion": per_criterion,
-        "phase1_evidence": {
-            str(n): block for n, block in evidence_blocks.items()
-        },
+        "phase1_evidence": {str(n): block for n, block in evidence_blocks.items()},
         "protocol_errors": protocol_errors,
     }
-
     print(json.dumps(result, indent=2))
-
-    if final_verdict == "FAIL":
-        sys.exit(1)
-    sys.exit(0)
+    sys.exit(1)
 
 
 if __name__ == "__main__":

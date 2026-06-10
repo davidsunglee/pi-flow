@@ -30,11 +30,15 @@ Perform these steps in order:
 
 1. `cd` to `## Working Directory`.
 
-2. Execute `## Test Command` exactly as supplied in a `bash` shell, capturing combined stdout and stderr and the exit code. Do NOT wrap the supplied command in single quotes (or any other quoting) — quoting the command can corrupt commands that themselves contain quote characters (e.g. `pytest -k 'not slow'`). Instead, preserve the supplied command text verbatim by feeding it to `bash` via a mechanism that does not require re-quoting it. Recommended approaches, in order of preference:
-   - Write `## Test Command` verbatim to a temporary script file and execute it with `bash <script>`, appending `2>&1` to merge stderr into stdout.
-   - Or pipe the command verbatim into `bash` via stdin (e.g. a heredoc whose body is exactly `## Test Command` followed by no transformation), again with stderr merged into stdout.
+2. Execute `## Test Command` exactly as supplied in a `bash` shell, capturing combined stdout and stderr and the exit code. Do NOT wrap the supplied command in single quotes (or any other quoting) — quoting the command can corrupt commands that themselves contain quote characters (e.g. `pytest -k 'not slow'`). Instead, feed the supplied command text verbatim to `bash` on standard input, creating no temporary file and no other filesystem artifact. The sanctioned mechanism is a heredoc whose body is exactly `## Test Command` with stderr merged into stdout:
 
-   Whichever mechanism is used, the bytes of `## Test Command` MUST reach `bash` unchanged — no surrounding quotes added, no characters escaped, no substitutions performed. Record the combined stream as the run-output and record the integer exit code.
+   ~~~
+   bash 2>&1 <<'PI_TEST_CMD_EOF'
+   <## Test Command, verbatim and unmodified>
+   PI_TEST_CMD_EOF
+   ~~~
+
+   Choose a heredoc delimiter that does not appear anywhere in `## Test Command`; if `PI_TEST_CMD_EOF` could collide with the command text, pick a longer collision-resistant variant so the heredoc body is never truncated early. Invoking `bash` this way to run the supplied command is the sanctioned execution mechanism — it is NOT a forbidden "other command" (see `## Rules`). The bytes of `## Test Command` MUST reach `bash` unchanged — no surrounding quotes added, no characters escaped, no substitutions performed, and no script file written. Record the combined stream as the run-output and record the integer exit code.
 
 3. Apply the identifier-extraction contract (inlined verbatim below) to the run-output stream to derive the set of failing-test identifiers.
 
@@ -136,7 +140,7 @@ Format constraints:
 - Record stable identifiers in `FAILING_IDENTIFIERS:` and non-reconcilable failures in `NON_RECONCILABLE_FAILURES:` per the contract above. Never record a raw line as a stable identifier.
 - Do NOT consult or mention `baseline_failures`, prior runs, or any cross-wave state.
 - Do NOT classify the run as pass or fail. Reconciliation is the caller's responsibility.
-- Do NOT modify any source file; do NOT run `git` commands; do NOT run any command other than the supplied `## Test Command`.
+- Do NOT modify any source file, and do NOT create or write any file other than the single artifact at `## Artifact Output Path`. Do NOT run `git`, `mkdir`, ad hoc file reads, or any command unrelated to executing the supplied `## Test Command`. Running the supplied command by feeding it to `bash` on standard input / via a heredoc (per `## Execution` step 2) is the sanctioned execution mechanism, not a forbidden "other command"; ephemeral shell constructs that create no filesystem artifact are permitted.
 - Your visible output MUST end with the DONE_MESSAGE marker line `TEST_RESULT_ARTIFACT: <absolute path>` emitted immediately before the tool call, AND your terminal tool action MUST be `subagent_done(message=DONE_MESSAGE)` with a `message` argument byte-equal to the visible marker line. No other structured markers anywhere in the response (no `STATUS:`, no other anchored lines).
 
 ## Output Contract
