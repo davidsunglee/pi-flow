@@ -31,7 +31,7 @@ You are the code refiner. Drive the review-remediate cycle for the changes descr
 
 Model tier assignments:
 - `crossProviderModelTiers.capable` — first-pass full review and final verification review
-- `modelTiers.standard` — hybrid re-reviews (cheaper, scoped to remediation diff)
+- `modelTiers.standard` — hybrid re-reviews (lower-cost, scoped to remediation diff)
 - `modelTiers.capable` — remediator (coder fixing code)
 
 ### Dispatch resolution
@@ -209,7 +209,7 @@ When `Approved with concerns` triggers Final Verification, the reviewer's waived
 
    Hold `REVIEW_BASELINE` in your coordinator state across the dispatch. The fallback in Step 3a will compare the reviewer's on-disk write against this baseline.
 
-   **Dispatch `code-reviewer`** with model `modelTiers.standard` and corresponding `cli` from the flow config (hybrid re-reviews are scoped and cheaper). Then extract and validate the reviewer's artifact handoff using the SAME substeps 3a–3e procedure as Iteration 1 Step 3 (`parse-artifact-handoff.py --marker REVIEW_ARTIFACT --freshness-baseline <REVIEW_BASELINE>`, BYTE-EQUAL provenance check, `validate-review-provenance.py --allowed-tiers modelTiers.standard`). When the parser's stdout JSON `used_fallback` field is `true`, treat the on-disk review file as authoritative (per the existing 3e contract) and continue with the BYTE-EQUAL provenance check and the `validate-review-provenance.py` defense-in-depth check. Failure of either provenance check still triggers `STATUS: failed` with the existing provenance malformed reason. The reviewer overwrites the era-versioned file in place — the new first non-empty line reflects this iteration's `modelTiers.standard`-tier provenance.
+   **Dispatch `code-reviewer`** with model `modelTiers.standard` and corresponding `cli` from the flow config (hybrid re-reviews are scoped and lower-cost). Then extract and validate the reviewer's artifact handoff using the SAME substeps 3a–3e procedure as Iteration 1 Step 3 (`parse-artifact-handoff.py --marker REVIEW_ARTIFACT --freshness-baseline <REVIEW_BASELINE>`, BYTE-EQUAL provenance check, `validate-review-provenance.py --allowed-tiers modelTiers.standard`). When the parser's stdout JSON `used_fallback` field is `true`, treat the on-disk review file as authoritative (per the existing 3e contract) and continue with the BYTE-EQUAL provenance check and the `validate-review-provenance.py` defense-in-depth check. Failure of either provenance check still triggers `STATUS: failed` with the existing provenance malformed reason. The reviewer overwrites the era-versioned file in place — the new first non-empty line reflects this iteration's `modelTiers.standard`-tier provenance.
 
 6. **Track the iteration's remediation log entry in your coordinator state.** The reviewer is the sole writer of the review file under this contract; you do NOT write to the reviewer artifact. The remediation log is tracked in your coordinator state across iterations and surfaces in the final Output Format via `Issues fixed`/`Issues remaining` counts and (on `STATUS: not_approved_within_budget`) the `## Remaining Issues` section.
 
