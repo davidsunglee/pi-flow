@@ -930,7 +930,7 @@ export async function runDoctorFix(args: {
   }
 
   const agents: RepairResult[] = [];
-  let agentNames: string[] = [];
+  let agentNames: string[];
   try {
     agentNames = await fs.readdir(path.join(target.root, "agents"));
   } catch {

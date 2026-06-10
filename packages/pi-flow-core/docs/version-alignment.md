@@ -29,7 +29,7 @@ resource resolution.
 `.pi/settings.json` `packages` entries control which `pi-flow` install Pi
 loads for a project:
 
-- `npm:@aphotic/pi-flow@0.8.0` — **pinned**: Pi loads exactly version 0.8.0;
+- `npm:@aphotic/pi-flow@0.9.0` — **pinned**: Pi loads exactly version 0.9.0;
   no automatic updates.
 - `npm:@aphotic/pi-flow` — **floating**: Pi loads the latest installed version
   of the package, which may advance across installs.
