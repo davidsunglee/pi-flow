@@ -44,6 +44,8 @@ The orchestrator MUST NOT:
 - Edit the artifact under judgment (the plan, the implementation, the review file) on the
   basis of an orchestrator-formed conclusion.
 
+**Sole exception — user-directed recipe amendment.** When verification fails because a plan's `Verify:` recipe is itself defective, the user may direct the orchestrator to amend that recipe (execute-plan Step 13 `(a)`). The orchestrator then mechanically updates the single `Verify:` line in the plan file with the user-approved text and re-dispatches the verifier. This is the only sanctioned plan edit during orchestration: it is user-formed, not orchestrator-formed, and the orchestrator still never inspects implementation files, synthesizes evidence, or overrides the parser's verdict.
+
 ## Sanctioned mechanical surface
 
 The orchestrator's allowed activities are the mechanical-glue work needed to connect

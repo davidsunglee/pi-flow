@@ -107,5 +107,43 @@ class TestOldMarkerNamesAbsent(unittest.TestCase):
                     )
 
 
+class TestFileWriteContract(unittest.TestCase):
+    """The test-runner agent and prompt must agree: exactly one durable write
+    (the artifact), no temp-script-file guidance, and a documented stdin/heredoc
+    execution mechanism. Guards against re-introducing the resolved conflict."""
+
+    FILES = [
+        ("packages/pi-flow-core/agents/test-runner.md", "agent"),
+        ("packages/pi-flow-core/skills/_shared/test-runner-prompt.md", "prompt"),
+    ]
+
+    def test_no_temp_script_file_guidance(self):
+        for rel_path, kind in self.FILES:
+            with self.subTest(file=rel_path, kind=kind):
+                body = read(rel_path).lower()
+                self.assertNotIn(
+                    "temporary script file", body,
+                    msg=f"{rel_path} ({kind}) must not recommend a temporary script file",
+                )
+
+    def test_single_artifact_write_rule_present(self):
+        for rel_path, kind in self.FILES:
+            with self.subTest(file=rel_path, kind=kind):
+                body = read(rel_path)
+                self.assertIn(
+                    "exactly ONE write to `## Artifact Output Path`", body,
+                    msg=f"{rel_path} ({kind}) must keep the single-artifact-write rule",
+                )
+
+    def test_stdin_or_heredoc_mechanism_documented(self):
+        for rel_path, kind in self.FILES:
+            with self.subTest(file=rel_path, kind=kind):
+                body = read(rel_path).lower()
+                self.assertTrue(
+                    "heredoc" in body or "stdin" in body or "standard input" in body,
+                    msg=f"{rel_path} ({kind}) must document a stdin/heredoc execution mechanism",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

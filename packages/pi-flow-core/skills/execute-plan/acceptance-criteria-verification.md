@@ -34,7 +34,7 @@ e. **Dispatch the verifier.** Dispatch a single `verifier` subagent via:
    subagent_run_serial { tasks: [{ name: "verifier: <task-N>", agent: "verifier", task: <filled prompt>, model: <resolved>, cli: <resolved>, executionPolicy: <resolved> }] }
    ```
 
-f. **Parse the result.** Parse the dispatched final message via `pi-flow helper execute-plan/parse-verifier-report`. Treat any protocol errors the parser surfaces as `VERDICT: FAIL`.
+f. **Parse the result.** Parse the dispatched final message via `pi-flow helper execute-plan/parse-verifier-report` and route the parser's `.verdict`: `PASS` and `PASS_WITH_PROTOCOL_WARNINGS` are passing outcomes — the latter carries only protocol-only formatting defects alongside complete, unambiguous PASS evidence and is accepted automatically while its `.protocol_warnings` are surfaced; `FAIL` (including missing, ambiguous, or substantively-defective evidence) is treated as a failure for the caller's retry loop. The parser is the only sanctioned classifier; the caller never re-interprets a `FAIL` report as a pass, inspects implementation files, or synthesizes evidence.
 
 ## Output
 
@@ -50,6 +50,7 @@ The output is the JSON shape produced by `pi-flow helper execute-plan/parse-veri
 - `per_criterion`
 - `phase1_evidence`
 - `protocol_errors`
+- `protocol_warnings` — present only on the `PASS_WITH_PROTOCOL_WARNINGS` outcome; lists the protocol-only formatting defects the tolerant pass identified.
 
 The `parse-verifier-report.py` script is the canonical contract for this shape.
 

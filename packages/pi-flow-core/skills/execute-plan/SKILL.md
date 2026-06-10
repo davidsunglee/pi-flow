@@ -344,7 +344,18 @@ Before dispatching a verifier, check that every acceptance criterion has a non-e
 
    **Sub-task carve-out:** Step 10 split-into-sub-tasks dispatches MUST run pre-commit; their changes must remain in the working tree at Step 11 so `git diff HEAD` captures them. Step 12's commit is the only sanctioned working-tree -> committed transition. If a sub-task's changes were committed before Step 11 (protocol violation), substitute `git diff <pre-subtask-commit>..HEAD -- <modified files>` for those criteria.
 
-2. **Parse verifier output and gate the wave (compatibility: Step 11.3 parser gate).** Parse each report with `pi-flow helper execute-plan/parse-verifier-report`. Route `VERDICT: PASS` as passing. Route `VERDICT: FAIL` (including malformed output or Phase 1 protocol errors) into Step 13 with the per-criterion `FAIL` entries and `reason:` text. Protocol errors never pass and are never silently interpreted as `PASS`.
+2. **Parse verifier output and gate the wave (compatibility: Step 11.3 parser gate).** Parse each report with `pi-flow helper execute-plan/parse-verifier-report` and route on the parsed `.verdict` field:
+   - `PASS` — passing; proceed to Step 12.
+   - `PASS_WITH_PROTOCOL_WARNINGS` — the report carried only protocol-only formatting defects while presenting complete, unambiguous PASS evidence for every criterion. The deterministic enumeration of which defects are protocol-only lives entirely in `parse-verifier-report.py`. Accept it **automatically as passing — no user confirmation gate** — and surface the `.protocol_warnings` entries prominently for that task:
+
+     ```
+     ⚠️ Task <N> verified PASS with protocol warnings (auto-accepted; evidence complete):
+       - <warning>
+     ```
+
+   - `FAIL` — route into Step 13 with the per-criterion `FAIL` entries and `reason:` text.
+
+   The parser is the sole sanctioned classifier of protocol-only vs. substantive defects. The orchestrator may only run `parse-verifier-report.py` over the verifier-produced report and route its `.verdict`; it MUST NOT inspect implementation files, re-interpret an ambiguous or substantively-defective report as a pass, or synthesize evidence. A `FAIL` — missing, ambiguous, or substantively-defective evidence — never passes.
 
 Step 11 exits successfully only when every task in the wave has `VERDICT: PASS`. If any task has `VERDICT: FAIL`, Step 12 MUST NOT run until Step 13 produces `VERDICT: PASS` for every failed task.
 
@@ -431,9 +442,12 @@ After 3 failed retries, notify the user at the end of the wave and ask:
 
 ```
 Options:
-(r) Retry again    — optionally with a different model or more context. Resets the per-task budget back to 3 for that task only.
-(x) Stop execution — halt the plan; prior wave commits remain in git history
+(r) Retry again            — optionally with a different model or more context. Resets the per-task budget back to 3 for that task only.
+(a) Amend Verify: recipe   — only when the verifier evidence shows the `Verify:` recipe itself is defective (it ran byte-equal and still failed for recipe reasons, or the verifier reports it unrunnable). You supply or approve a corrected recipe; the orchestrator updates the plan file's `Verify:` line for that criterion and re-dispatches the verifier with it. Resets the per-task budget back to 3.
+(x) Stop execution         — halt the plan; prior wave commits remain in git history
 ```
+
+**Recipe amendment (`(a)`) is the only sanctioned plan edit during execution and is user-directed.** Show the `(a)` option only when the failure evidence indicates the `Verify:` recipe — not the implementation — is at fault. On `(a)`: present the criterion text and its current `Verify:` recipe, take the user's corrected recipe (or explicit approval of a suggested one), update that single `Verify:` line in the plan file under `docs/plans/`, re-run `pi-flow helper execute-plan/extract-plan-tasks` to refresh the `--phase1-recipes-json` set, and re-dispatch the verifier (Step 11) with the corrected recipe; this resets the per-task retry budget to 3 (mirroring `(r)`). The user authorizes the change to what "verified" means; the orchestrator inspects no implementation files and forms no verdict of its own. See [`../_shared/orchestrator-verification-boundary.md`](../_shared/orchestrator-verification-boundary.md).
 
 `docs/test-runs/<plan-name>/` is preserved on `(x)`. There is no skip option.
 

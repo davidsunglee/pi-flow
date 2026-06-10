@@ -199,6 +199,28 @@ test('refine skill flow-config stop strings are preserved byte-equal', () => {
   );
 });
 
+test('execute-plan tolerant-verifier routing strings are present', () => {
+  const skill = readFileSync(skillPath('execute-plan'), 'utf8');
+  for (const s of [
+    'PASS_WITH_PROTOCOL_WARNINGS',
+    '⚠️ Task <N> verified PASS with protocol warnings (auto-accepted; evidence complete):',
+    '(a) Amend Verify: recipe',
+  ]) {
+    assert.ok(skill.includes(s), `execute-plan SKILL.md must contain: ${s}`);
+  }
+  assert.ok(
+    !skill.includes('Protocol errors never pass and are never silently interpreted as'),
+    'execute-plan SKILL.md must not retain the unconditional protocol-error-fail claim'
+  );
+  const acv = readFileSync(skillPath('execute-plan', 'acceptance-criteria-verification.md'), 'utf8');
+  assert.ok(acv.includes('PASS_WITH_PROTOCOL_WARNINGS'), 'acceptance-criteria-verification.md must route the tolerant verdict');
+  const boundary = readFileSync(sharedPath('orchestrator-verification-boundary.md'), 'utf8');
+  assert.ok(
+    boundary.includes('Sole exception — user-directed recipe amendment.'),
+    'orchestrator-verification-boundary.md must document the user-directed recipe-amendment carve-out'
+  );
+});
+
 test('legacy flow configuration naming is absent from package source', () => {
   // Split literals so this test file itself never contains the banned strings.
   const LEGACY_FILE_NAME = new RegExp('model' + '-tier', 'i');
