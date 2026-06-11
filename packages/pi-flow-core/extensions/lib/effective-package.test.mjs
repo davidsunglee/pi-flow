@@ -53,6 +53,12 @@ async function writeProjectSettings(cwd, settings) {
   await fs.writeFile(settingsPath, JSON.stringify(settings));
 }
 
+async function writeUserSettings(home, settings) {
+  const settingsPath = path.join(home, ".pi", "agent", "settings.json");
+  await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+  await fs.writeFile(settingsPath, JSON.stringify(settings));
+}
+
 // --- parseDeclaredPackages --------------------------------------------------
 
 test("parseDeclaredPackages: a string npm: spec is kind npm (bug fix), not local", () => {
@@ -275,6 +281,39 @@ test("resolveEffectiveCoreRoot: an untrusted project override falls back to the 
   await seedCore(projCore, "2.0.0");
   await writeProjectSettings(cwd, { packages: ["npm:@aphotic/pi-flow-core"] });
   // no trust.json — project is untrusted
+
+  const eff = await resolveEffectiveCoreRoot({ cwd, homeDir: home });
+  assert.ok(eff);
+  assert.equal(eff.scope, "user");
+  assert.equal(eff.root, realpathSync(userCore));
+});
+
+test("resolveEffectiveCoreRoot: a user settings local pi-flow-core package resolves (scope user) without a fixed npm install", async () => {
+  const sandbox = mkSandbox("eff-eff-user-local-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(cwd, { recursive: true });
+
+  // A local core checkout declared by user settings, NOT at the fixed
+  // ~/.pi/agent/npm install path. Local specs resolve relative to the agent dir.
+  const userCore = path.join(home, ".pi", "agent", "checkout", "pi-flow-core");
+  await seedCore(userCore, "3.3.3");
+  await writeUserSettings(home, { packages: ["checkout/pi-flow-core"] });
+
+  const eff = await resolveEffectiveCoreRoot({ cwd, homeDir: home });
+  assert.ok(eff, "user-declared local package should resolve");
+  assert.equal(eff.scope, "user");
+  assert.equal(eff.root, realpathSync(userCore));
+});
+
+test("resolveEffectiveCoreRoot: a user settings npm pi-flow package resolves under ~/.pi/agent/npm (scope user)", async () => {
+  const sandbox = mkSandbox("eff-eff-user-npm-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userCore = await seedUserCore(home, "4.4.4");
+  await writeUserSettings(home, { packages: ["npm:@aphotic/pi-flow-core"] });
 
   const eff = await resolveEffectiveCoreRoot({ cwd, homeDir: home });
   assert.ok(eff);

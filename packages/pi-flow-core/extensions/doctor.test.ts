@@ -1179,6 +1179,41 @@ test("buildDiagnosis: project aggregate npm:@aphotic/pi-flow overrides user dire
   assert.equal(d.hasSkew, false);
 });
 
+test("buildDiagnosis: declared local spec resolves relative to cwd (matching the effective resolver), not <cwd>/.pi", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-local-base-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  // A local core checkout at <cwd>/packages/pi-flow-core — the same base the
+  // shared effective resolver uses (cwd), not <cwd>/.pi.
+  const localCore = path.join(cwd, "packages", "pi-flow-core");
+  await seedCore(localCore, "2.0.0");
+  await seedTrust(home, cwd);
+  await seedSettings(cwd, ["packages/pi-flow-core"]);
+
+  const d = await buildDiagnosis({
+    activeRoot: realpathSync(localCore),
+    cwd,
+    homeDir: home,
+    scope: "project",
+  });
+
+  // The trusted project local override is the effective root.
+  assert.equal(d.effectiveScope, "project");
+  assert.equal(d.effectiveRoot, realpathSync(localCore));
+
+  const decl = d.surfaces.filter((s) => s.kind === "declared-package");
+  assert.equal(decl.length, 1);
+  assert.notEqual(
+    decl[0].classification,
+    "unresolved",
+    "a cwd-relative local spec must resolve, not look like <cwd>/.pi/...",
+  );
+  assert.equal(decl[0].realpath, realpathSync(localCore));
+});
+
 // --- dispatcher-as-surface + scope-aware --fix discipline --------------------
 
 function shimPathFor(home: string): string {

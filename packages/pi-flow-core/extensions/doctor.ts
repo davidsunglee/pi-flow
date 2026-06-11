@@ -461,8 +461,10 @@ async function declaredSurfaceReports(opts: {
     let realpath: string | undefined;
     let classification: Classification = "unresolved";
     if (declared.kind === "local") {
+      // Local specs resolve relative to baseDir (cwd), matching the shared
+      // effective resolver — not relative to the settings dir (<cwd>/.pi).
       const resolved = await realpathOrNull(
-        path.resolve(settingsDir, declared.spec),
+        path.resolve(baseDir, declared.spec),
       );
       if (resolved) {
         realpath = resolved;
@@ -1485,11 +1487,12 @@ async function readDeclaredLocalSpecs(
   } catch {
     return [];
   }
-  const settingsDir = path.dirname(settingsPath);
   const out: { spec: string; abs: string }[] = [];
   for (const declared of parseDeclaredPackages(parsed)) {
     if (declared.kind !== "local") continue;
-    out.push({ spec: declared.spec, abs: path.resolve(settingsDir, declared.spec) });
+    // Local specs resolve relative to cwd, matching the shared effective
+    // resolver (and declaredSurfaceReports) — not relative to <cwd>/.pi.
+    out.push({ spec: declared.spec, abs: path.resolve(cwd, declared.spec) });
   }
   return out;
 }

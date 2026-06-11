@@ -216,15 +216,19 @@ async function resolveCandidateToCore(candidateRoot) {
 
 /**
  * Compute the candidate install/checkout root for a declared package row. A
- * local spec resolves relative to baseDir; an npm spec resolves to the
- * project-scoped install under <baseDir>/.pi/npm/node_modules/<name>.
+ * local spec resolves relative to baseDir; an npm spec resolves under
+ * <npmRoot>/node_modules/<name>. When npmRoot is omitted it defaults to the
+ * project-scoped install tree <baseDir>/.pi/npm, so project resolution keeps the
+ * established convention; a scope with a different npm layout (e.g. the user
+ * install under ~/.pi/agent/npm) passes its own npmRoot.
  */
-function specToCandidateRoot({ spec, kind, name }, baseDir) {
+function specToCandidateRoot({ spec, kind, name }, baseDir, npmRoot) {
   if (kind === "local") {
     return path.resolve(baseDir, spec);
   }
   const pkgName = name ?? spec.slice("npm:".length);
-  return path.join(baseDir, ".pi", "npm", "node_modules", ...pkgName.split("/"));
+  const root = npmRoot ?? path.join(baseDir, ".pi", "npm");
+  return path.join(root, "node_modules", ...pkgName.split("/"));
 }
 
 /**
@@ -309,18 +313,35 @@ export async function resolveEffectiveCoreRoot({ cwd, homeDir }) {
     }
   }
 
-  // 2. User/global fallback — fixed user-install locations.
-  const agentNpm = path.join(
-    homeDir,
-    ".pi",
-    "agent",
-    "npm",
-    "node_modules",
-    "@aphotic",
+  // 2. User/global scope. Both the user's declared `packages` (from
+  // ~/.pi/agent/settings.json) and the fixed npm install locations live under
+  // the agent dir; npm installs are at ~/.pi/agent/npm, not <baseDir>/.pi/npm,
+  // and local specs resolve relative to the agent dir.
+  const agentDir = path.join(homeDir, ".pi", "agent");
+  const agentNpm = path.join(agentDir, "npm");
+
+  // 2a. User settings-declared pi-flow packages (local or npm).
+  const userDeclared = parseDeclaredPackages(
+    await readSettings(path.join(agentDir, "settings.json")),
   );
+  for (const row of userDeclared) {
+    if (!isPiFlowCandidate(row)) continue;
+    const candidate = specToCandidateRoot(row, agentDir, agentNpm);
+    const { core, viaAggregate } = await resolveCandidateToCore(candidate);
+    if (core) {
+      return {
+        root: core.root,
+        binPath: path.join(core.root, "bin", "pi-flow.mjs"),
+        scope: "user",
+        ...(viaAggregate ? { viaAggregate } : {}),
+      };
+    }
+  }
+
+  // 2b. Fixed user-install locations.
   const userCandidates = [
-    path.join(agentNpm, "pi-flow-core"),
-    path.join(agentNpm, "pi-flow"),
+    path.join(agentNpm, "node_modules", "@aphotic", "pi-flow-core"),
+    path.join(agentNpm, "node_modules", "@aphotic", "pi-flow"),
   ];
   for (const candidate of userCandidates) {
     const { core, viaAggregate } = await resolveCandidateToCore(candidate);
