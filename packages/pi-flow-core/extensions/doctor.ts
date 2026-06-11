@@ -1527,10 +1527,19 @@ async function resolveCandidateRoot(
   return v.ok && v.target ? v.target : null;
 }
 
-/** Read and parse declared local-spec roots from <cwd>/.pi/settings.json. */
-async function readDeclaredLocalSpecs(
+/**
+ * Declared specs whose resolved root equals the chosen target root. Both local
+ * and npm rows are scanned: local specs resolve through the reconcile candidate
+ * path, while npm specs resolve through the same shared `resolveSpecToCoreRoot`
+ * resolver `declaredSurfaceReports` uses. This way an entry such as
+ * `packages: ["npm:@aphotic/pi-flow-core"]` that already names the effective
+ * target is recognized, so the fix-report durability note is suppressed instead
+ * of misleadingly telling the user to add or update `.pi/settings.json`.
+ */
+export async function declaredSpecsNamingTarget(
   cwd: string,
-): Promise<{ spec: string; abs: string }[]> {
+  targetRoot: string,
+): Promise<string[]> {
   const settingsPath = path.join(cwd, ".pi", "settings.json");
   let parsed: unknown;
   try {
@@ -1538,25 +1547,27 @@ async function readDeclaredLocalSpecs(
   } catch {
     return [];
   }
-  const out: { spec: string; abs: string }[] = [];
-  for (const declared of parseDeclaredPackages(parsed)) {
-    if (declared.kind !== "local") continue;
-    // Local specs resolve relative to cwd, matching the shared effective
-    // resolver (and declaredSurfaceReports) — not relative to <cwd>/.pi.
-    out.push({ spec: declared.spec, abs: path.resolve(cwd, declared.spec) });
-  }
-  return out;
-}
-
-/** Declared specs whose resolved root equals the chosen target root. */
-async function declaredSpecsNamingTarget(
-  cwd: string,
-  targetRoot: string,
-): Promise<string[]> {
   const out: string[] = [];
-  for (const { spec, abs } of await readDeclaredLocalSpecs(cwd)) {
-    const core = await resolveCandidateRoot(abs, cwd);
-    if (core && core.root === targetRoot) out.push(spec);
+  for (const declared of parseDeclaredPackages(parsed)) {
+    let root: string | null = null;
+    if (declared.kind === "local") {
+      // Local specs resolve relative to cwd, matching the shared effective
+      // resolver (and declaredSurfaceReports) — not relative to <cwd>/.pi.
+      const core = await resolveCandidateRoot(
+        path.resolve(cwd, declared.spec),
+        cwd,
+      );
+      root = core?.root ?? null;
+    } else {
+      const core = await _resolveSpecToCoreRoot({
+        spec: declared.spec,
+        kind: declared.kind,
+        name: declared.name,
+        baseDir: cwd,
+      });
+      root = core?.root ?? null;
+    }
+    if (root && root === targetRoot) out.push(declared.spec);
   }
   return out;
 }

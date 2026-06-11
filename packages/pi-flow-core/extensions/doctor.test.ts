@@ -21,6 +21,7 @@ import {
   runDoctorFix,
   isDispatcherStale,
   planDefaultFix,
+  declaredSpecsNamingTarget,
 } from "./doctor.ts";
 import type { PiFlowCorePackage } from "./package-resolution.ts";
 import { readPiFlowCorePackage } from "./package-resolution.ts";
@@ -1327,6 +1328,32 @@ async function seedUserAggInstall(home: string): Promise<string> {
   await seedAggregate(aggRoot, coreRoot);
   return realpathSync(coreRoot);
 }
+
+test("declaredSpecsNamingTarget: npm spec naming the effective target is recognized (suppresses durability note)", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-decl-npm-");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(cwd, { recursive: true });
+
+  const projCoreRoot = await seedProjectNpmDirectInstall(cwd, "1.0.0");
+  await seedSettings(cwd, ["npm:@aphotic/pi-flow-core"]);
+
+  // The npm entry already names the effective target, so the fix-guidance scan
+  // must list it (an empty list is what triggers the misleading durability note).
+  const specs = await declaredSpecsNamingTarget(cwd, projCoreRoot);
+  assert.deepEqual(specs, ["npm:@aphotic/pi-flow-core"]);
+});
+
+test("declaredSpecsNamingTarget: npm spec resolving to a different root is not counted", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-decl-npm-miss-");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(cwd, { recursive: true });
+
+  await seedProjectNpmDirectInstall(cwd, "1.0.0");
+  await seedSettings(cwd, ["npm:@aphotic/pi-flow-core"]);
+
+  const specs = await declaredSpecsNamingTarget(cwd, path.join(cwd, "elsewhere"));
+  assert.deepEqual(specs, []);
+});
 
 test("buildDiagnosis: declared npm string spec (npm:@aphotic/pi-flow-core) with installed core is not unresolved", async () => {
   const sandbox = mkSandbox("pi-flow-doctor-npm-str-");
