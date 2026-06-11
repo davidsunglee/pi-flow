@@ -16,6 +16,7 @@ import {
   resolveReconcileTarget,
   validateExplicitTarget,
   repairLink,
+  repairDispatcher,
   parseDoctorArgs,
   helpText,
   runDoctorFix,
@@ -1524,6 +1525,51 @@ async function installDispatcherFile(
   await fs.writeFile(p, content, { mode: 0o755 });
   return p;
 }
+
+test("repairDispatcher: identical owned dispatcher missing exec bit is left executable", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-disp-skip-noexec-");
+  const activeRoot = path.join(sandbox, "active");
+  await seedCore(activeRoot, "1.0.0");
+  const dispatcherSrc = path.join(activeRoot, "bin", "pi-flow-dispatch.mjs");
+
+  const shimPath = path.join(sandbox, "home", ".pi", "agent", "bin", "pi-flow");
+  await fs.mkdir(path.dirname(shimPath), { recursive: true });
+  // Identical bytes but NO exec bit (mode 0o644).
+  await fs.writeFile(shimPath, await fs.readFile(dispatcherSrc), { mode: 0o644 });
+
+  const r = await repairDispatcher({ shimPath, dispatcherSrc });
+  assert.equal(r.outcome, "skipped");
+  const stat = await fs.lstat(shimPath);
+  assert.ok(
+    (stat.mode & 0o111) !== 0,
+    `expected exec bit set after skip; mode=${stat.mode.toString(8)}`,
+  );
+});
+
+test("repairDispatcher: stale owned dispatcher missing exec bit is refreshed and executable", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-disp-repair-noexec-");
+  const activeRoot = path.join(sandbox, "active");
+  await seedCore(activeRoot, "1.0.0");
+  const dispatcherSrc = path.join(activeRoot, "bin", "pi-flow-dispatch.mjs");
+
+  const shimPath = path.join(sandbox, "home", ".pi", "agent", "bin", "pi-flow");
+  await fs.mkdir(path.dirname(shimPath), { recursive: true });
+  // Stale bytes (same signature) and NO exec bit.
+  await fs.writeFile(shimPath, dispatcherBytes("0.0.0-stale"), { mode: 0o644 });
+
+  const r = await repairDispatcher({ shimPath, dispatcherSrc });
+  assert.equal(r.outcome, "repaired");
+  const stat = await fs.lstat(shimPath);
+  assert.ok(
+    (stat.mode & 0o111) !== 0,
+    `expected exec bit set after repair; mode=${stat.mode.toString(8)}`,
+  );
+  const [after, src] = await Promise.all([
+    fs.readFile(shimPath),
+    fs.readFile(dispatcherSrc),
+  ]);
+  assert.ok(after.equals(src), "refreshed dispatcher matches the active bytes");
+});
 
 test("isDispatcherStale: true when bytes differ, false when aligned or installed file is missing", async () => {
   const sandbox = mkSandbox("pi-flow-doctor-isstale-");

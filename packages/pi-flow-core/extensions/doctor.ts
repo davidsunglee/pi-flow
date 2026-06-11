@@ -1117,6 +1117,7 @@ export async function repairDispatcher(args: {
       await fs.mkdir(path.dirname(shimPath), { recursive: true });
       const content = await fs.readFile(dispatcherSrc);
       await fs.writeFile(shimPath, content, { mode: 0o755 });
+      await fs.chmod(shimPath, 0o755);
       return { path: shimPath, outcome: "created", to };
     }
     throw err;
@@ -1155,9 +1156,15 @@ export async function repairDispatcher(args: {
       };
     }
     if (existing.equals(source)) {
+      // Up-to-date bytes, but the owned file may have lost its exec bit; restore
+      // it so a "skipped" repair never leaves pi-flow non-executable on PATH.
+      await fs.chmod(shimPath, 0o755);
       return { path: shimPath, outcome: "skipped", to };
     }
     await fs.writeFile(shimPath, source, { mode: 0o755 });
+    // writeFile leaves an existing inode's mode untouched; chmod to guarantee
+    // the refreshed dispatcher is executable.
+    await fs.chmod(shimPath, 0o755);
     return { path: shimPath, outcome: "repaired", to };
   }
 

@@ -417,6 +417,72 @@ test("runHelperShimSetup: user target — refreshes stale dispatcher", async () 
   );
 });
 
+test("runHelperShimSetup: user target — identical owned dispatcher missing exec bit is repaired to executable", async () => {
+  const sandbox = mkSandbox("pi-flow-shim-skip-noexec-");
+  const packageRoot = path.join(sandbox, "pkg");
+  const dispatcherSrc = await seedDispatcher(packageRoot);
+  const shimDir = path.join(sandbox, "home", ".pi", "agent", "bin");
+  await fs.mkdir(shimDir, { recursive: true });
+  const shimPath = path.join(shimDir, "pi-flow");
+  // Pre-install the identical dispatcher content WITHOUT the exec bit (mode 0o644).
+  const content = await fs.readFile(dispatcherSrc);
+  await fs.writeFile(shimPath, content, { mode: 0o644 });
+
+  const ui = makeNotifier();
+  const result = await runHelperShimSetup({
+    shimPath,
+    dispatcherSrc,
+    effectiveTarget: "user",
+    ui,
+  });
+
+  assert.equal(result.status, "skipped");
+  // Even though content was identical, the exec bit must be restored.
+  const stat = await fs.lstat(shimPath);
+  assert.ok(
+    (stat.mode & 0o111) !== 0,
+    `expected exec bit set after identical-skip; mode=${stat.mode.toString(8)}`,
+  );
+  const after = await fs.readFile(shimPath);
+  assert.ok(after.equals(content), "content must be unchanged after skip");
+});
+
+test("runHelperShimSetup: user target — stale owned dispatcher missing exec bit is refreshed and executable", async () => {
+  const sandbox = mkSandbox("pi-flow-shim-refresh-noexec-");
+  const packageRoot = path.join(sandbox, "pkg");
+  const dispatcherSrc = await seedDispatcher(packageRoot);
+  const shimDir = path.join(sandbox, "home", ".pi", "agent", "bin");
+  await fs.mkdir(shimDir, { recursive: true });
+  const shimPath = path.join(shimDir, "pi-flow");
+  // Pre-install a stale dispatcher (same signature, different bytes) WITHOUT the exec bit.
+  await fs.writeFile(
+    shimPath,
+    "#!/usr/bin/env node\n" +
+      "/**\n" +
+      " * pi-flow-dispatch.mjs — the stable per-cwd helper launcher.\n" +
+      " */\nconsole.log('old-version');\n",
+    { mode: 0o644 },
+  );
+
+  const ui = makeNotifier();
+  const result = await runHelperShimSetup({
+    shimPath,
+    dispatcherSrc,
+    effectiveTarget: "user",
+    ui,
+  });
+
+  assert.equal(result.status, "refreshed");
+  const stat = await fs.lstat(shimPath);
+  assert.ok(
+    (stat.mode & 0o111) !== 0,
+    `expected exec bit set after refresh; mode=${stat.mode.toString(8)}`,
+  );
+  const after = await fs.readFile(shimPath);
+  const src = await fs.readFile(dispatcherSrc);
+  assert.ok(after.equals(src), "refreshed shim must match new dispatcher source");
+});
+
 test("runHelperShimSetup: migrates legacy symlink pointing at managed pi-flow-core bin", async () => {
   const sandbox = mkSandbox("pi-flow-shim-migrate-");
   const packageRoot = path.join(sandbox, "pkg");

@@ -273,6 +273,9 @@ export async function runHelperShimSetup(
     await fs.mkdir(path.dirname(shimPath), { recursive: true });
     const content = await fs.readFile(dispatcherSrc);
     await fs.writeFile(shimPath, content, { mode: 0o755 });
+    // writeFile's mode only applies on create; chmod unconditionally so the
+    // dispatcher is executable regardless of umask or a pre-existing inode.
+    await fs.chmod(shimPath, 0o755);
     ui.notify(
       `/flow:setup helper-runner shim (user):\n  created: ${shimPath}\nReload Pi or run /reload to make pi-flow available on PATH.`,
       "info",
@@ -289,6 +292,7 @@ export async function runHelperShimSetup(
       await fs.unlink(shimPath);
       const content = await fs.readFile(dispatcherSrc);
       await fs.writeFile(shimPath, content, { mode: 0o755 });
+      await fs.chmod(shimPath, 0o755);
       ui.notify(
         `/flow:setup helper-runner shim (${effectiveTarget}):\n  migrated: ${shimPath} (replaced legacy managed symlink with dispatcher copy)\nReload Pi or run /reload to make pi-flow available on PATH.`,
         "info",
@@ -326,6 +330,9 @@ export async function runHelperShimSetup(
         fs.readFile(dispatcherSrc),
       ]);
       if (existing.equals(source)) {
+        // Bytes match, but the owned file may have lost its exec bit; repair it
+        // so a "skipped" report never leaves pi-flow non-executable on PATH.
+        await fs.chmod(shimPath, 0o755);
         ui.notify(
           `/flow:setup helper-runner shim (${effectiveTarget}):\n  skipped: ${shimPath} (dispatcher already up to date)`,
           "info",
@@ -333,6 +340,9 @@ export async function runHelperShimSetup(
         return { status: "skipped", shimPath };
       }
       await fs.writeFile(shimPath, source, { mode: 0o755 });
+      // writeFile leaves an existing inode's mode untouched; chmod to guarantee
+      // the refreshed dispatcher is executable.
+      await fs.chmod(shimPath, 0o755);
       ui.notify(
         `/flow:setup helper-runner shim (${effectiveTarget}):\n  refreshed: ${shimPath} (updated stale dispatcher)\nReload Pi or run /reload to make pi-flow available on PATH.`,
         "info",
