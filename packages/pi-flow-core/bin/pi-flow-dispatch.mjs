@@ -72,12 +72,14 @@ async function bootstrap(homeDir) {
   let module = null;
   let bootstrapBin = null;
   for (const candidate of bootstrapCandidates(homeDir)) {
-    if (!existsSync(candidate)) continue;
+    // Probe the bootstrap bin independently of the shared module: an older user
+    // core may ship bin/pi-flow.mjs without effective-package.mjs, and must
+    // still serve as the fallback target.
     if (bootstrapBin === null) {
       const coreBin = path.join(coreRootFromCandidate(candidate), "bin", "pi-flow.mjs");
       if (existsSync(coreBin)) bootstrapBin = coreBin;
     }
-    if (module === null) {
+    if (module === null && existsSync(candidate)) {
       try {
         module = await import(pathToFileURL(candidate).href);
       } catch {

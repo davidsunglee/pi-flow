@@ -52,6 +52,14 @@ async function seedUserDirectCore(home, version) {
   return root;
 }
 
+// Seed a direct-core user install that ships a bin/pi-flow.mjs but NO shared
+// effective-package.mjs (an older core predating the module).
+async function seedUserDirectCoreNoModule(home, version) {
+  const root = path.join(agentNpm(home), "pi-flow-core");
+  await seedCore(root, version);
+  return root;
+}
+
 async function seedUserAggregateCore(home, version) {
   const aggRoot = path.join(agentNpm(home), "pi-flow");
   await fs.mkdir(path.join(aggRoot, "bin"), { recursive: true });
@@ -170,6 +178,35 @@ test("malformed trust.json falls back to the user core without throwing", async 
 
   const { targetBin } = await resolveDispatchTarget({ cwd, homeDir: home });
   assert.equal(targetBin, path.join(realpathSync(userCore), "bin", "pi-flow.mjs"));
+});
+
+test("a user core missing effective-package.mjs falls back to its bootstrap bin", async () => {
+  const sandbox = mkSandbox("disp-nomodule-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  const userCore = await seedUserDirectCoreNoModule(home, "0.9.0");
+  await fs.mkdir(cwd, { recursive: true });
+
+  const { targetBin } = await resolveDispatchTarget({ cwd, homeDir: home });
+  assert.equal(targetBin, path.join(realpathSync(userCore), "bin", "pi-flow.mjs"));
+});
+
+test("a user core whose effective-package.mjs fails to import falls back to its bootstrap bin", async () => {
+  const sandbox = mkSandbox("disp-badmodule-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  const root = path.join(agentNpm(home), "pi-flow-core");
+  await seedCore(root, "0.9.0");
+  const libDir = path.join(root, "extensions", "lib");
+  await fs.mkdir(libDir, { recursive: true });
+  await fs.writeFile(
+    path.join(libDir, "effective-package.mjs"),
+    "this is not valid javascript ;{",
+  );
+  await fs.mkdir(cwd, { recursive: true });
+
+  const { targetBin } = await resolveDispatchTarget({ cwd, homeDir: home });
+  assert.equal(targetBin, path.join(realpathSync(root), "bin", "pi-flow.mjs"));
 });
 
 test("no user install found yields a null target", async () => {

@@ -230,9 +230,11 @@ export function isLocalDevCheckout(realpath: string, cwd: string): boolean {
  *
  * - A user/global install is "overridden" when a higher-priority project
  *   override is in effect (the project scope supersedes it).
- * - A project install is "overridden" when the project declared a pi-flow entry
- *   (a deliberate, if non-effective, intent); otherwise it is a leftover
- *   "shadowed" by the effective install.
+ * - A project install is "overridden" only when a project pi-flow entry is
+ *   actually in effect (`effectiveScope === "project"` and the project declared
+ *   an entry); otherwise — e.g. an untrusted project or an unresolvable
+ *   declaration leaving the user/global package effective — it is a leftover
+ *   "shadowed" by the effective install, not overridden by a project package.
  */
 export function decideInactiveClassification(opts: {
   surfaceScope: "user" | "project";
@@ -245,7 +247,9 @@ export function decideInactiveClassification(opts: {
       ? "inactive-overridden"
       : "inactive-shadowed";
   }
-  return declaresProjectEntry ? "inactive-overridden" : "inactive-shadowed";
+  return effectiveScope === "project" && declaresProjectEntry
+    ? "inactive-overridden"
+    : "inactive-shadowed";
 }
 
 /**

@@ -1068,6 +1068,76 @@ test("buildDiagnosis: a stale project .pi/npm install with no project entry is i
   assert.deepEqual(d.skewKinds, []);
 });
 
+test("buildDiagnosis: an untrusted project override leaves the project install inactive-shadowed, not overridden", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-untrusted-shadow-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  const projInstall = path.join(
+    cwd,
+    ".pi",
+    "npm",
+    "node_modules",
+    "@aphotic",
+    "pi-flow-core",
+  );
+  await seedCore(projInstall, "2.0.0-dev");
+  // Declares a project npm entry, but the project is NOT trusted → the override
+  // is ignored and the effective package stays the user/global install. The
+  // leftover project install is shadowed by it, not overridden by a project pkg.
+  await seedSettings(cwd, ["npm:@aphotic/pi-flow-core"]);
+
+  const d = await buildDiagnosis({
+    activeRoot: userRoot,
+    cwd,
+    homeDir: home,
+    scope: "user",
+  });
+
+  assert.equal(d.effectiveRoot, userRoot);
+  assert.equal(d.effectiveScope, "user");
+  const projectInstall = d.surfaces.find((s) => s.kind === "project-install");
+  assert.equal(projectInstall?.classification, "inactive-shadowed");
+});
+
+test("buildDiagnosis: a trusted but unresolvable project declaration leaves the project install inactive-shadowed", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-unresolvable-shadow-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  const projInstall = path.join(
+    cwd,
+    ".pi",
+    "npm",
+    "node_modules",
+    "@aphotic",
+    "pi-flow-core",
+  );
+  await seedCore(projInstall, "2.0.0-dev");
+  await seedTrust(home, cwd);
+  // Trusted, but the declared local path resolves to no usable core → effective
+  // package stays the user install, so the project install is shadowed.
+  await seedSettings(cwd, ["packages/pi-flow-core"]);
+
+  const d = await buildDiagnosis({
+    activeRoot: userRoot,
+    cwd,
+    homeDir: home,
+    scope: "user",
+  });
+
+  assert.equal(d.effectiveRoot, userRoot);
+  assert.equal(d.effectiveScope, "user");
+  const projectInstall = d.surfaces.find((s) => s.kind === "project-install");
+  assert.equal(projectInstall?.classification, "inactive-shadowed");
+});
+
 test("buildDiagnosis: a helper shim to a root that is neither effective nor a recognized inactive install is genuine stale-skew", async () => {
   const sandbox = mkSandbox("pi-flow-doctor-genuine-skew-");
   const home = path.join(sandbox, "home");
