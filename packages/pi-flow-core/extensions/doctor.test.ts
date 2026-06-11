@@ -91,7 +91,7 @@ test("parseDeclaredPackages: parses the live two-entry shape (object npm floatin
   };
   const result = parseDeclaredPackages(settings);
   assert.deepEqual(result, [
-    { spec: "npm:@aphotic/pi-flow", kind: "npm", pinned: false },
+    { spec: "npm:@aphotic/pi-flow", kind: "npm", pinned: false, name: "@aphotic/pi-flow" },
     { spec: "../packages/pi-flow", kind: "local", pinned: false },
   ]);
 });
@@ -101,8 +101,14 @@ test("parseDeclaredPackages: marks an explicit @version npm spec as pinned", () 
     packages: [{ source: "npm:@aphotic/pi-flow@0.8.0" }],
   });
   assert.deepEqual(result, [
-    { spec: "npm:@aphotic/pi-flow@0.8.0", kind: "npm", pinned: true },
+    { spec: "npm:@aphotic/pi-flow@0.8.0", kind: "npm", pinned: true, name: "@aphotic/pi-flow" },
   ]);
+});
+
+test("parseDeclaredPackages: bare npm: string is classified as npm, not local", () => {
+  const result = parseDeclaredPackages({ packages: ["npm:@aphotic/pi-flow"] });
+  assert.equal(result[0].kind, "npm");
+  assert.equal(result[0].name, "@aphotic/pi-flow");
 });
 
 test("parseDeclaredPackages: returns [] when packages is absent or not an array", () => {

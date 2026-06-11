@@ -8,7 +8,6 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createRequire } from "node:module";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
@@ -27,6 +26,10 @@ import {
   readPiFlowCorePackage,
   findEnclosingCoreRoot,
 } from "./package-resolution.ts";
+import {
+  resolveBinToCore as _resolveBinToCore,
+  parseDeclaredPackages as _parseDeclaredPackages,
+} from "./lib/effective-package.mjs";
 
 export type SurfaceKind =
   | "helper-shim"
@@ -64,48 +67,13 @@ export interface BinResolution {
 
 /**
  * Resolve a bin/pi-flow(.mjs) path to the pi-flow-core package that actually
- * executes, mirroring runtime delegation. First compute PACKAGE_ROOT via
- * packageRootFromBin (runner parity) and try readPiFlowCorePackage on it (a
- * direct core runner). If that root is instead the aggregate `@aphotic/pi-flow`
- * wrapper, reproduce its `createRequire(...).resolve(
- * "@aphotic/pi-flow-core/bin/pi-flow.mjs")` delegation and resolve the bundled/
- * dependency core. Returns { core } with viaAggregate set when the path went
- * through the wrapper; core is null only when the bin is genuinely not pi-flow.
+ * executes, mirroring runtime delegation. Delegates to the shared
+ * effective-package module. Returns { core } with viaAggregate set when the
+ * path went through the aggregate wrapper; core is null only when the bin is
+ * genuinely not pi-flow.
  */
 export async function resolveBinToCore(binPath: string): Promise<BinResolution> {
-  const root = await packageRootFromBin(binPath);
-  if (!root) return { core: null };
-
-  const direct = await readPiFlowCorePackage(root);
-  if (direct) return { core: direct };
-
-  // The bin's PACKAGE_ROOT may be the aggregate `@aphotic/pi-flow` wrapper.
-  let pkg: Record<string, unknown>;
-  try {
-    const content = await fs.readFile(path.join(root, "package.json"), "utf8");
-    pkg = JSON.parse(content) as Record<string, unknown>;
-  } catch {
-    return { core: null };
-  }
-
-  if (!pkg || typeof pkg !== "object" || pkg.name !== "@aphotic/pi-flow") {
-    return { core: null };
-  }
-
-  const viaAggregate = {
-    name: pkg.name as string,
-    version: String(pkg.version),
-    root,
-  };
-  try {
-    const req = createRequire(path.join(root, "bin", "pi-flow.mjs"));
-    const coreBin = req.resolve("@aphotic/pi-flow-core/bin/pi-flow.mjs");
-    const coreRoot = await packageRootFromBin(coreBin);
-    const core = coreRoot ? await readPiFlowCorePackage(coreRoot) : null;
-    return { core, viaAggregate };
-  } catch {
-    return { core: null, viaAggregate };
-  }
+  return _resolveBinToCore(binPath);
 }
 
 export interface DeclaredPackage {
@@ -115,6 +83,8 @@ export interface DeclaredPackage {
   kind: "npm" | "local";
   /** true when an npm spec carries an explicit @<version> pin */
   pinned: boolean;
+  /** extracted package name for npm specs (undefined for local specs) */
+  name?: string;
 }
 
 export interface DoctorDiagnosis {
@@ -135,31 +105,14 @@ export interface BuildDiagnosisOptions {
 
 /**
  * Parse the `packages` array of a parsed `.pi/settings.json` object into
- * DeclaredPackage rows. String entries are local path specs; object entries
- * with a string `source` are npm or local depending on the `npm:` prefix.
- * Malformed entries are ignored; returns [] when `packages` is missing.
+ * DeclaredPackage rows. String entries beginning `npm:` are npm specs; other
+ * string entries are local path specs. Object entries with a string `source`
+ * are classified by the same `npm:` prefix rule. Malformed entries are
+ * ignored; returns [] when `packages` is missing. Delegates to the shared
+ * effective-package module.
  */
 export function parseDeclaredPackages(settingsJson: unknown): DeclaredPackage[] {
-  if (!settingsJson || typeof settingsJson !== "object") return [];
-  const packages = (settingsJson as Record<string, unknown>).packages;
-  if (!Array.isArray(packages)) return [];
-
-  const out: DeclaredPackage[] = [];
-  for (const entry of packages) {
-    if (typeof entry === "string") {
-      out.push({ spec: entry, kind: "local", pinned: false });
-      continue;
-    }
-    if (entry && typeof entry === "object") {
-      const source = (entry as Record<string, unknown>).source;
-      if (typeof source !== "string") continue;
-      const kind: "npm" | "local" = source.startsWith("npm:") ? "npm" : "local";
-      const pinned =
-        kind === "npm" && /@[^/@]+$/.test(source.slice("npm:".length));
-      out.push({ spec: source, kind, pinned });
-    }
-  }
-  return out;
+  return _parseDeclaredPackages(settingsJson);
 }
 
 /**
