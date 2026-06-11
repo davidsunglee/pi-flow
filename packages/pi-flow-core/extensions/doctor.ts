@@ -31,6 +31,7 @@ import {
   parseDeclaredPackages as _parseDeclaredPackages,
   resolveEffectiveCoreRoot,
   resolveSpecToCoreRoot as _resolveSpecToCoreRoot,
+  abbreviatePath,
 } from "./lib/effective-package.mjs";
 
 export type SurfaceKind =
@@ -102,12 +103,14 @@ export interface DeclaredPackage {
 export interface DoctorDiagnosis {
   active: PiFlowCorePackage; // the executing ("intended") package
   scope: SetupScope;
+  homeDir: string; // the home directory used for this diagnosis (for path abbreviation)
   effectiveRoot: string; // the pi-flow-core root Pi resolves to for this cwd
   effectiveScope: "project" | "user"; // which scope supplied the effective root
   surfaces: SurfaceReport[];
   hasSkew: boolean; // overall failure verdict
   skewKinds: SurfaceKind[]; // resolution-path surfaces classified stale-skew
   strictDivergence: SurfaceKind[]; // under --strict, resolution surfaces not on the effective root (empty in default mode)
+  absentCandidates: string[]; // install/bin candidate paths that were absent (for --all inventory)
 }
 
 export interface BuildDiagnosisOptions {
@@ -708,15 +711,29 @@ export async function buildDiagnosis(
         .map((s) => s.kind)
     : [];
 
+  // Absent candidates: install/bin candidate paths that were silently skipped
+  // (not present on disk). Used by --all inventory mode.
+  const surfacePaths = new Set(surfaces.map((s) => s.inspectedPath));
+  const allCandidates = [
+    ...projectInstallCandidates,
+    ...userInstallCandidates,
+    ...nodeBinCandidates,
+  ];
+  const absentCandidates = allCandidates
+    .map((c) => c.path)
+    .filter((p) => !surfacePaths.has(p));
+
   return {
     active,
     scope,
+    homeDir,
     effectiveRoot,
     effectiveScope,
     surfaces,
     hasSkew,
     skewKinds,
     strictDivergence,
+    absentCandidates,
   };
 }
 
@@ -935,24 +952,100 @@ const TAGS: Record<Classification, string> = {
   "non-pi-flow": "[non-pi-flow]",
 };
 
-/** Render a DoctorDiagnosis into a human-readable report string. */
-export function renderReport(d: DoctorDiagnosis): string {
-  const lines: string[] = [];
-  lines.push(
-    `Active pi-flow package: ${d.active.name}@${d.active.version} (${d.active.root})`,
-  );
-  for (const s of d.surfaces) {
-    const tag = TAGS[s.classification];
-    lines.push(`  ${tag} ${s.label}`);
-    const pkgPart = s.pkg ? ` [${s.pkg.name}@${s.pkg.version}]` : "";
-    const detailPart = s.detail ? ` — ${s.detail}` : "";
-    lines.push(`    -> ${s.realpath ?? "(unresolved)"}${pkgPart}${detailPart}`);
+/** Width of the widest tag "[non-pi-flow]" — all tags are padded to this. */
+const TAG_WIDTH = 13; // "[non-pi-flow]".length
+
+function renderSurfaceRow(s: SurfaceReport, homeDir: string): string[] {
+  const tag = TAGS[s.classification].padEnd(TAG_WIDTH);
+  const version = s.pkg ? `v${s.pkg.version}` : "";
+  const displayPath = abbreviatePath(s.realpath ?? s.inspectedPath, homeDir);
+  const parts = [`  ${tag}  ${s.label}`];
+  if (version) parts[0] += `  ${version}`;
+  parts[0] += `  ${displayPath}`;
+  if (s.detail) parts[0] += `  — ${s.detail}`;
+  // Sub-type continuation line for inactive installs.
+  if (s.classification === "inactive-overridden") {
+    parts.push(`  ${"".padEnd(TAG_WIDTH)}    overridden by project package`);
+  } else if (s.classification === "inactive-shadowed") {
+    parts.push(`  ${"".padEnd(TAG_WIDTH)}    shadowed — user package effective`);
   }
+  return parts;
+}
+
+/** Render a DoctorDiagnosis into a human-readable grouped report string. */
+export function renderReport(d: DoctorDiagnosis, opts?: { all?: boolean }): string {
+  const { all = false } = opts ?? {};
+  const lines: string[] = [];
+
+  // Verdict header
   lines.push(
-    d.hasSkew
-      ? "SKEW DETECTED — helper/template/skill resolution can use a different pi-flow version than the active skills."
-      : "OK — all managed pi-flow surfaces resolve to the active package.",
+    d.hasSkew ? "pi-flow doctor — SKEW DETECTED" : "pi-flow doctor — OK, no skew",
   );
+  // Active package identity line with abbreviated path and scope note
+  const scopeNote =
+    d.effectiveScope === "project" ? "(project override)" : "(user/global)";
+  lines.push(
+    `  ${d.active.name}@${d.active.version}  ${abbreviatePath(d.active.root, d.homeDir)}  ${scopeNote}`,
+  );
+  lines.push("");
+
+  // Group surfaces into three categories
+  const effectiveSurfaces = d.surfaces.filter(
+    (s) =>
+      s.classification !== "inactive-overridden" &&
+      s.classification !== "inactive-shadowed" &&
+      s.classification !== "stale-skew",
+  );
+  const inactiveSurfaces = d.surfaces.filter(
+    (s) =>
+      s.classification === "inactive-overridden" ||
+      s.classification === "inactive-shadowed",
+  );
+  const skewSurfaces = d.surfaces.filter(
+    (s) => s.classification === "stale-skew",
+  );
+
+  // Effective surfaces section
+  lines.push("Effective surfaces");
+  if (effectiveSurfaces.length === 0) {
+    lines.push("  (none)");
+  } else {
+    for (const s of effectiveSurfaces) {
+      lines.push(...renderSurfaceRow(s, d.homeDir));
+    }
+  }
+  lines.push("");
+
+  // Inactive installs section
+  lines.push("Inactive installs");
+  if (inactiveSurfaces.length === 0) {
+    lines.push("  (none)");
+  } else {
+    for (const s of inactiveSurfaces) {
+      lines.push(...renderSurfaceRow(s, d.homeDir));
+    }
+  }
+  lines.push("");
+
+  // Skew section
+  lines.push("Skew");
+  if (skewSurfaces.length === 0) {
+    lines.push("  (none)");
+  } else {
+    for (const s of skewSurfaces) {
+      lines.push(...renderSurfaceRow(s, d.homeDir));
+    }
+  }
+
+  // --all: absent candidate inventory
+  if (all && d.absentCandidates.length > 0) {
+    lines.push("");
+    lines.push("Absent candidates");
+    for (const p of d.absentCandidates) {
+      lines.push(`  [absent]  ${abbreviatePath(p, d.homeDir)}`);
+    }
+  }
+
   return lines.join("\n");
 }
 
@@ -960,13 +1053,14 @@ export interface DoctorArgs {
   help: boolean;
   fix: boolean;
   strict: boolean;
+  all: boolean;
   source?: string; // value following --source
 }
 
-/** Parse "/flow:doctor" args. Recognizes --help|-h, --fix, --strict, --source <value>. */
+/** Parse "/flow:doctor" args. Recognizes --help|-h, --fix, --strict, --all, --source <value>. */
 export function parseDoctorArgs(raw: string): DoctorArgs {
   const tokens = raw.split(/\s+/).filter((t) => t.length > 0);
-  const args: DoctorArgs = { help: false, fix: false, strict: false };
+  const args: DoctorArgs = { help: false, fix: false, strict: false, all: false };
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
     if (t === "--help" || t === "-h") {
@@ -975,6 +1069,8 @@ export function parseDoctorArgs(raw: string): DoctorArgs {
       args.fix = true;
     } else if (t === "--strict") {
       args.strict = true;
+    } else if (t === "--all") {
+      args.all = true;
     } else if (t === "--source") {
       if (i + 1 < tokens.length) {
         args.source = tokens[i + 1];
@@ -1268,7 +1364,7 @@ export function registerDoctor(pi: ExtensionAPI): void {
 
         if (!parsed.fix) {
           ctx.ui.notify(
-            renderReport(diagnosis),
+            renderReport(diagnosis, { all: parsed.all }),
             diagnosis.hasSkew ? "error" : "info",
           );
           return;

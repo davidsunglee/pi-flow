@@ -231,8 +231,31 @@ test("buildDiagnosis: a checkout under cwd (no node_modules) is local-dev and no
   assert.equal(d.hasSkew, false);
 });
 
-test("renderReport: names the active package and emits the SKEW verdict when skewed", async () => {
-  const sandbox = mkSandbox("pi-flow-doctor-render-");
+test("renderReport: OK verdict — header starts with OK, three sections present, no [SKEW]", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-render-ok-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const activeRoot = path.join(sandbox, "active");
+  await seedCore(activeRoot, "1.0.0");
+
+  const d = await buildDiagnosis({ activeRoot, cwd, homeDir: home, scope: "user" });
+  const report = renderReport(d);
+
+  assert.ok(
+    report.startsWith("pi-flow doctor — OK, no skew"),
+    `first line should be OK header, got: ${report.split("\n")[0]}`,
+  );
+  assert.ok(report.includes("Effective surfaces"), "should have Effective surfaces section");
+  assert.ok(report.includes("Inactive installs"), "should have Inactive installs section");
+  assert.ok(report.includes("Skew"), "should have Skew section");
+  assert.ok(!report.includes("[SKEW]"), "OK report must not contain [SKEW]");
+});
+
+test("renderReport: SKEW verdict — header is SKEW DETECTED and [SKEW] tag appears", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-render-skew-");
   const home = path.join(sandbox, "home");
   const cwd = path.join(sandbox, "proj");
   await fs.mkdir(home, { recursive: true });
@@ -247,18 +270,54 @@ test("renderReport: names the active package and emits the SKEW verdict when ske
   const d = await buildDiagnosis({ activeRoot, cwd, homeDir: home, scope: "user" });
   const report = renderReport(d);
 
-  const firstLine = report.split("\n")[0];
-  assert.ok(firstLine.startsWith("Active pi-flow package: @aphotic/pi-flow-core@1.0.0 ("));
-  assert.ok(report.includes("[SKEW]"));
   assert.ok(
-    report.endsWith(
-      "SKEW DETECTED — helper/template/skill resolution can use a different pi-flow version than the active skills.",
-    ),
+    report.startsWith("pi-flow doctor — SKEW DETECTED"),
+    `first line should be SKEW header, got: ${report.split("\n")[0]}`,
   );
+  assert.ok(report.includes("[SKEW]"), "SKEW report must contain [SKEW] tag");
 });
 
-test("renderReport: emits the OK verdict when nothing is skewed", async () => {
-  const sandbox = mkSandbox("pi-flow-doctor-ok-render-");
+test("renderReport: coexistence — overridden user install shows [inactive], zero [SKEW]", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-render-coexist-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  const overrideRoot = path.join(cwd, "packages", "pi-flow-core");
+  await seedCore(overrideRoot, "1.0.0");
+  await seedTrust(home, cwd);
+  await seedSettings(cwd, ["packages/pi-flow-core"]);
+
+  const d = await buildDiagnosis({ activeRoot: userRoot, cwd, homeDir: home, scope: "project" });
+  const report = renderReport(d);
+
+  assert.ok(!d.hasSkew, "coexistence should have no skew");
+  assert.ok(report.includes("[inactive]"), "should have [inactive] row for overridden user install");
+  assert.ok(!report.includes("[SKEW]"), "coexistence report must not contain [SKEW]");
+  assert.ok(report.includes("Inactive installs"), "should have Inactive installs section");
+});
+
+test("renderReport: paths are abbreviated — no raw homeDir, contains ~", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-render-abbrev-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  await makeShim(home, path.join(userRoot, "bin", "pi-flow.mjs"));
+
+  const d = await buildDiagnosis({ activeRoot: userRoot, cwd, homeDir: home, scope: "user" });
+  const report = renderReport(d);
+
+  assert.ok(!report.includes(home), `report must not contain raw homeDir path: ${home}`);
+  assert.ok(report.includes("~"), "report should contain ~ for home abbreviation");
+});
+
+test("renderReport: empty sections render (none)", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-render-none-");
   const home = path.join(sandbox, "home");
   const cwd = path.join(sandbox, "proj");
   await fs.mkdir(home, { recursive: true });
@@ -269,9 +328,50 @@ test("renderReport: emits the OK verdict when nothing is skewed", async () => {
 
   const d = await buildDiagnosis({ activeRoot, cwd, homeDir: home, scope: "user" });
   const report = renderReport(d);
+
+  // With no inactive installs and no skew, both sections should show (none)
+  const lines = report.split("\n");
+  const inactiveIdx = lines.findIndex((l) => l.startsWith("Inactive installs"));
+  assert.ok(inactiveIdx >= 0, "should have Inactive installs section");
+  const afterInactive = lines[inactiveIdx + 1];
   assert.ok(
-    report.endsWith("OK — all managed pi-flow surfaces resolve to the active package."),
+    afterInactive?.includes("(none)"),
+    `line after "Inactive installs" should be (none), got: ${afterInactive}`,
   );
+
+  const skewIdx = lines.findIndex((l) => l.startsWith("Skew"));
+  assert.ok(skewIdx >= 0, "should have Skew section");
+  const afterSkew = lines[skewIdx + 1];
+  assert.ok(
+    afterSkew?.includes("(none)"),
+    `line after "Skew" should be (none), got: ${afterSkew}`,
+  );
+});
+
+test("renderReport --all: adds Absent candidates section; default mode omits it", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-render-all-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const activeRoot = path.join(sandbox, "active");
+  await seedCore(activeRoot, "1.0.0");
+
+  const d = await buildDiagnosis({ activeRoot, cwd, homeDir: home, scope: "user" });
+
+  const defaultReport = renderReport(d);
+  const allReport = renderReport(d, { all: true });
+
+  assert.ok(
+    allReport.includes("Absent candidates"),
+    "--all report must have Absent candidates section",
+  );
+  assert.ok(
+    !defaultReport.includes("Absent candidates"),
+    "default report must not have Absent candidates section",
+  );
+  assert.ok(d.absentCandidates.length > 0, "diagnosis should track absent candidate paths");
 });
 
 // --- aggregate wrapper bin --------------------------------------------------
@@ -557,7 +657,7 @@ test("repairLink: a real file at the path is a conflict and its contents are unc
 // --- parseDoctorArgs --------------------------------------------------------
 
 test("parseDoctorArgs: an empty string yields all flags false and no source", () => {
-  assert.deepEqual(parseDoctorArgs(""), { help: false, fix: false, strict: false });
+  assert.deepEqual(parseDoctorArgs(""), { help: false, fix: false, strict: false, all: false });
 });
 
 test("parseDoctorArgs: --fix sets fix only", () => {
@@ -585,7 +685,7 @@ test("parseDoctorArgs: --fix --source pkg/x sets fix and captures the source val
 test("parseDoctorArgs: --help (and -h) set help; unknown flags are ignored", () => {
   assert.equal(parseDoctorArgs("--help").help, true);
   assert.equal(parseDoctorArgs("-h").help, true);
-  assert.deepEqual(parseDoctorArgs("--bogus"), { help: false, fix: false, strict: false });
+  assert.deepEqual(parseDoctorArgs("--bogus"), { help: false, fix: false, strict: false, all: false });
 });
 
 // --- helpText ---------------------------------------------------------------
