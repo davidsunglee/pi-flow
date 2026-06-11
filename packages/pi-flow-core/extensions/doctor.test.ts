@@ -700,11 +700,30 @@ test("parseDoctorArgs: --help (and -h) set help; unknown flags are ignored", () 
   assert.deepEqual(parseDoctorArgs("--bogus"), { help: false, fix: false, strict: false, all: false });
 });
 
+test("parseDoctorArgs: --all sets all only", () => {
+  const r = parseDoctorArgs("--all");
+  assert.equal(r.all, true);
+  assert.equal(r.fix, false);
+  assert.equal(r.strict, false);
+  assert.equal(r.help, false);
+});
+
+test("parseDoctorArgs: --fix --strict --all sets fix, strict, and all", () => {
+  const r = parseDoctorArgs("--fix --strict --all");
+  assert.equal(r.fix, true);
+  assert.equal(r.strict, true);
+  assert.equal(r.all, true);
+  assert.equal(r.help, false);
+  assert.equal(r.source, undefined);
+});
+
 // --- helpText ---------------------------------------------------------------
 
-test("helpText: documents --source, names the core package, and states the never-edit-settings boundary", () => {
+test("helpText: documents --source, --strict, --all, names the core package, and states the never-edit-settings boundary", () => {
   const t = helpText();
   assert.ok(t.includes("--source"));
+  assert.ok(t.includes("--strict"), "helpText must document --strict");
+  assert.ok(t.includes("--all"), "helpText must document --all");
   assert.ok(t.includes("@aphotic/pi-flow-core"));
   assert.ok(t.includes("never edits"));
 });

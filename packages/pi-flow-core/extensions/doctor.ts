@@ -1287,6 +1287,15 @@ export function helpText(): string {
     "  /flow:doctor --fix --source <target>",
     "      repoint at an explicitly named target (required when ambiguous).",
     "",
+    "Flags:",
+    "  --strict",
+    "      airtight same-root check: every effective resolution surface must",
+    "      resolve to the effective root (local-dev divergence fails). Reports",
+    "      error when any resolution surface diverges, even without stale-skew.",
+    "  --all",
+    "      deeper inventory including absent install/bin candidates; adds an",
+    "      Absent candidates section to the report.",
+    "",
     "--source <target> forms:",
     "  1. An absolute path to an @aphotic/pi-flow-core root — a directory with",
     "     bin/pi-flow.mjs and a package.json whose name is @aphotic/pi-flow-core.",
@@ -1565,9 +1574,12 @@ export function registerDoctor(pi: ExtensionAPI): void {
         });
 
         if (!parsed.fix) {
+          const isError =
+            diagnosis.hasSkew ||
+            (parsed.strict && diagnosis.strictDivergence.length > 0);
           ctx.ui.notify(
             renderReport(diagnosis, { all: parsed.all }),
-            diagnosis.hasSkew ? "error" : "info",
+            isError ? "error" : "info",
           );
           return;
         }
