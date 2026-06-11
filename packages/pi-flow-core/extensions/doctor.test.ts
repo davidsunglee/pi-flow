@@ -5,6 +5,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import type { Classification } from "./doctor.ts";
 import {
   parseDeclaredPackages,
   isLocalDevCheckout,
@@ -41,26 +42,54 @@ async function seedCore(root: string, version: string): Promise<void> {
 
 test("classifySurface: returns each classification for crafted inputs", () => {
   const activeRoot = "/proj/active";
+  const effectiveRoot = "/proj/active";
   const cwd = "/proj";
+  const inactiveInstallRoots = new Map<string, Classification>([
+    ["/home/user/install", "inactive-overridden"],
+    ["/proj/.pi/npm/node_modules/@aphotic/pi-flow-core", "inactive-shadowed"],
+  ]);
+  const base = {
+    activeRoot,
+    effectiveRoot,
+    cwd,
+    isResolutionKind: true,
+    inactiveInstallRoots,
+  };
   assert.equal(
-    classifySurface({ activeRoot, cwd, realpath: "/x", exists: false }),
+    classifySurface({ ...base, realpath: "/x", exists: false }),
     "absent",
   );
   assert.equal(
-    classifySurface({ activeRoot, cwd, realpath: null, exists: true }),
+    classifySurface({ ...base, realpath: null, exists: true }),
     "unresolved",
   );
   assert.equal(
-    classifySurface({ activeRoot, cwd, realpath: activeRoot, exists: true }),
+    classifySurface({ ...base, realpath: effectiveRoot, exists: true }),
     "active",
   );
   assert.equal(
-    classifySurface({ activeRoot, cwd, realpath: "/proj/src/pkg", exists: true }),
+    classifySurface({ ...base, realpath: "/proj/src/pkg", exists: true }),
     "local-dev",
   );
+  // A recognized inactive install carries its precomputed classification.
   assert.equal(
-    classifySurface({ activeRoot, cwd, realpath: "/elsewhere/pkg", exists: true }),
+    classifySurface({ ...base, realpath: "/home/user/install", exists: true }),
+    "inactive-overridden",
+  );
+  // A resolution surface pointing at an unrecognized root is genuine skew.
+  assert.equal(
+    classifySurface({ ...base, realpath: "/elsewhere/pkg", exists: true }),
     "stale-skew",
+  );
+  // A non-resolution surface pointing elsewhere is neutral, never skew.
+  assert.equal(
+    classifySurface({
+      ...base,
+      isResolutionKind: false,
+      realpath: "/elsewhere/pkg",
+      exists: true,
+    }),
+    "inactive-shadowed",
   );
 });
 
@@ -141,7 +170,9 @@ test("buildDiagnosis: helper shim to a stale core yields stale-skew and hasSkew=
   const activeRoot = path.join(sandbox, "active");
   await seedCore(activeRoot, "1.0.0");
 
-  const staleRoot = path.join(cwd, ".pi", "npm", "node_modules", "@aphotic", "pi-flow-core");
+  // A stale core that is NOT at a recognized install candidate location, so the
+  // helper shim pointing at it reads as genuine skew.
+  const staleRoot = path.join(sandbox, "stale");
   await seedCore(staleRoot, "0.5.0");
 
   await makeShim(home, path.join(staleRoot, "bin", "pi-flow.mjs"));
@@ -209,7 +240,7 @@ test("renderReport: names the active package and emits the SKEW verdict when ske
 
   const activeRoot = path.join(sandbox, "active");
   await seedCore(activeRoot, "1.0.0");
-  const staleRoot = path.join(cwd, ".pi", "npm", "node_modules", "@aphotic", "pi-flow-core");
+  const staleRoot = path.join(sandbox, "stale");
   await seedCore(staleRoot, "0.5.0");
   await makeShim(home, path.join(staleRoot, "bin", "pi-flow.mjs"));
 
@@ -526,14 +557,22 @@ test("repairLink: a real file at the path is a conflict and its contents are unc
 // --- parseDoctorArgs --------------------------------------------------------
 
 test("parseDoctorArgs: an empty string yields all flags false and no source", () => {
-  assert.deepEqual(parseDoctorArgs(""), { help: false, fix: false });
+  assert.deepEqual(parseDoctorArgs(""), { help: false, fix: false, strict: false });
 });
 
 test("parseDoctorArgs: --fix sets fix only", () => {
   const r = parseDoctorArgs("--fix");
   assert.equal(r.fix, true);
   assert.equal(r.help, false);
+  assert.equal(r.strict, false);
   assert.equal(r.source, undefined);
+});
+
+test("parseDoctorArgs: --strict sets strict only", () => {
+  const r = parseDoctorArgs("--strict");
+  assert.equal(r.strict, true);
+  assert.equal(r.fix, false);
+  assert.equal(r.help, false);
 });
 
 test("parseDoctorArgs: --fix --source pkg/x sets fix and captures the source value", () => {
@@ -546,7 +585,7 @@ test("parseDoctorArgs: --fix --source pkg/x sets fix and captures the source val
 test("parseDoctorArgs: --help (and -h) set help; unknown flags are ignored", () => {
   assert.equal(parseDoctorArgs("--help").help, true);
   assert.equal(parseDoctorArgs("-h").help, true);
-  assert.deepEqual(parseDoctorArgs("--bogus"), { help: false, fix: false });
+  assert.deepEqual(parseDoctorArgs("--bogus"), { help: false, fix: false, strict: false });
 });
 
 // --- helpText ---------------------------------------------------------------
@@ -632,6 +671,213 @@ test("runDoctorFix: repoints the helper shim and agent links to the target and n
   // settings.json is byte-for-byte unchanged (never-write-settings guarantee).
   const after = await fs.readFile(settingsPath);
   assert.ok(before.equals(after));
+});
+
+// --- effective model: inactive classifications + scope-aware + strict --------
+
+async function seedUserInstall(home: string, version: string): Promise<string> {
+  const root = path.join(
+    home,
+    ".pi",
+    "agent",
+    "npm",
+    "node_modules",
+    "@aphotic",
+    "pi-flow-core",
+  );
+  await seedCore(root, version);
+  return realpathSync(root);
+}
+
+async function seedTrust(home: string, trustedCwd: string): Promise<void> {
+  const trustPath = path.join(home, ".pi", "agent", "trust.json");
+  await fs.mkdir(path.dirname(trustPath), { recursive: true });
+  await fs.writeFile(trustPath, JSON.stringify({ [trustedCwd]: true }));
+}
+
+async function seedSettings(cwd: string, packages: unknown[]): Promise<void> {
+  const p = path.join(cwd, ".pi", "settings.json");
+  await fs.mkdir(path.dirname(p), { recursive: true });
+  await fs.writeFile(p, JSON.stringify({ packages }, null, 2) + "\n");
+}
+
+test("buildDiagnosis: global-only install with aligned shim/agents has no skew", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-globalonly-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  await makeShim(home, path.join(userRoot, "bin", "pi-flow.mjs"));
+  await makeUserAgents(home, userRoot);
+
+  const d = await buildDiagnosis({
+    activeRoot: userRoot,
+    cwd,
+    homeDir: home,
+    scope: "user",
+  });
+
+  assert.equal(d.effectiveRoot, userRoot);
+  assert.equal(d.effectiveScope, "user");
+  const shim = d.surfaces.find((s) => s.kind === "helper-shim");
+  const userAgents = d.surfaces.find((s) => s.kind === "user-agents");
+  const userInstall = d.surfaces.find((s) => s.kind === "user-install");
+  assert.equal(shim?.classification, "active");
+  assert.equal(userAgents?.classification, "active");
+  assert.equal(userInstall?.classification, "active");
+  assert.equal(d.hasSkew, false);
+});
+
+test("buildDiagnosis: global + trusted project override (same version) marks the user install inactive-overridden with no skew", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-override-same-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  const overrideRoot = path.join(cwd, "packages", "pi-flow-core");
+  await seedCore(overrideRoot, "1.0.0");
+  await seedTrust(home, cwd);
+  await seedSettings(cwd, ["packages/pi-flow-core"]);
+
+  const d = await buildDiagnosis({
+    activeRoot: userRoot,
+    cwd,
+    homeDir: home,
+    scope: "project",
+  });
+
+  assert.equal(d.effectiveRoot, realpathSync(overrideRoot));
+  assert.equal(d.effectiveScope, "project");
+  const userInstall = d.surfaces.find((s) => s.kind === "user-install");
+  assert.equal(userInstall?.classification, "inactive-overridden");
+  assert.equal(d.hasSkew, false);
+  assert.deepEqual(d.skewKinds, []);
+});
+
+test("buildDiagnosis: global + trusted project override (different version) still marks the user install inactive-overridden with no skew", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-override-diff-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  const overrideRoot = path.join(cwd, "packages", "pi-flow-core");
+  await seedCore(overrideRoot, "2.0.0-dev");
+  await seedTrust(home, cwd);
+  await seedSettings(cwd, ["packages/pi-flow-core"]);
+
+  const d = await buildDiagnosis({
+    activeRoot: userRoot,
+    cwd,
+    homeDir: home,
+    scope: "project",
+  });
+
+  assert.equal(d.effectiveScope, "project");
+  const userInstall = d.surfaces.find((s) => s.kind === "user-install");
+  assert.equal(userInstall?.classification, "inactive-overridden");
+  assert.equal(d.hasSkew, false);
+});
+
+test("buildDiagnosis: a stale project .pi/npm install with no project entry is inactive-shadowed, not skew", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-shadowed-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  const projInstall = path.join(
+    cwd,
+    ".pi",
+    "npm",
+    "node_modules",
+    "@aphotic",
+    "pi-flow-core",
+  );
+  await seedCore(projInstall, "0.5.0");
+
+  const d = await buildDiagnosis({
+    activeRoot: userRoot,
+    cwd,
+    homeDir: home,
+    scope: "user",
+  });
+
+  assert.equal(d.effectiveRoot, userRoot);
+  assert.equal(d.effectiveScope, "user");
+  const projectInstall = d.surfaces.find((s) => s.kind === "project-install");
+  assert.equal(projectInstall?.classification, "inactive-shadowed");
+  assert.equal(d.hasSkew, false);
+  assert.deepEqual(d.skewKinds, []);
+});
+
+test("buildDiagnosis: a helper shim to a root that is neither effective nor a recognized inactive install is genuine stale-skew", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-genuine-skew-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  // A stale core that is NOT at any recognized install candidate location.
+  const staleRoot = path.join(sandbox, "stale");
+  await seedCore(staleRoot, "0.5.0");
+  await makeShim(home, path.join(staleRoot, "bin", "pi-flow.mjs"));
+
+  const d = await buildDiagnosis({
+    activeRoot: userRoot,
+    cwd,
+    homeDir: home,
+    scope: "user",
+  });
+
+  const shim = d.surfaces.find((s) => s.kind === "helper-shim");
+  assert.equal(shim?.classification, "stale-skew");
+  assert.equal(d.hasSkew, true);
+  assert.ok(d.skewKinds.includes("helper-shim"));
+});
+
+test("buildDiagnosis: --strict flags a clean-by-default local-dev surface as divergent", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-strict-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  const checkoutRoot = path.join(cwd, "packages", "pi-flow-core");
+  await seedCore(checkoutRoot, "2.0.0-dev");
+  await makeShim(home, path.join(checkoutRoot, "bin", "pi-flow.mjs"));
+
+  // Default mode: the in-tree checkout is local-dev — clean, no skew, no strict divergence.
+  const def = await buildDiagnosis({
+    activeRoot: userRoot,
+    cwd,
+    homeDir: home,
+    scope: "user",
+  });
+  const defShim = def.surfaces.find((s) => s.kind === "helper-shim");
+  assert.equal(defShim?.classification, "local-dev");
+  assert.equal(def.hasSkew, false);
+  assert.deepEqual(def.strictDivergence, []);
+
+  // Strict mode: the effective resolution surface diverges from the effective root.
+  const strict = await buildDiagnosis({
+    activeRoot: userRoot,
+    cwd,
+    homeDir: home,
+    scope: "user",
+    strict: true,
+  });
+  assert.ok(strict.strictDivergence.includes("helper-shim"));
+  // hasSkew is unaffected by strict.
+  assert.equal(strict.hasSkew, false);
 });
 
 test("buildDiagnosis: node-bin through aggregate wrapper reports the delegated core, never non-pi-flow", async () => {

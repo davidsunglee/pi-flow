@@ -29,6 +29,7 @@ import {
 import {
   resolveBinToCore as _resolveBinToCore,
   parseDeclaredPackages as _parseDeclaredPackages,
+  resolveEffectiveCoreRoot,
 } from "./lib/effective-package.mjs";
 
 export type SurfaceKind =
@@ -41,12 +42,22 @@ export type SurfaceKind =
   | "declared-package";
 
 export type Classification =
-  | "active" // realpath === active package root
+  | "active" // realpath === effective pi-flow-core root
   | "local-dev" // a source checkout within the active working tree (intentional)
-  | "stale-skew" // a different package that is neither active nor a recognized checkout
+  | "stale-skew" // a resolution surface pointing at a root that is neither effective, a recognized inactive install, nor a checkout
+  | "inactive-overridden" // a real pi-flow install whose scope a higher-priority effective scope overrides (neutral)
+  | "inactive-shadowed" // a real pi-flow install in a non-effective scope, shadowed by the effective install (neutral)
   | "absent" // the surface path does not exist (informational)
   | "unresolved" // the surface exists but its pi-flow target could not be resolved
   | "non-pi-flow"; // resolves to something that is not a pi-flow-core package
+
+/** The resolution-path surface kinds — the ones whose skew matters. */
+export const RESOLUTION_KINDS: SurfaceKind[] = [
+  "helper-shim",
+  "user-agents",
+  "project-agents",
+  "node-bin",
+];
 
 export interface SurfaceReport {
   kind: SurfaceKind;
@@ -90,9 +101,12 @@ export interface DeclaredPackage {
 export interface DoctorDiagnosis {
   active: PiFlowCorePackage; // the executing ("intended") package
   scope: SetupScope;
+  effectiveRoot: string; // the pi-flow-core root Pi resolves to for this cwd
+  effectiveScope: "project" | "user"; // which scope supplied the effective root
   surfaces: SurfaceReport[];
   hasSkew: boolean; // overall failure verdict
   skewKinds: SurfaceKind[]; // resolution-path surfaces classified stale-skew
+  strictDivergence: SurfaceKind[]; // under --strict, resolution surfaces not on the effective root (empty in default mode)
 }
 
 export interface BuildDiagnosisOptions {
@@ -100,6 +114,8 @@ export interface BuildDiagnosisOptions {
   cwd: string;
   homeDir: string;
   scope: SetupScope;
+  /** require every effective resolution surface to resolve to the effective root */
+  strict?: boolean;
   /** injectable for tests; defaults read the real filesystem */
 }
 
@@ -128,20 +144,76 @@ export function isLocalDevCheckout(realpath: string, cwd: string): boolean {
   return !realpath.includes(nodeModulesSeg) && !realpath.includes(piNpmSeg);
 }
 
-/** Classify a surface against the active package root. */
+/**
+ * Decide whether a real-but-inactive pi-flow install reads as overridden or
+ * shadowed, from its own scope, the effective scope, and whether the project
+ * declares a pi-flow `packages` entry.
+ *
+ * - A user/global install is "overridden" when a higher-priority project
+ *   override is in effect (the project scope supersedes it).
+ * - A project install is "overridden" when the project declared a pi-flow entry
+ *   (a deliberate, if non-effective, intent); otherwise it is a leftover
+ *   "shadowed" by the effective install.
+ */
+export function decideInactiveClassification(opts: {
+  surfaceScope: "user" | "project";
+  effectiveScope: "project" | "user";
+  declaresProjectEntry: boolean;
+}): "inactive-overridden" | "inactive-shadowed" {
+  const { surfaceScope, effectiveScope, declaresProjectEntry } = opts;
+  if (surfaceScope === "user") {
+    return effectiveScope === "project"
+      ? "inactive-overridden"
+      : "inactive-shadowed";
+  }
+  return declaresProjectEntry ? "inactive-overridden" : "inactive-shadowed";
+}
+
+/**
+ * Classify a surface against the effective pi-flow-core root. Order: absent →
+ * unresolved → active (realpath === effectiveRoot) → local-dev (in-tree
+ * checkout) → a recognized inactive install (its precomputed inactive
+ * classification) → stale-skew, reserved for a *resolution* surface whose
+ * realpath is none of the above. A non-resolution surface pointing elsewhere is
+ * a neutral inactive install (never skew).
+ */
 export function classifySurface(opts: {
   activeRoot: string;
+  effectiveRoot: string;
   cwd: string;
   realpath: string | null;
   exists: boolean;
+  isResolutionKind: boolean;
+  inactiveInstallRoots: Map<string, Classification>;
 }): Classification {
-  const { activeRoot, cwd, realpath, exists } = opts;
+  const {
+    effectiveRoot,
+    cwd,
+    realpath,
+    exists,
+    isResolutionKind,
+    inactiveInstallRoots,
+  } = opts;
   if (!exists) return "absent";
   if (realpath == null) return "unresolved";
-  if (realpath === activeRoot) return "active";
+  if (realpath === effectiveRoot) return "active";
   if (isLocalDevCheckout(realpath, cwd)) return "local-dev";
-  return "stale-skew";
+  const inactive = inactiveInstallRoots.get(realpath);
+  if (inactive) return inactive;
+  if (isResolutionKind) return "stale-skew";
+  // A non-resolution (install/declared) surface pointing somewhere other than
+  // the effective root or a recognized install is still neutral, never skew.
+  return "inactive-shadowed";
 }
+
+/** A per-surface classifier closure produced by buildDiagnosis. `compareRoot`
+ * overrides the effective root for scope-aware surfaces (e.g. user agents). */
+type Classify = (args: {
+  realpath: string | null;
+  exists: boolean;
+  kind: SurfaceKind;
+  compareRoot?: string;
+}) => Classification;
 
 /** Resolve a bin surface (helper shim or node bin) into a SurfaceReport. */
 async function binSurfaceReport(opts: {
@@ -150,11 +222,9 @@ async function binSurfaceReport(opts: {
   inspectedPath: string;
   resolvePath: string;
   exists: boolean;
-  activeRoot: string;
-  cwd: string;
+  classify: Classify;
 }): Promise<SurfaceReport> {
-  const { kind, label, inspectedPath, resolvePath, exists, activeRoot, cwd } =
-    opts;
+  const { kind, label, inspectedPath, resolvePath, exists, classify } = opts;
   if (!exists) {
     return { kind, label, inspectedPath, classification: "absent" };
   }
@@ -165,11 +235,10 @@ async function binSurfaceReport(opts: {
     : undefined;
 
   if (core) {
-    const classification = classifySurface({
-      activeRoot,
-      cwd,
+    const classification = classify({
       realpath: core.root,
       exists: true,
+      kind,
     });
     return {
       kind,
@@ -190,15 +259,18 @@ async function binSurfaceReport(opts: {
   return { kind, label, inspectedPath, classification: "non-pi-flow" };
 }
 
-/** Resolve an agents symlink directory into a single SurfaceReport. */
+/** Resolve an agents symlink directory into a single SurfaceReport. The
+ * `compareRoot` lets a scope's agents be judged against their own scope's root
+ * (e.g. user agents against the user install even when a project override is
+ * effective). */
 async function agentsSurfaceReport(opts: {
   kind: SurfaceKind;
   label: string;
   dir: string;
-  activeRoot: string;
-  cwd: string;
+  classify: Classify;
+  compareRoot?: string;
 }): Promise<SurfaceReport> {
-  const { kind, label, dir, activeRoot, cwd } = opts;
+  const { kind, label, dir, classify, compareRoot } = opts;
   let entries: string[];
   try {
     entries = await fs.readdir(dir);
@@ -228,8 +300,10 @@ async function agentsSurfaceReport(opts: {
   }
 
   const rank: Record<Classification, number> = {
-    "stale-skew": 4,
-    "local-dev": 3,
+    "stale-skew": 5,
+    "local-dev": 4,
+    "inactive-overridden": 3,
+    "inactive-shadowed": 3,
     active: 2,
     "non-pi-flow": 1,
     unresolved: 0,
@@ -238,11 +312,11 @@ async function agentsSurfaceReport(opts: {
   let worst: { core: PiFlowCorePackage; classification: Classification } | null =
     null;
   for (const core of roots.values()) {
-    const classification = classifySurface({
-      activeRoot,
-      cwd,
+    const classification = classify({
       realpath: core.root,
       exists: true,
+      kind,
+      compareRoot,
     });
     if (!worst || rank[classification] > rank[worst.classification]) {
       worst = { core, classification };
@@ -269,17 +343,16 @@ async function agentsSurfaceReport(opts: {
 async function installSurfaceReports(opts: {
   kind: SurfaceKind;
   candidates: { path: string; label: string }[];
-  activeRoot: string;
-  cwd: string;
+  classify: Classify;
 }): Promise<SurfaceReport[]> {
-  const { kind, candidates, activeRoot, cwd } = opts;
+  const { kind, candidates, classify } = opts;
   const out: SurfaceReport[] = [];
   for (const c of candidates) {
     const rp = await realpathOrNull(c.path);
     if (!rp) continue; // absent — informational, no row
     const core = await readPiFlowCorePackage(c.path);
     const classification = core
-      ? classifySurface({ activeRoot, cwd, realpath: core.root, exists: true })
+      ? classify({ realpath: core.root, exists: true, kind })
       : "unresolved";
     out.push({
       kind,
@@ -296,10 +369,9 @@ async function installSurfaceReports(opts: {
 /** Resolve declared packages from .pi/settings.json into SurfaceReports. */
 async function declaredSurfaceReports(opts: {
   settingsPath: string;
-  activeRoot: string;
-  cwd: string;
+  classify: Classify;
 }): Promise<SurfaceReport[]> {
-  const { settingsPath, activeRoot, cwd } = opts;
+  const { settingsPath, classify } = opts;
   let parsed: unknown;
   try {
     const content = await fs.readFile(settingsPath, "utf8");
@@ -320,11 +392,10 @@ async function declaredSurfaceReports(opts: {
       );
       if (resolved) {
         realpath = resolved;
-        classification = classifySurface({
-          activeRoot,
-          cwd,
+        classification = classify({
           realpath: resolved,
           exists: true,
+          kind: "declared-package",
         });
       }
     }
@@ -347,7 +418,7 @@ async function declaredSurfaceReports(opts: {
 export async function buildDiagnosis(
   opts: BuildDiagnosisOptions,
 ): Promise<DoctorDiagnosis> {
-  const { activeRoot, cwd, homeDir, scope } = opts;
+  const { activeRoot, cwd, homeDir, scope, strict } = opts;
 
   const active =
     (await readPiFlowCorePackage(activeRoot)) ??
@@ -356,6 +427,119 @@ export async function buildDiagnosis(
       name: "@aphotic/pi-flow-core",
       version: "unknown",
     } satisfies PiFlowCorePackage);
+
+  // The effective pi-flow-core root Pi resolves to for this cwd (honoring a
+  // trusted project override, else the user/global install). When neither
+  // resolves, the executing package is what is effectively active.
+  const resolvedEffective = await resolveEffectiveCoreRoot({ cwd, homeDir });
+  const effectiveRoot = resolvedEffective?.root ?? activeRoot;
+  const effectiveScope: "project" | "user" = resolvedEffective?.scope ?? "user";
+
+  // Whether the project declares a pi-flow `packages` entry at all — used to
+  // distinguish an overridden project install from a leftover shadowed one.
+  const declaresProjectEntry = await projectDeclaresPiFlow(cwd);
+
+  // Install candidate locations, by scope. Reused to both build surface rows
+  // and to recognize inactive installs (so a resolution surface pointing at one
+  // is not mis-flagged stale-skew).
+  const projectInstallCandidates: { path: string; label: string }[] = [
+    {
+      path: path.join(
+        cwd,
+        ".pi",
+        "npm",
+        "node_modules",
+        "@aphotic",
+        "pi-flow-core",
+      ),
+      label: "project install (<cwd>/.pi/npm/.../pi-flow-core)",
+    },
+    {
+      path: path.join(
+        cwd,
+        ".pi",
+        "npm",
+        "node_modules",
+        "@aphotic",
+        "pi-flow",
+        "node_modules",
+        "@aphotic",
+        "pi-flow-core",
+      ),
+      label: "project install meta (<cwd>/.pi/npm/.../pi-flow/.../pi-flow-core)",
+    },
+  ];
+  const userInstallCandidates: { path: string; label: string }[] = [
+    {
+      path: path.join(
+        homeDir,
+        ".pi",
+        "agent",
+        "npm",
+        "node_modules",
+        "@aphotic",
+        "pi-flow-core",
+      ),
+      label: "user install (~/.pi/agent/npm/.../pi-flow-core)",
+    },
+    {
+      path: path.join(
+        homeDir,
+        ".pi",
+        "agent",
+        "npm",
+        "node_modules",
+        "@aphotic",
+        "pi-flow",
+        "node_modules",
+        "@aphotic",
+        "pi-flow-core",
+      ),
+      label: "user install meta (~/.pi/agent/npm/.../pi-flow/.../pi-flow-core)",
+    },
+  ];
+
+  // Recognized inactive installs: real pi-flow cores at a known install
+  // location whose root is not the effective root. Mapped to their resolved
+  // (overridden vs shadowed) classification.
+  const inactiveInstallRoots = new Map<string, Classification>();
+  for (const [surfaceScope, candidates] of [
+    ["project", projectInstallCandidates],
+    ["user", userInstallCandidates],
+  ] as const) {
+    for (const c of candidates) {
+      const core = await readPiFlowCorePackage(c.path);
+      if (!core || core.root === effectiveRoot) continue;
+      if (inactiveInstallRoots.has(core.root)) continue;
+      inactiveInstallRoots.set(
+        core.root,
+        decideInactiveClassification({
+          surfaceScope,
+          effectiveScope,
+          declaresProjectEntry,
+        }),
+      );
+    }
+  }
+
+  // The user/global install root, for scope-aware user agents (they may
+  // legitimately serve the user root even when a project override is effective).
+  const userRoot =
+    effectiveScope === "user"
+      ? effectiveRoot
+      : ((await resolveFirstCoreRoot(userInstallCandidates.map((c) => c.path))) ??
+        effectiveRoot);
+
+  const classify: Classify = ({ realpath, exists, kind, compareRoot }) =>
+    classifySurface({
+      activeRoot,
+      effectiveRoot: compareRoot ?? effectiveRoot,
+      cwd,
+      realpath,
+      exists,
+      isResolutionKind: RESOLUTION_KINDS.includes(kind),
+      inactiveInstallRoots,
+    });
 
   const surfaces: SurfaceReport[] = [];
 
@@ -388,32 +572,30 @@ export async function buildDiagnosis(
           inspectedPath: shimPath,
           resolvePath,
           exists: true,
-          activeRoot,
-          cwd,
+          classify,
         }),
       );
     }
   }
 
-  // user-agents
+  // user-agents — judged against the user/global install root.
   surfaces.push(
     await agentsSurfaceReport({
       kind: "user-agents",
       label: "user agents (~/.pi/agent/agents)",
       dir: path.join(homeDir, ".pi", "agent", "agents"),
-      activeRoot,
-      cwd,
+      classify,
+      compareRoot: userRoot,
     }),
   );
 
-  // project-agents
+  // project-agents — judged against the effective project root.
   surfaces.push(
     await agentsSurfaceReport({
       kind: "project-agents",
       label: "project agents (<cwd>/.pi/agents)",
       dir: path.join(cwd, ".pi", "agents"),
-      activeRoot,
-      cwd,
+      classify,
     }),
   );
 
@@ -421,35 +603,8 @@ export async function buildDiagnosis(
   surfaces.push(
     ...(await installSurfaceReports({
       kind: "project-install",
-      candidates: [
-        {
-          path: path.join(
-            cwd,
-            ".pi",
-            "npm",
-            "node_modules",
-            "@aphotic",
-            "pi-flow-core",
-          ),
-          label: "project install (<cwd>/.pi/npm/.../pi-flow-core)",
-        },
-        {
-          path: path.join(
-            cwd,
-            ".pi",
-            "npm",
-            "node_modules",
-            "@aphotic",
-            "pi-flow",
-            "node_modules",
-            "@aphotic",
-            "pi-flow-core",
-          ),
-          label: "project install meta (<cwd>/.pi/npm/.../pi-flow/.../pi-flow-core)",
-        },
-      ],
-      activeRoot,
-      cwd,
+      candidates: projectInstallCandidates,
+      classify,
     })),
   );
 
@@ -457,37 +612,8 @@ export async function buildDiagnosis(
   surfaces.push(
     ...(await installSurfaceReports({
       kind: "user-install",
-      candidates: [
-        {
-          path: path.join(
-            homeDir,
-            ".pi",
-            "agent",
-            "npm",
-            "node_modules",
-            "@aphotic",
-            "pi-flow-core",
-          ),
-          label: "user install (~/.pi/agent/npm/.../pi-flow-core)",
-        },
-        {
-          path: path.join(
-            homeDir,
-            ".pi",
-            "agent",
-            "npm",
-            "node_modules",
-            "@aphotic",
-            "pi-flow",
-            "node_modules",
-            "@aphotic",
-            "pi-flow-core",
-          ),
-          label: "user install meta (~/.pi/agent/npm/.../pi-flow/.../pi-flow-core)",
-        },
-      ],
-      activeRoot,
-      cwd,
+      candidates: userInstallCandidates,
+      classify,
     })),
   );
 
@@ -529,8 +655,7 @@ export async function buildDiagnosis(
         inspectedPath: c.path,
         resolvePath: c.path,
         exists: true,
-        activeRoot,
-        cwd,
+        classify,
       }),
     );
   }
@@ -539,26 +664,72 @@ export async function buildDiagnosis(
   surfaces.push(
     ...(await declaredSurfaceReports({
       settingsPath: path.join(cwd, ".pi", "settings.json"),
-      activeRoot,
-      cwd,
+      classify,
     })),
   );
 
-  const resolutionKinds: SurfaceKind[] = [
-    "helper-shim",
-    "user-agents",
-    "project-agents",
-    "node-bin",
-  ];
   const skewKinds = surfaces
     .filter(
       (s) =>
-        resolutionKinds.includes(s.kind) && s.classification === "stale-skew",
+        RESOLUTION_KINDS.includes(s.kind) && s.classification === "stale-skew",
     )
     .map((s) => s.kind);
   const hasSkew = skewKinds.length > 0;
 
-  return { active, scope, surfaces, hasSkew, skewKinds };
+  // --strict: every effective resolution surface must resolve to the effective
+  // root. A clean-by-default local-dev or otherwise-divergent surface fails.
+  const strictDivergence: SurfaceKind[] = strict
+    ? surfaces
+        .filter(
+          (s) =>
+            RESOLUTION_KINDS.includes(s.kind) &&
+            s.realpath != null &&
+            s.realpath !== effectiveRoot,
+        )
+        .map((s) => s.kind)
+    : [];
+
+  return {
+    active,
+    scope,
+    effectiveRoot,
+    effectiveScope,
+    surfaces,
+    hasSkew,
+    skewKinds,
+    strictDivergence,
+  };
+}
+
+/** Whether <cwd>/.pi/settings.json declares a pi-flow `packages` entry (an npm
+ * pi-flow identity or any local spec, which may resolve to pi-flow). */
+async function projectDeclaresPiFlow(cwd: string): Promise<boolean> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(
+      await fs.readFile(path.join(cwd, ".pi", "settings.json"), "utf8"),
+    );
+  } catch {
+    return false;
+  }
+  for (const row of parseDeclaredPackages(parsed)) {
+    if (row.kind === "local") return true;
+    if (row.name === "@aphotic/pi-flow" || row.name === "@aphotic/pi-flow-core") {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** First candidate path that reads as a pi-flow-core package, by its root. */
+async function resolveFirstCoreRoot(
+  candidatePaths: string[],
+): Promise<string | null> {
+  for (const p of candidatePaths) {
+    const core = await readPiFlowCorePackage(p);
+    if (core) return core.root;
+  }
+  return null;
 }
 
 export interface ReconcileTargetResult {
@@ -738,6 +909,8 @@ const TAGS: Record<Classification, string> = {
   active: "[active]",
   "local-dev": "[local-dev]",
   "stale-skew": "[SKEW]",
+  "inactive-overridden": "[inactive]",
+  "inactive-shadowed": "[inactive]",
   absent: "[absent]",
   unresolved: "[unresolved]",
   "non-pi-flow": "[non-pi-flow]",
@@ -767,19 +940,22 @@ export function renderReport(d: DoctorDiagnosis): string {
 export interface DoctorArgs {
   help: boolean;
   fix: boolean;
+  strict: boolean;
   source?: string; // value following --source
 }
 
-/** Parse "/flow:doctor" args. Recognizes --help|-h, --fix, --source <value>. */
+/** Parse "/flow:doctor" args. Recognizes --help|-h, --fix, --strict, --source <value>. */
 export function parseDoctorArgs(raw: string): DoctorArgs {
   const tokens = raw.split(/\s+/).filter((t) => t.length > 0);
-  const args: DoctorArgs = { help: false, fix: false };
+  const args: DoctorArgs = { help: false, fix: false, strict: false };
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
     if (t === "--help" || t === "-h") {
       args.help = true;
     } else if (t === "--fix") {
       args.fix = true;
+    } else if (t === "--strict") {
+      args.strict = true;
     } else if (t === "--source") {
       if (i + 1 < tokens.length) {
         args.source = tokens[i + 1];
@@ -1068,6 +1244,7 @@ export function registerDoctor(pi: ExtensionAPI): void {
           cwd: ctx.cwd,
           homeDir: os.homedir(),
           scope,
+          strict: parsed.strict,
         });
 
         if (!parsed.fix) {
