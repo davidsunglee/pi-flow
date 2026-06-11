@@ -11,7 +11,6 @@ import path from "node:path";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
-  SlashCommandInfo,
 } from "@earendil-works/pi-coding-agent";
 import {
   resolveScope,
@@ -23,7 +22,6 @@ import {
 import {
   type PiFlowCorePackage,
   realpathOrNull,
-  packageRootFromBin,
   readPiFlowCorePackage,
   findEnclosingCoreRoot,
 } from "./package-resolution.ts";
@@ -1535,33 +1533,6 @@ async function readDeclaredLocalSpecs(
   return out;
 }
 
-/** Gather unique-by-root reconcile candidates: declared local roots plus the
- * roots of loaded flow: commands. (The active package is added by the caller.) */
-async function gatherDeclaredOrLoaded(opts: {
-  cwd: string;
-  commands: SlashCommandInfo[];
-}): Promise<PiFlowCorePackage[]> {
-  const { cwd, commands } = opts;
-  const byRoot = new Map<string, PiFlowCorePackage>();
-
-  for (const { abs } of await readDeclaredLocalSpecs(cwd)) {
-    const core = await resolveCandidateRoot(abs, cwd);
-    if (core) byRoot.set(core.root, core);
-  }
-
-  for (const entry of commands) {
-    if (!entry.name.startsWith("flow:")) continue;
-    const baseDir = entry.sourceInfo?.baseDir;
-    if (!baseDir) continue;
-    const rp = await realpathOrNull(baseDir);
-    if (!rp) continue;
-    const core = await findEnclosingCoreRoot(rp);
-    if (core) byRoot.set(core.root, core);
-  }
-
-  return [...byRoot.values()];
-}
-
 /** Declared specs whose resolved root equals the chosen target root. */
 async function declaredSpecsNamingTarget(
   cwd: string,
@@ -1573,6 +1544,33 @@ async function declaredSpecsNamingTarget(
     if (core && core.root === targetRoot) out.push(spec);
   }
   return out;
+}
+
+/**
+ * Plan a default (`--fix` without `--source`) repair from the effective
+ * diagnosis. The target package and repair scope come from the package Pi
+ * actually resolves to for this cwd — a trusted project override when present,
+ * else the user/global install — never from the executing command scope. This
+ * is what lets a user-installed doctor sitting inside a trusted project override
+ * repair the project agents instead of repointing the (already-correct) user
+ * root and leaving the project-scope agents stale.
+ */
+export function planDefaultFix(args: {
+  diagnosis: DoctorDiagnosis;
+  homeDir: string;
+  cwd: string;
+}): {
+  target: PiFlowCorePackage;
+  effectiveTarget: DurableTarget;
+  agentsDir: string;
+} {
+  const { diagnosis, homeDir, cwd } = args;
+  const effectiveTarget: DurableTarget = diagnosis.effectiveScope;
+  const agentsDir =
+    effectiveTarget === "user"
+      ? path.join(homeDir, ".pi", "agent", "agents")
+      : path.join(cwd, ".pi", "agents");
+  return { target: diagnosis.effective, effectiveTarget, agentsDir };
 }
 
 export function registerDoctor(pi: ExtensionAPI): void {
@@ -1625,8 +1623,15 @@ export function registerDoctor(pi: ExtensionAPI): void {
           return;
         }
 
-        // --fix: resolve the target.
-        let target: PiFlowCorePackage;
+        // --fix: derive the target package and repair scope from the effective
+        // model (the package Pi resolves to for this cwd), not the executing
+        // command scope. An explicit --source overrides only the target package.
+        const plan = planDefaultFix({
+          diagnosis,
+          homeDir: os.homedir(),
+          cwd: ctx.cwd,
+        });
+        let target: PiFlowCorePackage = plan.target;
         if (parsed.source) {
           const validation = await validateExplicitTarget(parsed.source, ctx.cwd);
           if (!validation.ok || !validation.target) {
@@ -1637,27 +1642,9 @@ export function registerDoctor(pi: ExtensionAPI): void {
             return;
           }
           target = validation.target;
-        } else {
-          const declaredOrLoaded = await gatherDeclaredOrLoaded({
-            cwd: ctx.cwd,
-            commands: pi.getCommands(),
-          });
-          const reconcile = resolveReconcileTarget({ active, declaredOrLoaded });
-          if (reconcile.kind === "ambiguous") {
-            const list = (reconcile.candidates ?? [])
-              .map((c) => `  - ${c.root} (${c.name}@${c.version})`)
-              .join("\n");
-            ctx.ui.notify(
-              `multiple candidate pi-flow-core packages:\n${list}\nre-run with --source <one-of-these>`,
-              "error",
-            );
-            return;
-          }
-          target = reconcile.target!;
         }
 
-        const effectiveTarget: DurableTarget =
-          scope === "temporary" ? "user" : scope;
+        const effectiveTarget: DurableTarget = plan.effectiveTarget;
         const shimPath = path.join(
           os.homedir(),
           ".pi",
@@ -1665,10 +1652,7 @@ export function registerDoctor(pi: ExtensionAPI): void {
           "bin",
           "pi-flow",
         );
-        const agentsDir =
-          effectiveTarget === "user"
-            ? path.join(os.homedir(), ".pi", "agent", "agents")
-            : path.join(ctx.cwd, ".pi", "agents");
+        const agentsDir = plan.agentsDir;
 
         const declaredSpecsForTarget = await declaredSpecsNamingTarget(
           ctx.cwd,

@@ -20,6 +20,7 @@ import {
   helpText,
   runDoctorFix,
   isDispatcherStale,
+  planDefaultFix,
 } from "./doctor.ts";
 import type { PiFlowCorePackage } from "./package-resolution.ts";
 import { readPiFlowCorePackage } from "./package-resolution.ts";
@@ -958,6 +959,80 @@ test("buildDiagnosis: global + trusted project override (different version) stil
   const userInstall = d.surfaces.find((s) => s.kind === "user-install");
   assert.equal(userInstall?.classification, "inactive-overridden");
   assert.equal(d.hasSkew, false);
+});
+
+test("planDefaultFix: user-installed doctor in a trusted project npm override targets the project override and project agents, not the user root", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-planfix-override-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  // User-installed doctor: the executing (active) package is the user install,
+  // whose user agents are already correct.
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  await makeShim(home, path.join(userRoot, "bin", "pi-flow.mjs"));
+  await makeUserAgents(home, userRoot);
+
+  // A trusted project npm override (declared under .pi/settings.json, installed
+  // under .pi/npm) at a newer version, with stale (absent) project agents.
+  const overrideRoot = path.join(
+    cwd,
+    ".pi",
+    "npm",
+    "node_modules",
+    "@aphotic",
+    "pi-flow-core",
+  );
+  await seedCore(overrideRoot, "2.0.0-dev");
+  await seedTrust(home, cwd);
+  await seedSettings(cwd, ["npm:@aphotic/pi-flow-core"]);
+
+  // The command scope is "user" (doctor executes from the user install), but the
+  // effective package Pi resolves to is the trusted project override.
+  const diagnosis = await buildDiagnosis({
+    activeRoot: userRoot,
+    cwd,
+    homeDir: home,
+    scope: "user",
+  });
+  assert.equal(diagnosis.effectiveScope, "project");
+  assert.equal(diagnosis.effective.root, realpathSync(overrideRoot));
+
+  // The default fix plan must follow the effective model, not the command scope:
+  // repair the project override's agents, not the (already-correct) user root.
+  const plan = planDefaultFix({ diagnosis, homeDir: home, cwd });
+  assert.equal(plan.target.root, realpathSync(overrideRoot));
+  assert.equal(plan.effectiveTarget, "project");
+  assert.equal(plan.agentsDir, path.join(cwd, ".pi", "agents"));
+});
+
+test("planDefaultFix: a user-effective diagnosis targets the user package and user agents dir", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-planfix-user-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  await makeShim(home, path.join(userRoot, "bin", "pi-flow.mjs"));
+  await makeUserAgents(home, userRoot);
+
+  const diagnosis = await buildDiagnosis({
+    activeRoot: userRoot,
+    cwd,
+    homeDir: home,
+    scope: "user",
+  });
+  assert.equal(diagnosis.effectiveScope, "user");
+
+  const plan = planDefaultFix({ diagnosis, homeDir: home, cwd });
+  assert.equal(plan.target.root, userRoot);
+  assert.equal(plan.effectiveTarget, "user");
+  assert.equal(
+    plan.agentsDir,
+    path.join(home, ".pi", "agent", "agents"),
+  );
 });
 
 test("buildDiagnosis: a stale project .pi/npm install with no project entry is inactive-shadowed, not skew", async () => {

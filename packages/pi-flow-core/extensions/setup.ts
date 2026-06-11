@@ -390,7 +390,7 @@ function parseExplicitTarget(args: string): DurableTarget | undefined {
 export function registerSetup(pi: ExtensionAPI): void {
   pi.registerCommand("flow:setup", {
     description:
-      "Symlink bundled pi-flow agent definitions into the matching @aphotic/pi-mux-subagents discovery directory.",
+      "Symlink bundled pi-flow agent definitions into the matching @aphotic/pi-mux-subagents discovery directory and install/refresh the user helper dispatcher.",
     handler: async (args: string, ctx: ExtensionCommandContext) => {
       try {
         const ownPackageRoot = await fs.realpath(
