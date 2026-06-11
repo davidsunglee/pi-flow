@@ -30,6 +30,7 @@ import {
   resolveBinToCore as _resolveBinToCore,
   parseDeclaredPackages as _parseDeclaredPackages,
   resolveEffectiveCoreRoot,
+  resolveSpecToCoreRoot as _resolveSpecToCoreRoot,
 } from "./lib/effective-package.mjs";
 
 export type SurfaceKind =
@@ -381,9 +382,11 @@ async function declaredSurfaceReports(opts: {
   }
 
   const settingsDir = path.dirname(settingsPath);
+  // settingsPath = <cwd>/.pi/settings.json, so settingsDir = <cwd>/.pi, baseDir = <cwd>
+  const baseDir = path.dirname(settingsDir);
   const out: SurfaceReport[] = [];
   for (const declared of parseDeclaredPackages(parsed)) {
-    const detail = `${declared.spec} (${declared.pinned ? "pinned" : "floating"}, ${declared.kind})`;
+    let detail = `${declared.spec} (${declared.pinned ? "pinned" : "floating"}, ${declared.kind})`;
     let realpath: string | undefined;
     let classification: Classification = "unresolved";
     if (declared.kind === "local") {
@@ -397,6 +400,22 @@ async function declaredSurfaceReports(opts: {
           exists: true,
           kind: "declared-package",
         });
+      }
+    } else if (declared.kind === "npm") {
+      const core = await _resolveSpecToCoreRoot({
+        spec: declared.spec,
+        kind: declared.kind,
+        name: declared.name,
+        baseDir,
+      });
+      if (core) {
+        realpath = core.root;
+        classification = classify({
+          realpath: core.root,
+          exists: true,
+          kind: "declared-package",
+        });
+        detail = `${declared.spec} (${declared.pinned ? "pinned" : "floating"}, ${declared.kind}) → v${core.version}`;
       }
     }
     out.push({

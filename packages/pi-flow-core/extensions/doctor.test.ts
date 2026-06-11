@@ -907,3 +907,143 @@ test("buildDiagnosis: node-bin through aggregate wrapper reports the delegated c
   assert.equal(nodeBin.classification, "active");
   assert.ok(nodeBin.detail?.includes("via @aphotic/pi-flow@0.8.0 wrapper"));
 });
+
+// --- npm declared packages resolution ----------------------------------------
+
+async function seedProjectNpmDirectInstall(cwd: string, version: string): Promise<string> {
+  const root = path.join(cwd, ".pi", "npm", "node_modules", "@aphotic", "pi-flow-core");
+  await seedCore(root, version);
+  return realpathSync(root);
+}
+
+async function seedProjectNpmAggInstall(cwd: string): Promise<string> {
+  const aggRoot = path.join(cwd, ".pi", "npm", "node_modules", "@aphotic", "pi-flow");
+  const coreRoot = path.join(aggRoot, "node_modules", "@aphotic", "pi-flow-core");
+  await seedAggregate(aggRoot, coreRoot);
+  return realpathSync(coreRoot);
+}
+
+async function seedUserAggInstall(home: string): Promise<string> {
+  const aggRoot = path.join(home, ".pi", "agent", "npm", "node_modules", "@aphotic", "pi-flow");
+  const coreRoot = path.join(aggRoot, "node_modules", "@aphotic", "pi-flow-core");
+  await seedAggregate(aggRoot, coreRoot);
+  return realpathSync(coreRoot);
+}
+
+test("buildDiagnosis: declared npm string spec (npm:@aphotic/pi-flow-core) with installed core is not unresolved", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-npm-str-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  await seedProjectNpmDirectInstall(cwd, "1.0.0");
+  await seedSettings(cwd, ["npm:@aphotic/pi-flow-core"]);
+
+  const d = await buildDiagnosis({ activeRoot: userRoot, cwd, homeDir: home, scope: "user" });
+  const decl = d.surfaces.filter((s) => s.kind === "declared-package");
+  assert.equal(decl.length, 1);
+  assert.notEqual(decl[0].classification, "unresolved", "npm string spec with install should not be unresolved");
+  assert.ok(decl[0].realpath, "npm string spec should resolve to a realpath");
+});
+
+test("buildDiagnosis: declared npm object spec ({ source: 'npm:@aphotic/pi-flow' }) with installed core is not unresolved", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-npm-obj-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  await seedProjectNpmDirectInstall(cwd, "1.0.0");
+  await seedSettings(cwd, [{ source: "npm:@aphotic/pi-flow-core", extensions: [], skills: [] }]);
+
+  const d = await buildDiagnosis({ activeRoot: userRoot, cwd, homeDir: home, scope: "user" });
+  const decl = d.surfaces.filter((s) => s.kind === "declared-package");
+  assert.equal(decl.length, 1);
+  assert.notEqual(decl[0].classification, "unresolved", "npm object spec with install should not be unresolved");
+  assert.ok(decl[0].realpath);
+});
+
+test("buildDiagnosis: declared pinned npm spec (npm:@aphotic/pi-flow@0.8.0) with installed core resolves and detail includes version", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-npm-pin-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  await seedProjectNpmDirectInstall(cwd, "0.8.0");
+  await seedSettings(cwd, ["npm:@aphotic/pi-flow-core@0.8.0"]);
+
+  const d = await buildDiagnosis({ activeRoot: userRoot, cwd, homeDir: home, scope: "user" });
+  const decl = d.surfaces.filter((s) => s.kind === "declared-package");
+  assert.equal(decl.length, 1);
+  assert.notEqual(decl[0].classification, "unresolved", "pinned npm spec with install should not be unresolved");
+  assert.ok(decl[0].realpath);
+  assert.ok(decl[0].detail?.includes("pinned"), "detail should mention pinned");
+  assert.ok(decl[0].detail?.includes("0.8.0"), "detail should include resolved version");
+});
+
+test("buildDiagnosis: declared npm:@aphotic/pi-flow (aggregate) resolves to bundled core, not unresolved", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-npm-agg-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  await seedProjectNpmAggInstall(cwd);
+  await seedSettings(cwd, ["npm:@aphotic/pi-flow"]);
+
+  const d = await buildDiagnosis({ activeRoot: userRoot, cwd, homeDir: home, scope: "user" });
+  const decl = d.surfaces.filter((s) => s.kind === "declared-package");
+  assert.equal(decl.length, 1);
+  assert.notEqual(decl[0].classification, "unresolved", "aggregate npm spec with install should not be unresolved");
+  assert.ok(decl[0].realpath, "aggregate npm spec should resolve to the bundled core root");
+});
+
+test("buildDiagnosis: project direct npm:@aphotic/pi-flow-core overrides user aggregate @aphotic/pi-flow (interop)", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-interop-d-a-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  // User has an aggregate install; project has a direct core install.
+  await seedUserAggInstall(home);
+  const projCoreRoot = await seedProjectNpmDirectInstall(cwd, "1.0.0");
+  await seedTrust(home, cwd);
+  await seedSettings(cwd, ["npm:@aphotic/pi-flow-core"]);
+
+  const d = await buildDiagnosis({ activeRoot: projCoreRoot, cwd, homeDir: home, scope: "project" });
+  assert.equal(d.effectiveScope, "project", "project direct should override user aggregate");
+  assert.equal(d.effectiveRoot, projCoreRoot);
+  const decl = d.surfaces.filter((s) => s.kind === "declared-package");
+  assert.equal(decl.length, 1);
+  assert.notEqual(decl[0].classification, "unresolved");
+  assert.equal(d.hasSkew, false);
+});
+
+test("buildDiagnosis: project aggregate npm:@aphotic/pi-flow overrides user direct @aphotic/pi-flow-core (interop)", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-interop-a-d-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  // User has a direct core install; project has an aggregate install.
+  await seedUserInstall(home, "1.0.0");
+  const projBundledCore = await seedProjectNpmAggInstall(cwd);
+  await seedTrust(home, cwd);
+  await seedSettings(cwd, ["npm:@aphotic/pi-flow"]);
+
+  const d = await buildDiagnosis({ activeRoot: projBundledCore, cwd, homeDir: home, scope: "project" });
+  assert.equal(d.effectiveScope, "project", "project aggregate should override user direct");
+  assert.equal(d.effectiveRoot, projBundledCore);
+  const decl = d.surfaces.filter((s) => s.kind === "declared-package");
+  assert.equal(decl.length, 1);
+  assert.notEqual(decl[0].classification, "unresolved");
+  assert.equal(d.hasSkew, false);
+});
