@@ -11,6 +11,7 @@ import {
   resolveSpecToCoreRoot,
   isTrusted,
   resolveEffectiveCoreRoot,
+  resolveUserCoreRoot,
   abbreviatePath,
 } from "./effective-package.mjs";
 
@@ -328,6 +329,42 @@ test("resolveEffectiveCoreRoot: returns null when neither project nor user resol
   await fs.mkdir(cwd, { recursive: true });
   const eff = await resolveEffectiveCoreRoot({ cwd, homeDir: home });
   assert.equal(eff, null);
+});
+
+// --- resolveUserCoreRoot ----------------------------------------------------
+
+test("resolveUserCoreRoot: resolves a user settings-declared local package outside ~/.pi/agent/npm", async () => {
+  const sandbox = mkSandbox("eff-user-local-");
+  const home = path.join(sandbox, "home");
+  // A local core checkout declared by user settings, NOT at the fixed npm path.
+  const userCore = path.join(home, ".pi", "agent", "checkout", "pi-flow-core");
+  await seedCore(userCore, "3.3.3");
+  await writeUserSettings(home, { packages: ["checkout/pi-flow-core"] });
+
+  const res = await resolveUserCoreRoot({ homeDir: home });
+  assert.ok(res, "user-declared local package should resolve");
+  assert.equal(res.scope, "user");
+  assert.equal(res.root, realpathSync(userCore));
+});
+
+test("resolveUserCoreRoot: resolves the fixed npm install when no settings package is declared", async () => {
+  const sandbox = mkSandbox("eff-user-fixed-");
+  const home = path.join(sandbox, "home");
+  const userCore = await seedUserCore(home, "1.0.0");
+
+  const res = await resolveUserCoreRoot({ homeDir: home });
+  assert.ok(res);
+  assert.equal(res.scope, "user");
+  assert.equal(res.root, realpathSync(userCore));
+});
+
+test("resolveUserCoreRoot: ignores any project override and returns null when no user install exists", async () => {
+  const sandbox = mkSandbox("eff-user-none-");
+  const home = path.join(sandbox, "home");
+  await fs.mkdir(home, { recursive: true });
+
+  const res = await resolveUserCoreRoot({ homeDir: home });
+  assert.equal(res, null);
 });
 
 // --- abbreviatePath ---------------------------------------------------------

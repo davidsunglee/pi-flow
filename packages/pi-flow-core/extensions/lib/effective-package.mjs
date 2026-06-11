@@ -313,14 +313,25 @@ export async function resolveEffectiveCoreRoot({ cwd, homeDir }) {
     }
   }
 
-  // 2. User/global scope. Both the user's declared `packages` (from
-  // ~/.pi/agent/settings.json) and the fixed npm install locations live under
-  // the agent dir; npm installs are at ~/.pi/agent/npm, not <baseDir>/.pi/npm,
-  // and local specs resolve relative to the agent dir.
+  // 2. User/global scope, resolved independently of any project override.
+  return resolveUserCoreRoot({ homeDir });
+}
+
+/**
+ * Resolve the user/global pi-flow-core root for `homeDir`, independent of any
+ * project override. Both the user's declared `packages` (from
+ * ~/.pi/agent/settings.json) and the fixed npm install locations live under the
+ * agent dir; npm installs are at ~/.pi/agent/npm, not <baseDir>/.pi/npm, and
+ * local specs resolve relative to the agent dir (so a user-declared local/path
+ * install outside ~/.pi/agent/npm still resolves). Returns
+ * { root, binPath, scope: "user", viaAggregate? } or null. Tolerates
+ * missing/malformed settings.
+ */
+export async function resolveUserCoreRoot({ homeDir }) {
   const agentDir = path.join(homeDir, ".pi", "agent");
   const agentNpm = path.join(agentDir, "npm");
 
-  // 2a. User settings-declared pi-flow packages (local or npm).
+  // a. User settings-declared pi-flow packages (local or npm).
   const userDeclared = parseDeclaredPackages(
     await readSettings(path.join(agentDir, "settings.json")),
   );
@@ -338,7 +349,7 @@ export async function resolveEffectiveCoreRoot({ cwd, homeDir }) {
     }
   }
 
-  // 2b. Fixed user-install locations.
+  // b. Fixed user-install locations.
   const userCandidates = [
     path.join(agentNpm, "node_modules", "@aphotic", "pi-flow-core"),
     path.join(agentNpm, "node_modules", "@aphotic", "pi-flow"),

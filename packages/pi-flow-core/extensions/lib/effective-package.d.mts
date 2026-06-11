@@ -44,4 +44,7 @@ export function resolveEffectiveCoreRoot(opts: {
   cwd: string;
   homeDir: string;
 }): Promise<EffectiveCoreRoot | null>;
+export function resolveUserCoreRoot(opts: {
+  homeDir: string;
+}): Promise<EffectiveCoreRoot | null>;
 export function abbreviatePath(p: string, homeDir: string): string;

@@ -1234,6 +1234,50 @@ test("buildDiagnosis: --strict does not flag user agents aligned to the user roo
   assert.ok(!strict.strictDivergence.includes("user-agents"));
 });
 
+async function seedUserSettings(home: string, packages: unknown[]): Promise<void> {
+  const p = path.join(home, ".pi", "agent", "settings.json");
+  await fs.mkdir(path.dirname(p), { recursive: true });
+  await fs.writeFile(p, JSON.stringify({ packages }, null, 2) + "\n");
+}
+
+test("buildDiagnosis: user agents at a settings-declared local user package are not skew during a trusted project override", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-usersettings-local-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  // The user/global core is declared via ~/.pi/agent/settings.json as a local
+  // path install OUTSIDE the fixed ~/.pi/agent/npm tree.
+  const userRoot = path.join(home, ".pi", "agent", "checkout", "pi-flow-core");
+  await seedCore(userRoot, "1.0.0");
+  await seedUserSettings(home, ["checkout/pi-flow-core"]);
+  // User agents legitimately serve that user/global install.
+  await makeUserAgents(home, userRoot);
+
+  // A trusted project override supplies the effective (project) root.
+  const overrideRoot = path.join(cwd, "packages", "pi-flow-core");
+  await seedCore(overrideRoot, "2.0.0-dev");
+  await seedTrust(home, cwd);
+  await seedSettings(cwd, ["packages/pi-flow-core"]);
+
+  const d = await buildDiagnosis({
+    activeRoot: realpathSync(userRoot),
+    cwd,
+    homeDir: home,
+    scope: "project",
+  });
+
+  assert.equal(d.effectiveScope, "project");
+  assert.equal(d.effectiveRoot, realpathSync(overrideRoot));
+  const userAgents = d.surfaces.find((s) => s.kind === "user-agents");
+  // The user agents point at the real user root, which must be recognized as
+  // the user/global install — active against their own scope, never stale-skew.
+  assert.equal(userAgents?.classification, "active");
+  assert.ok(!d.skewKinds.includes("user-agents"));
+  assert.equal(d.hasSkew, false);
+});
+
 test("buildDiagnosis: node-bin through aggregate wrapper reports the delegated core, never non-pi-flow", async () => {
   const sandbox = mkSandbox("pi-flow-doctor-agg-bd-");
   const home = path.join(sandbox, "home");

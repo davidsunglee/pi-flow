@@ -29,6 +29,7 @@ import {
   resolveBinToCore as _resolveBinToCore,
   parseDeclaredPackages as _parseDeclaredPackages,
   resolveEffectiveCoreRoot,
+  resolveUserCoreRoot,
   resolveSpecToCoreRoot as _resolveSpecToCoreRoot,
   abbreviatePath,
 } from "./lib/effective-package.mjs";
@@ -615,6 +616,17 @@ export async function buildDiagnosis(
     },
   ];
 
+  // The user/global install root, resolved independently of any project
+  // override (including ~/.pi/agent/settings.json declared local/npm packages,
+  // which may live outside ~/.pi/agent/npm). Used for scope-aware user agents
+  // (they may legitimately serve the user root even when a project override is
+  // effective) and to recognize that root as a neutral inactive install.
+  const userResolvedRoot =
+    effectiveScope === "user"
+      ? effectiveRoot
+      : ((await resolveUserCoreRoot({ homeDir }))?.root ?? null);
+  const userRoot = userResolvedRoot ?? effectiveRoot;
+
   // Recognized inactive installs: real pi-flow cores at a known install
   // location whose root is not the effective root. Mapped to their resolved
   // (overridden vs shadowed) classification.
@@ -638,13 +650,23 @@ export async function buildDiagnosis(
     }
   }
 
-  // The user/global install root, for scope-aware user agents (they may
-  // legitimately serve the user root even when a project override is effective).
-  const userRoot =
-    effectiveScope === "user"
-      ? effectiveRoot
-      : ((await resolveFirstCoreRoot(userInstallCandidates.map((c) => c.path))) ??
-        effectiveRoot);
+  // The settings-declared user/global root (which may sit outside the fixed npm
+  // candidates) is also a recognized inactive install when a project override is
+  // effective, so surfaces resolving to it read as neutral rather than skew.
+  if (
+    userResolvedRoot &&
+    userResolvedRoot !== effectiveRoot &&
+    !inactiveInstallRoots.has(userResolvedRoot)
+  ) {
+    inactiveInstallRoots.set(
+      userResolvedRoot,
+      decideInactiveClassification({
+        surfaceScope: "user",
+        effectiveScope,
+        declaresProjectEntry,
+      }),
+    );
+  }
 
   const classify: Classify = ({ realpath, exists, kind, compareRoot }) =>
     classifySurface({
@@ -894,17 +916,6 @@ async function projectDeclaresPiFlow(cwd: string): Promise<boolean> {
     }
   }
   return false;
-}
-
-/** First candidate path that reads as a pi-flow-core package, by its root. */
-async function resolveFirstCoreRoot(
-  candidatePaths: string[],
-): Promise<string | null> {
-  for (const p of candidatePaths) {
-    const core = await readPiFlowCorePackage(p);
-    if (core) return core.root;
-  }
-  return null;
 }
 
 export interface ReconcileTargetResult {
