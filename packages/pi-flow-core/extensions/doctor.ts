@@ -15,6 +15,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import {
   resolveScope,
+  DISPATCHER_SIGNATURE,
   type DurableTarget,
   type SetupConflict,
   type SetupScope,
@@ -89,6 +90,64 @@ export async function resolveBinToCore(binPath: string): Promise<BinResolution> 
   return _resolveBinToCore(binPath);
 }
 
+/** Absolute path to a package root's bundled stable dispatcher launcher. */
+function dispatcherPathFor(root: string): string {
+  return path.join(root, "bin", "pi-flow-dispatch.mjs");
+}
+
+/**
+ * Stale-bytes axis: content-compare the installed dispatcher at `installedPath`
+ * against the active package's bin/pi-flow-dispatch.mjs. Returns true only when
+ * both files are readable and their bytes differ — i.e. the installed launcher
+ * is out of date and needs a re-copy. A missing installed file (it isn't a
+ * dispatcher) or a missing active dispatcher (nothing to compare against) is not
+ * stale. This says nothing about which core the dispatcher resolves at runtime.
+ */
+export async function isDispatcherStale(args: {
+  installedPath: string;
+  activeRoot: string;
+}): Promise<boolean> {
+  const { installedPath, activeRoot } = args;
+  let installed: Buffer;
+  try {
+    installed = await fs.readFile(installedPath);
+  } catch {
+    return false;
+  }
+  let active: Buffer;
+  try {
+    active = await fs.readFile(dispatcherPathFor(activeRoot));
+  } catch {
+    return false;
+  }
+  return !installed.equals(active);
+}
+
+/**
+ * True iff the real file at `filePath` is our stable dispatcher launcher —
+ * recognized by the dispatcher signature, or by byte-equality with the active
+ * package's dispatcher. Anything else (a foreign script, a legacy core bin copy)
+ * reads as not-ours and is preserved untouched.
+ */
+async function isDispatcherFile(
+  filePath: string,
+  activeRoot: string,
+): Promise<boolean> {
+  let buf: Buffer;
+  try {
+    buf = await fs.readFile(filePath);
+  } catch {
+    return false;
+  }
+  if (buf.toString("utf8", 0, 512).includes(DISPATCHER_SIGNATURE)) return true;
+  try {
+    const active = await fs.readFile(dispatcherPathFor(activeRoot));
+    return buf.equals(active);
+  } catch {
+    return false;
+  }
+}
+
 export interface DeclaredPackage {
   /** raw spec: "npm:@aphotic/pi-flow@0.8.0", "npm:@aphotic/pi-flow", or a local path */
   spec: string;
@@ -111,6 +170,15 @@ export interface DoctorDiagnosis {
   skewKinds: SurfaceKind[]; // resolution-path surfaces classified stale-skew
   strictDivergence: SurfaceKind[]; // under --strict, resolution surfaces not on the effective root (empty in default mode)
   absentCandidates: string[]; // install/bin candidate paths that were absent (for --all inventory)
+  /**
+   * Stale-bytes axis for an installed helper-shim dispatcher: true iff a real
+   * dispatcher file is installed and its bytes differ from the active package's
+   * bin/pi-flow-dispatch.mjs (so --fix should re-copy it). This is independent
+   * of the runtime-target axis (the dispatcher surface's classification): a
+   * dispatcher can be byte-aligned yet resolve a divergent effective target, and
+   * vice versa.
+   */
+  staleDispatcher: boolean;
 }
 
 export interface BuildDiagnosisOptions {
@@ -564,8 +632,15 @@ export async function buildDiagnosis(
     });
 
   const surfaces: SurfaceReport[] = [];
+  let staleDispatcher = false;
 
-  // helper-shim
+  // helper-shim. The shim has two recognized forms:
+  //  - the new stable dispatcher (a real file copy of bin/pi-flow-dispatch.mjs),
+  //    evaluated on two independent axes — its installed bytes vs the active
+  //    package's dispatcher (stale-bytes), and its effective runtime target for
+  //    this cwd (the per-cwd core it would actually spawn);
+  //  - the legacy owned symlink, classified via resolveBinToCore as before.
+  const shimLabel = "helper shim (~/.pi/agent/bin/pi-flow)";
   const shimPath = path.join(homeDir, ".pi", "agent", "bin", "pi-flow");
   {
     let st: Awaited<ReturnType<typeof fs.lstat>> | undefined;
@@ -577,11 +652,44 @@ export async function buildDiagnosis(
     if (!st) {
       surfaces.push({
         kind: "helper-shim",
-        label: "helper shim (~/.pi/agent/bin/pi-flow)",
+        label: shimLabel,
         inspectedPath: shimPath,
         classification: "absent",
       });
+    } else if (
+      !st.isSymbolicLink() &&
+      st.isFile() &&
+      (await isDispatcherFile(shimPath, activeRoot))
+    ) {
+      // Dispatcher form — the two independent axes.
+      // (a) stale-bytes: installed launcher vs the active package's dispatcher.
+      const stale = await isDispatcherStale({ installedPath: shimPath, activeRoot });
+      staleDispatcher = stale;
+      // (b) runtime-target: the per-cwd delegate the dispatcher would spawn.
+      const runtime = await resolveEffectiveCoreRoot({ cwd, homeDir });
+      const runtimeRoot = runtime?.root ?? null;
+      const pkg = runtimeRoot
+        ? ((await readPiFlowCorePackage(runtimeRoot)) ?? undefined)
+        : undefined;
+      const classification = classify({
+        realpath: runtimeRoot,
+        exists: true,
+        kind: "helper-shim",
+      });
+      const detail = stale
+        ? "dispatcher (stale-dispatcher: bytes differ from active)"
+        : "dispatcher (bytes aligned with active)";
+      surfaces.push({
+        kind: "helper-shim",
+        label: shimLabel,
+        inspectedPath: shimPath,
+        realpath: runtimeRoot ?? undefined,
+        pkg,
+        classification,
+        detail,
+      });
     } else {
+      // Legacy symlink (or a foreign real file) — classify via resolveBinToCore.
       let resolvePath = shimPath;
       if (st.isSymbolicLink()) {
         const link = await fs.readlink(shimPath);
@@ -590,7 +698,7 @@ export async function buildDiagnosis(
       surfaces.push(
         await binSurfaceReport({
           kind: "helper-shim",
-          label: "helper shim (~/.pi/agent/bin/pi-flow)",
+          label: shimLabel,
           inspectedPath: shimPath,
           resolvePath,
           exists: true,
@@ -734,6 +842,7 @@ export async function buildDiagnosis(
     skewKinds,
     strictDivergence,
     absentCandidates,
+    staleDispatcher,
   };
 }
 
@@ -941,6 +1050,88 @@ export async function repairLink(args: {
   };
 }
 
+/**
+ * Repair the installed dispatcher launcher at `shimPath` by re-copying the
+ * active package's bin/pi-flow-dispatch.mjs, honoring the never-clobber-foreign
+ * posture. Outcomes mirror repairLink's vocabulary:
+ *  - created: nothing was present; the dispatcher copy was written;
+ *  - skipped: an up-to-date dispatcher copy already exists;
+ *  - repaired: a stale dispatcher copy was refreshed to the active bytes;
+ *  - conflict: a foreign file or a directory occupies the path — left untouched.
+ * The desired target (`to`) is the active dispatcher source so the report and
+ * target-root derivation stay consistent with symlink repairs.
+ */
+export async function repairDispatcher(args: {
+  shimPath: string;
+  dispatcherSrc: string;
+}): Promise<RepairResult> {
+  const { shimPath, dispatcherSrc } = args;
+  const to = dispatcherSrc;
+
+  let st: Awaited<ReturnType<typeof fs.lstat>>;
+  try {
+    st = await fs.lstat(shimPath);
+  } catch (err: any) {
+    if (err && err.code === "ENOENT") {
+      await fs.mkdir(path.dirname(shimPath), { recursive: true });
+      const content = await fs.readFile(dispatcherSrc);
+      await fs.writeFile(shimPath, content, { mode: 0o755 });
+      return { path: shimPath, outcome: "created", to };
+    }
+    throw err;
+  }
+
+  if (st.isDirectory()) {
+    return {
+      path: shimPath,
+      outcome: "conflict",
+      to,
+      conflict: {
+        path: shimPath,
+        reason: "directory at target — refusing to overwrite",
+      },
+    };
+  }
+
+  if (st.isFile()) {
+    const [existing, source] = await Promise.all([
+      fs.readFile(shimPath),
+      fs.readFile(dispatcherSrc),
+    ]);
+    const ours =
+      existing.toString("utf8", 0, 512).includes(DISPATCHER_SIGNATURE) ||
+      existing.equals(source);
+    if (!ours) {
+      // Foreign real file — preserve.
+      return {
+        path: shimPath,
+        outcome: "conflict",
+        to,
+        conflict: {
+          path: shimPath,
+          reason: "real file at target — refusing to overwrite",
+        },
+      };
+    }
+    if (existing.equals(source)) {
+      return { path: shimPath, outcome: "skipped", to };
+    }
+    await fs.writeFile(shimPath, source, { mode: 0o755 });
+    return { path: shimPath, outcome: "repaired", to };
+  }
+
+  // Anything else (e.g. a socket/fifo) — refuse to touch.
+  return {
+    path: shimPath,
+    outcome: "conflict",
+    to,
+    conflict: {
+      path: shimPath,
+      reason: "non-regular file at target — refusing to overwrite",
+    },
+  };
+}
+
 const TAGS: Record<Classification, string> = {
   active: "[active]",
   "local-dev": "[local-dev]",
@@ -1128,6 +1319,8 @@ export async function runDoctorFix(args: {
   activeRoot: string;
   cwd: string;
   declaredSpecsForTarget: string[]; // declared specs that already name this target (may be empty)
+  /** active package's bin/pi-flow-dispatch.mjs — the source for a dispatcher copy */
+  dispatcherSrc?: string;
 }): Promise<DoctorFixReport> {
   const {
     target,
@@ -1137,34 +1330,43 @@ export async function runDoctorFix(args: {
     activeRoot,
     cwd,
     declaredSpecsForTarget,
+    dispatcherSrc,
   } = args;
 
   const shimTarget = path.join(target.root, "bin", "pi-flow.mjs");
   const guidance: string[] = [];
 
+  // Determine the current shim form so we repair the right kind of surface
+  // without ever deleting an inactive install (we only touch the shim itself).
+  let shimStat: Awaited<ReturnType<typeof fs.lstat>> | undefined;
+  try {
+    shimStat = await fs.lstat(shimPath);
+  } catch (err: any) {
+    if (err && err.code === "ENOENT") shimStat = undefined;
+    else throw err;
+  }
+
   let shim: RepairResult | null;
-  if (effectiveTarget === "project") {
-    let absent = false;
-    try {
-      await fs.lstat(shimPath);
-    } catch (err: any) {
-      if (err && err.code === "ENOENT") absent = true;
-      else throw err;
-    }
-    if (absent) {
-      shim = null;
-      guidance.push(
-        `no helper shim at ${shimPath}; run /flow:setup --target user (or re-run from a user-scope install) to create it.`,
-      );
-    } else {
-      shim = await repairLink({
-        linkPath: shimPath,
-        desiredTarget: shimTarget,
-        activeRoot,
-        cwd,
-      });
-    }
+  if (shimStat?.isSymbolicLink()) {
+    // Legacy owned symlink — repoint to the target's bin (back-compat).
+    shim = await repairLink({
+      linkPath: shimPath,
+      desiredTarget: shimTarget,
+      activeRoot,
+      cwd,
+    });
+  } else if (!shimStat && effectiveTarget === "project") {
+    // No shim, and this scope cannot own the global one — guidance only.
+    shim = null;
+    guidance.push(
+      `no helper shim at ${shimPath}; run /flow:setup --target user (or re-run from a user-scope install) to create it.`,
+    );
+  } else if (dispatcherSrc) {
+    // Dispatcher form: refresh a stale installed launcher, create an absent
+    // one (user scope), and preserve any foreign file — never clobber.
+    shim = await repairDispatcher({ shimPath, dispatcherSrc });
   } else {
+    // No dispatcher source available — fall back to a legacy symlink repoint.
     shim = await repairLink({
       linkPath: shimPath,
       desiredTarget: shimTarget,
@@ -1428,6 +1630,11 @@ export function registerDoctor(pi: ExtensionAPI): void {
           activeRoot: ownPackageRoot,
           cwd: ctx.cwd,
           declaredSpecsForTarget,
+          dispatcherSrc: path.join(
+            ownPackageRoot,
+            "bin",
+            "pi-flow-dispatch.mjs",
+          ),
         });
 
         const hasConflict =

@@ -64,7 +64,7 @@ const TEMPORARY_REFUSAL_MESSAGE =
   "/flow:setup detected a temporary package load (pi -e). Re-run with --target user or --target project to perform a durable setup.";
 
 /** Signature string present in our stable dispatcher file. */
-const DISPATCHER_SIGNATURE =
+export const DISPATCHER_SIGNATURE =
   "pi-flow-dispatch.mjs — the stable per-cwd helper launcher";
 
 export async function resolveScope(

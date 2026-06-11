@@ -19,9 +19,17 @@ import {
   parseDoctorArgs,
   helpText,
   runDoctorFix,
+  isDispatcherStale,
 } from "./doctor.ts";
 import type { PiFlowCorePackage } from "./package-resolution.ts";
 import { readPiFlowCorePackage } from "./package-resolution.ts";
+import { DISPATCHER_SIGNATURE } from "./setup.ts";
+
+/** Dispatcher-file bytes for a seeded core: the signature plus a version marker
+ * so distinct versions yield distinct bytes (for stale-bytes assertions). */
+function dispatcherBytes(version: string): string {
+  return `#!/usr/bin/env node\n// ${DISPATCHER_SIGNATURE}\n// seeded@${version}\n`;
+}
 
 function mkSandbox(prefix: string): string {
   return realpathSync(mkdtempSync(path.join(os.tmpdir(), prefix)));
@@ -35,6 +43,10 @@ async function seedCore(root: string, version: string): Promise<void> {
     JSON.stringify({ name: "@aphotic/pi-flow-core", version }),
   );
   await fs.writeFile(path.join(root, "bin", "pi-flow.mjs"), "");
+  await fs.writeFile(
+    path.join(root, "bin", "pi-flow-dispatch.mjs"),
+    dispatcherBytes(version),
+  );
   await fs.writeFile(path.join(root, "agents", "flow.md"), "# flow\n");
 }
 
@@ -1146,4 +1158,324 @@ test("buildDiagnosis: project aggregate npm:@aphotic/pi-flow overrides user dire
   assert.equal(decl.length, 1);
   assert.notEqual(decl[0].classification, "unresolved");
   assert.equal(d.hasSkew, false);
+});
+
+// --- dispatcher-as-surface + scope-aware --fix discipline --------------------
+
+function shimPathFor(home: string): string {
+  return path.join(home, ".pi", "agent", "bin", "pi-flow");
+}
+
+/** Install a real dispatcher file at the helper-shim path with given bytes. */
+async function installDispatcherFile(
+  home: string,
+  content: string,
+): Promise<string> {
+  const p = shimPathFor(home);
+  await fs.mkdir(path.dirname(p), { recursive: true });
+  await fs.writeFile(p, content, { mode: 0o755 });
+  return p;
+}
+
+test("isDispatcherStale: true when bytes differ, false when aligned or installed file is missing", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-isstale-");
+  const activeRoot = path.join(sandbox, "active");
+  await seedCore(activeRoot, "1.0.0");
+  const activeDisp = path.join(activeRoot, "bin", "pi-flow-dispatch.mjs");
+
+  const aligned = path.join(sandbox, "aligned");
+  await fs.writeFile(aligned, await fs.readFile(activeDisp));
+  assert.equal(
+    await isDispatcherStale({ installedPath: aligned, activeRoot }),
+    false,
+    "byte-identical installed dispatcher is not stale",
+  );
+
+  const stale = path.join(sandbox, "stale");
+  await fs.writeFile(stale, dispatcherBytes("9.9.9"));
+  assert.equal(
+    await isDispatcherStale({ installedPath: stale, activeRoot }),
+    true,
+    "byte-divergent installed dispatcher is stale",
+  );
+
+  assert.equal(
+    await isDispatcherStale({
+      installedPath: path.join(sandbox, "nope"),
+      activeRoot,
+    }),
+    false,
+    "a missing installed dispatcher is not stale",
+  );
+});
+
+test("dispatcher surface (stale bytes, aligned target): detected as a surface and --fix refreshes it to the active bytes", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-disp-stale-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  await makeUserAgents(home, userRoot);
+  // Installed dispatcher bytes differ from the active package's (stale).
+  const shimPath = await installDispatcherFile(home, dispatcherBytes("0.0.0-stale"));
+
+  const d = await buildDiagnosis({ activeRoot: userRoot, cwd, homeDir: home, scope: "user" });
+  const shim = d.surfaces.find((s) => s.kind === "helper-shim");
+  assert.ok(shim);
+  // Axis (a): stale bytes.
+  assert.equal(d.staleDispatcher, true);
+  assert.ok(shim.detail?.includes("stale-dispatcher"), "detail flags stale-dispatcher");
+  // Axis (b): the effective runtime target is aligned with the user install.
+  assert.equal(shim.realpath, userRoot);
+  assert.equal(shim.classification, "active");
+  // Stale bytes alone do not produce skew (the runtime target is aligned).
+  assert.equal(d.hasSkew, false);
+
+  const dispatcherSrc = path.join(userRoot, "bin", "pi-flow-dispatch.mjs");
+  const target = (await readPiFlowCorePackage(userRoot))!;
+  const r = await runDoctorFix({
+    target,
+    effectiveTarget: "user",
+    shimPath,
+    agentsDir: path.join(home, ".pi", "agent", "agents"),
+    activeRoot: userRoot,
+    cwd,
+    declaredSpecsForTarget: [],
+    dispatcherSrc,
+  });
+
+  assert.equal(r.shim?.outcome, "repaired");
+  const [after, src] = await Promise.all([
+    fs.readFile(shimPath),
+    fs.readFile(dispatcherSrc),
+  ]);
+  assert.ok(after.equals(src), "installed dispatcher matches the active bytes after --fix");
+
+  // Re-diagnose: the stale-bytes axis clears.
+  const d2 = await buildDiagnosis({ activeRoot: userRoot, cwd, homeDir: home, scope: "user" });
+  assert.equal(d2.staleDispatcher, false);
+});
+
+test("dispatcher surface (aligned bytes, divergent target): byte-equality does not imply the effective target is the active root", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-disp-axisA-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  const overrideRoot = path.join(cwd, "packages", "pi-flow-core");
+  await seedCore(overrideRoot, "2.0.0-dev");
+  await seedTrust(home, cwd);
+  await seedSettings(cwd, ["packages/pi-flow-core"]);
+
+  // Installed dispatcher bytes EQUAL the active package's (aligned).
+  const activeDisp = path.join(userRoot, "bin", "pi-flow-dispatch.mjs");
+  await installDispatcherFile(home, (await fs.readFile(activeDisp)).toString());
+
+  const d = await buildDiagnosis({ activeRoot: userRoot, cwd, homeDir: home, scope: "project" });
+  const shim = d.surfaces.find((s) => s.kind === "helper-shim");
+  assert.ok(shim);
+  // Axis (a): aligned — no stale-dispatcher.
+  assert.equal(d.staleDispatcher, false);
+  assert.ok(shim.detail?.includes("aligned"));
+  assert.ok(!shim.detail?.includes("stale-dispatcher"));
+  // Axis (b): the runtime target is the trusted project override, NOT the active
+  // user root — resolved independently of the matching bytes.
+  assert.equal(shim.realpath, realpathSync(overrideRoot));
+  assert.notEqual(shim.realpath, userRoot);
+  assert.equal(shim.classification, "active");
+});
+
+test("runDoctorFix: reaches a clean report without deleting a present inactive install", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-fix-keep-inactive-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  // An inactive project install, shadowed by the effective user install.
+  const inactiveInstall = path.join(
+    cwd,
+    ".pi",
+    "npm",
+    "node_modules",
+    "@aphotic",
+    "pi-flow-core",
+  );
+  await seedCore(inactiveInstall, "0.5.0");
+
+  // A stale dispatcher to refresh, and a stale user agent to repair.
+  const shimPath = await installDispatcherFile(home, dispatcherBytes("0.0.0-stale"));
+  const agentsDir = path.join(home, ".pi", "agent", "agents");
+  await fs.mkdir(agentsDir, { recursive: true });
+  await fs.symlink(
+    path.join(inactiveInstall, "agents", "flow.md"),
+    path.join(agentsDir, "flow.md"),
+  );
+
+  const target = (await readPiFlowCorePackage(userRoot))!;
+  const r = await runDoctorFix({
+    target,
+    effectiveTarget: "user",
+    shimPath,
+    agentsDir,
+    activeRoot: userRoot,
+    cwd,
+    declaredSpecsForTarget: [],
+    dispatcherSrc: path.join(userRoot, "bin", "pi-flow-dispatch.mjs"),
+  });
+
+  const conflicts = [r.shim, ...r.agents].filter((o) => o?.outcome === "conflict");
+  assert.equal(conflicts.length, 0, "a clean fix reports no conflicts");
+  assert.equal(r.shim?.outcome, "repaired");
+
+  // The inactive install dir is never deleted to reach a clean report.
+  const st = await fs.lstat(inactiveInstall);
+  assert.ok(st.isDirectory(), "inactive install dir must still exist after --fix");
+});
+
+test("runDoctorFix: a foreign file at the shim path is preserved as a conflict, not overwritten", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-fix-foreign-shim-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  const shimPath = shimPathFor(home);
+  await fs.mkdir(path.dirname(shimPath), { recursive: true });
+  const foreign = "#!/bin/sh\necho not pi-flow\n";
+  await fs.writeFile(shimPath, foreign);
+
+  const target = (await readPiFlowCorePackage(userRoot))!;
+  const r = await runDoctorFix({
+    target,
+    effectiveTarget: "user",
+    shimPath,
+    agentsDir: path.join(home, ".pi", "agent", "agents"),
+    activeRoot: userRoot,
+    cwd,
+    declaredSpecsForTarget: [],
+    dispatcherSrc: path.join(userRoot, "bin", "pi-flow-dispatch.mjs"),
+  });
+
+  assert.equal(r.shim?.outcome, "conflict");
+  assert.equal(await fs.readFile(shimPath, "utf8"), foreign, "foreign file is left byte-for-byte unchanged");
+});
+
+test("runDoctorFix: trusted-project override repairs project-scope agents and leaves user-scope agents unchanged", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-fix-scope-proj-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  const overrideRoot = path.join(cwd, "packages", "pi-flow-core");
+  await seedCore(overrideRoot, "2.0.0-dev");
+  await seedTrust(home, cwd);
+  await seedSettings(cwd, ["packages/pi-flow-core"]);
+
+  // User-scope agents correctly point at the user root — snapshot them.
+  const userAgentsDir = path.join(home, ".pi", "agent", "agents");
+  await makeUserAgents(home, userRoot);
+  const userLinkBefore = await fs.readlink(path.join(userAgentsDir, "flow.md"));
+
+  // Project-scope agents are STALE (point at the user root, not the override).
+  const projAgentsDir = path.join(cwd, ".pi", "agents");
+  await fs.mkdir(projAgentsDir, { recursive: true });
+  await fs.symlink(
+    path.join(userRoot, "agents", "flow.md"),
+    path.join(projAgentsDir, "flow.md"),
+  );
+
+  const target = (await readPiFlowCorePackage(overrideRoot))!;
+  const r = await runDoctorFix({
+    target,
+    effectiveTarget: "project",
+    shimPath: shimPathFor(home),
+    agentsDir: projAgentsDir,
+    activeRoot: userRoot,
+    cwd,
+    declaredSpecsForTarget: ["packages/pi-flow-core"],
+    dispatcherSrc: path.join(userRoot, "bin", "pi-flow-dispatch.mjs"),
+  });
+
+  // Effective (project) scope agents repaired to the project/override root.
+  const projAgent = r.agents.find((a) => a.path.endsWith("flow.md"));
+  assert.equal(projAgent?.outcome, "repaired");
+  assert.equal(
+    realpathSync(path.join(projAgentsDir, "flow.md")),
+    realpathSync(path.join(overrideRoot, "agents", "flow.md")),
+  );
+
+  // Unrelated user-scope agents are byte-for-byte unchanged.
+  assert.equal(await fs.readlink(path.join(userAgentsDir, "flow.md")), userLinkBefore);
+  assert.equal(
+    realpathSync(path.join(userAgentsDir, "flow.md")),
+    realpathSync(path.join(userRoot, "agents", "flow.md")),
+  );
+});
+
+test("runDoctorFix: user-effective scope repairs user-scope agents and leaves project-scope agents untouched", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-fix-scope-user-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  // A separate stale core (outside cwd, so repair is not a local-dev preserve).
+  const staleRoot = path.join(sandbox, "stale");
+  await seedCore(staleRoot, "0.5.0");
+
+  // Project-scope agents that must be left untouched (no project entry).
+  const projCore = path.join(cwd, "packages", "pi-flow-core");
+  await seedCore(projCore, "2.0.0-dev");
+  const projAgentsDir = path.join(cwd, ".pi", "agents");
+  await fs.mkdir(projAgentsDir, { recursive: true });
+  await fs.symlink(
+    path.join(projCore, "agents", "flow.md"),
+    path.join(projAgentsDir, "flow.md"),
+  );
+  const projLinkBefore = await fs.readlink(path.join(projAgentsDir, "flow.md"));
+
+  // User-scope agents are STALE (point at the separate stale core).
+  const userAgentsDir = path.join(home, ".pi", "agent", "agents");
+  await fs.mkdir(userAgentsDir, { recursive: true });
+  await fs.symlink(
+    path.join(staleRoot, "agents", "flow.md"),
+    path.join(userAgentsDir, "flow.md"),
+  );
+
+  const target = (await readPiFlowCorePackage(userRoot))!;
+  const r = await runDoctorFix({
+    target,
+    effectiveTarget: "user",
+    shimPath: shimPathFor(home),
+    agentsDir: userAgentsDir,
+    activeRoot: userRoot,
+    cwd,
+    declaredSpecsForTarget: [],
+    dispatcherSrc: path.join(userRoot, "bin", "pi-flow-dispatch.mjs"),
+  });
+
+  // Effective (user) scope agents repaired to the user root.
+  const userAgent = r.agents.find((a) => a.path.endsWith("flow.md"));
+  assert.equal(userAgent?.outcome, "repaired");
+  assert.equal(
+    realpathSync(path.join(userAgentsDir, "flow.md")),
+    realpathSync(path.join(userRoot, "agents", "flow.md")),
+  );
+
+  // Unrelated project-scope agents are byte-for-byte unchanged.
+  assert.equal(await fs.readlink(path.join(projAgentsDir, "flow.md")), projLinkBefore);
+  assert.equal(
+    realpathSync(path.join(projAgentsDir, "flow.md")),
+    realpathSync(path.join(projCore, "agents", "flow.md")),
+  );
 });
