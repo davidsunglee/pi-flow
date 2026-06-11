@@ -311,6 +311,51 @@ test("renderReport: coexistence — overridden user install shows [inactive], ze
   assert.ok(report.includes("Inactive installs"), "should have Inactive installs section");
 });
 
+test("renderReport: when executing and effective packages differ, labels the executing package and adds a separate effective line", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-render-effective-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  const overrideRoot = path.join(cwd, "packages", "pi-flow-core");
+  await seedCore(overrideRoot, "2.0.0-dev");
+  await seedTrust(home, cwd);
+  await seedSettings(cwd, ["packages/pi-flow-core"]);
+
+  const d = await buildDiagnosis({ activeRoot: userRoot, cwd, homeDir: home, scope: "project" });
+  const report = renderReport(d);
+  const lines = report.split("\n");
+
+  // The executing package line is labeled as such and carries the active version.
+  const execLine = lines.find((l) => l.includes("(executing)"));
+  assert.ok(execLine, `report should label the executing package line:\n${report}`);
+  assert.ok(execLine!.includes("@1.0.0"), "executing line should carry active version");
+  // A separate effective line carries the override identity and scope note.
+  const effLine = lines.find((l) => l.includes("(project override)"));
+  assert.ok(effLine, `report should have an effective line with scope note:\n${report}`);
+  assert.ok(effLine!.includes("@2.0.0-dev"), "effective line should carry effective version");
+});
+
+test("renderReport: when executing and effective packages match, keeps a single identity line with the scope note", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-render-effective-same-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const activeRoot = path.join(sandbox, "active");
+  await seedCore(activeRoot, "1.0.0");
+
+  const d = await buildDiagnosis({ activeRoot, cwd, homeDir: home, scope: "user" });
+  const report = renderReport(d);
+
+  // No split when they are the same package — one line with the scope note.
+  assert.ok(!report.includes("(executing)"), "no executing label when they match");
+  assert.ok(report.includes("(user/global)"), "single line keeps the scope note");
+});
+
 test("renderReport: paths are abbreviated — no raw homeDir, contains ~", async () => {
   const sandbox = mkSandbox("pi-flow-doctor-render-abbrev-");
   const home = path.join(sandbox, "home");
@@ -1009,6 +1054,39 @@ test("buildDiagnosis: --strict flags a clean-by-default local-dev surface as div
   assert.ok(strict.strictDivergence.includes("helper-shim"));
   // hasSkew is unaffected by strict.
   assert.equal(strict.hasSkew, false);
+});
+
+test("buildDiagnosis: --strict does not flag user agents aligned to the user root during a project override", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-strict-useragents-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  // User agents legitimately serve the user/global install.
+  await makeUserAgents(home, userRoot);
+  // A trusted project override supplies the effective root.
+  const overrideRoot = path.join(cwd, "packages", "pi-flow-core");
+  await seedCore(overrideRoot, "2.0.0-dev");
+  await seedTrust(home, cwd);
+  await seedSettings(cwd, ["packages/pi-flow-core"]);
+
+  const strict = await buildDiagnosis({
+    activeRoot: userRoot,
+    cwd,
+    homeDir: home,
+    scope: "project",
+    strict: true,
+  });
+
+  assert.equal(strict.effectiveScope, "project");
+  assert.equal(strict.effectiveRoot, realpathSync(overrideRoot));
+  const userAgents = strict.surfaces.find((s) => s.kind === "user-agents");
+  // User agents are judged against the user root and are healthy...
+  assert.equal(userAgents?.classification, "active");
+  // ...so strict must not report them as divergent against the project root.
+  assert.ok(!strict.strictDivergence.includes("user-agents"));
 });
 
 test("buildDiagnosis: node-bin through aggregate wrapper reports the delegated core, never non-pi-flow", async () => {

@@ -70,6 +70,14 @@ export interface SurfaceReport {
   pkg?: PiFlowCorePackage; // resolved package (name@version) at realpath
   classification: Classification;
   detail?: string; // e.g. declared spec string + "pinned"/"floating", or notes
+  /**
+   * The root this surface is intended to resolve to — its own scope's effective
+   * root rather than the cwd effective root (e.g. user agents compare against
+   * the user/global install even under a project override). Defaults to the cwd
+   * effective root when unset. Used by --strict so a surface is only flagged
+   * divergent against its intended comparison root.
+   */
+  compareRoot?: string;
 }
 
 export interface BinResolution {
@@ -161,6 +169,7 @@ export interface DeclaredPackage {
 
 export interface DoctorDiagnosis {
   active: PiFlowCorePackage; // the executing ("intended") package
+  effective: PiFlowCorePackage; // the package at the effective root for this cwd (== active when they coincide)
   scope: SetupScope;
   homeDir: string; // the home directory used for this diagnosis (for path abbreviation)
   effectiveRoot: string; // the pi-flow-core root Pi resolves to for this cwd
@@ -408,6 +417,7 @@ async function agentsSurfaceReport(opts: {
     pkg: worst!.core,
     classification: worst!.classification,
     detail,
+    compareRoot,
   };
 }
 
@@ -526,6 +536,18 @@ export async function buildDiagnosis(
   const resolvedEffective = await resolveEffectiveCoreRoot({ cwd, homeDir });
   const effectiveRoot = resolvedEffective?.root ?? activeRoot;
   const effectiveScope: "project" | "user" = resolvedEffective?.scope ?? "user";
+
+  // The package identity at the effective root — distinct from `active` when an
+  // override/local-dev resolution diverges from the executing package.
+  const effective =
+    effectiveRoot === activeRoot
+      ? active
+      : ((await readPiFlowCorePackage(effectiveRoot)) ??
+        ({
+          root: effectiveRoot,
+          name: "@aphotic/pi-flow-core",
+          version: "unknown",
+        } satisfies PiFlowCorePackage));
 
   // Whether the project declares a pi-flow `packages` entry at all — used to
   // distinguish an overridden project install from a leftover shadowed one.
@@ -808,15 +830,18 @@ export async function buildDiagnosis(
     .map((s) => s.kind);
   const hasSkew = skewKinds.length > 0;
 
-  // --strict: every effective resolution surface must resolve to the effective
-  // root. A clean-by-default local-dev or otherwise-divergent surface fails.
+  // --strict: every effective resolution surface must resolve to its intended
+  // comparison root — the cwd effective root, or a scope's own root for
+  // scope-aware surfaces (e.g. user agents against the user/global install even
+  // under a project override). A clean-by-default local-dev or otherwise-
+  // divergent surface fails; a scope-aligned user agent does not.
   const strictDivergence: SurfaceKind[] = strict
     ? surfaces
         .filter(
           (s) =>
             RESOLUTION_KINDS.includes(s.kind) &&
             s.realpath != null &&
-            s.realpath !== effectiveRoot,
+            s.realpath !== (s.compareRoot ?? effectiveRoot),
         )
         .map((s) => s.kind)
     : [];
@@ -835,6 +860,7 @@ export async function buildDiagnosis(
 
   return {
     active,
+    effective,
     scope,
     homeDir,
     effectiveRoot,
@@ -1174,12 +1200,24 @@ export function renderReport(d: DoctorDiagnosis, opts?: { all?: boolean }): stri
   lines.push(
     d.hasSkew ? "pi-flow doctor — SKEW DETECTED" : "pi-flow doctor — OK, no skew",
   );
-  // Active package identity line with abbreviated path and scope note
+  // Package identity line(s). When the executing package and the effective
+  // package coincide, a single line carries the scope note. When they diverge
+  // (override/local-dev), label the executing package explicitly and add a
+  // separate effective line so the scope note describes the right root/version.
   const scopeNote =
     d.effectiveScope === "project" ? "(project override)" : "(user/global)";
-  lines.push(
-    `  ${d.active.name}@${d.active.version}  ${abbreviatePath(d.active.root, d.homeDir)}  ${scopeNote}`,
-  );
+  if (d.active.root === d.effectiveRoot) {
+    lines.push(
+      `  ${d.active.name}@${d.active.version}  ${abbreviatePath(d.active.root, d.homeDir)}  ${scopeNote}`,
+    );
+  } else {
+    lines.push(
+      `  ${d.active.name}@${d.active.version}  ${abbreviatePath(d.active.root, d.homeDir)}  (executing)`,
+    );
+    lines.push(
+      `  effective: ${d.effective.name}@${d.effective.version}  ${abbreviatePath(d.effective.root, d.homeDir)}  ${scopeNote}`,
+    );
+  }
   lines.push("");
 
   // Group surfaces into three categories
