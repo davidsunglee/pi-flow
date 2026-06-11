@@ -31,6 +31,38 @@ async function seedAgents(dir: string, names: string[]): Promise<void> {
   }
 }
 
+/** Seed a bin/pi-flow-dispatch.mjs with the stable dispatcher signature. */
+async function seedDispatcher(packageRoot: string): Promise<string> {
+  const binDir = path.join(packageRoot, "bin");
+  await fs.mkdir(binDir, { recursive: true });
+  const dispPath = path.join(binDir, "pi-flow-dispatch.mjs");
+  await fs.writeFile(
+    dispPath,
+    "#!/usr/bin/env node\n" +
+      "/**\n" +
+      " * pi-flow-dispatch.mjs — the stable per-cwd helper launcher.\n" +
+      " */\nconsole.log('dispatch');\n",
+  );
+  return dispPath;
+}
+
+/**
+ * Seed a complete managed @aphotic/pi-flow-core package at `root`:
+ * package.json with name "@aphotic/pi-flow-core" plus bin/pi-flow.mjs.
+ * Returns the path to bin/pi-flow.mjs.
+ */
+async function seedManagedPiFlowCore(root: string): Promise<string> {
+  const binDir = path.join(root, "bin");
+  await fs.mkdir(binDir, { recursive: true });
+  await fs.writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({ name: "@aphotic/pi-flow-core", version: "0.9.0" }),
+  );
+  const binPath = path.join(binDir, "pi-flow.mjs");
+  await fs.writeFile(binPath, "#!/usr/bin/env node\n");
+  return binPath;
+}
+
 test("runSetup: creates symlinks for each bundled agent file (happy path)", async () => {
   const sandbox = mkSandbox("pi-flow-setup-happy-");
   const agentsDir = path.join(sandbox, "pkg", "agents");
@@ -260,25 +292,21 @@ test("resolveScope: heuristic fallback returns temporary for standalone installs
   assert.equal(result.scope, "temporary");
 });
 
-async function seedShimTarget(packageRoot: string): Promise<string> {
-  const binDir = path.join(packageRoot, "bin");
-  await fs.mkdir(binDir, { recursive: true });
-  const binPath = path.join(binDir, "pi-flow.mjs");
-  await fs.writeFile(binPath, "#!/usr/bin/env node\n");
-  return binPath;
-}
+// ---------------------------------------------------------------------------
+// runHelperShimSetup — dispatcher file-copy tests
+// ---------------------------------------------------------------------------
 
-test("runHelperShimSetup: user target — creates symlink when shim is missing", async () => {
+test("runHelperShimSetup: user target — creates real-file dispatcher when shim is missing", async () => {
   const sandbox = mkSandbox("pi-flow-shim-create-");
   const packageRoot = path.join(sandbox, "pkg");
-  const shimTarget = await seedShimTarget(packageRoot);
+  const dispatcherSrc = await seedDispatcher(packageRoot);
   const shimDir = path.join(sandbox, "home", ".pi", "agent", "bin");
   const shimPath = path.join(shimDir, "pi-flow");
 
   const ui = makeNotifier();
   const result = await runHelperShimSetup({
     shimPath,
-    shimTarget,
+    dispatcherSrc,
     effectiveTarget: "user",
     ui,
   });
@@ -287,10 +315,18 @@ test("runHelperShimSetup: user target — creates symlink when shim is missing",
   assert.equal(result.shimPath, shimPath);
 
   const stat = await fs.lstat(shimPath);
-  assert.equal(stat.isSymbolicLink(), true);
-  const linkTarget = await fs.readlink(shimPath);
-  const resolved = path.resolve(shimDir, linkTarget);
-  assert.equal(resolved, shimTarget);
+  assert.equal(stat.isSymbolicLink(), false, "shim must be a real file, not a symlink");
+  assert.equal(stat.isFile(), true);
+  // Verify exec bit is set (mode & 0o111 !== 0).
+  assert.ok(
+    (stat.mode & 0o111) !== 0,
+    `expected exec bit set; mode=${stat.mode.toString(8)}`,
+  );
+
+  // Content must match the dispatcher source.
+  const shimContent = await fs.readFile(shimPath);
+  const srcContent = await fs.readFile(dispatcherSrc);
+  assert.ok(shimContent.equals(srcContent), "shim content must match dispatcher source");
 
   assert.equal(
     ui.calls.some(
@@ -304,27 +340,31 @@ test("runHelperShimSetup: user target — creates symlink when shim is missing",
   );
 });
 
-test("runHelperShimSetup: user target — idempotent skip when shim already points to this package", async () => {
+test("runHelperShimSetup: user target — skips identical dispatcher already installed", async () => {
   const sandbox = mkSandbox("pi-flow-shim-skip-");
   const packageRoot = path.join(sandbox, "pkg");
-  const shimTarget = await seedShimTarget(packageRoot);
+  const dispatcherSrc = await seedDispatcher(packageRoot);
   const shimDir = path.join(sandbox, "home", ".pi", "agent", "bin");
   await fs.mkdir(shimDir, { recursive: true });
   const shimPath = path.join(shimDir, "pi-flow");
-  await fs.symlink(shimTarget, shimPath);
+  // Pre-install the identical dispatcher content.
+  const content = await fs.readFile(dispatcherSrc);
+  await fs.writeFile(shimPath, content, { mode: 0o755 });
 
   const ui = makeNotifier();
   const result = await runHelperShimSetup({
     shimPath,
-    shimTarget,
+    dispatcherSrc,
     effectiveTarget: "user",
     ui,
   });
 
   assert.equal(result.status, "skipped");
-  const linkTarget = await fs.readlink(shimPath);
-  const resolved = path.resolve(shimDir, linkTarget);
-  assert.equal(resolved, shimTarget);
+  // File must still be a real file with original content.
+  const stat = await fs.lstat(shimPath);
+  assert.equal(stat.isSymbolicLink(), false);
+  const after = await fs.readFile(shimPath);
+  assert.ok(after.equals(content), "content must be unchanged after skip");
 
   assert.equal(
     ui.calls.some(
@@ -335,10 +375,168 @@ test("runHelperShimSetup: user target — idempotent skip when shim already poin
   );
 });
 
-test("runHelperShimSetup: user target — divergent symlink reported as conflict and not overwritten", async () => {
+test("runHelperShimSetup: user target — refreshes stale dispatcher", async () => {
+  const sandbox = mkSandbox("pi-flow-shim-refresh-");
+  const packageRoot = path.join(sandbox, "pkg");
+  const dispatcherSrc = await seedDispatcher(packageRoot);
+  const shimDir = path.join(sandbox, "home", ".pi", "agent", "bin");
+  await fs.mkdir(shimDir, { recursive: true });
+  const shimPath = path.join(shimDir, "pi-flow");
+  // Pre-install an older/stale dispatcher with the same signature but different content.
+  await fs.writeFile(
+    shimPath,
+    "#!/usr/bin/env node\n" +
+      "/**\n" +
+      " * pi-flow-dispatch.mjs — the stable per-cwd helper launcher.\n" +
+      " */\nconsole.log('old-version');\n",
+    { mode: 0o755 },
+  );
+
+  const ui = makeNotifier();
+  const result = await runHelperShimSetup({
+    shimPath,
+    dispatcherSrc,
+    effectiveTarget: "user",
+    ui,
+  });
+
+  assert.equal(result.status, "refreshed");
+  // File must be updated with the new content.
+  const stat = await fs.lstat(shimPath);
+  assert.equal(stat.isSymbolicLink(), false);
+  const after = await fs.readFile(shimPath);
+  const src = await fs.readFile(dispatcherSrc);
+  assert.ok(after.equals(src), "refreshed shim must match new dispatcher source");
+
+  assert.equal(
+    ui.calls.some(
+      (c) =>
+        c.message.includes("helper-runner shim") && c.message.includes("refreshed"),
+    ),
+    true,
+  );
+});
+
+test("runHelperShimSetup: user target — identical owned dispatcher missing exec bit is repaired to executable", async () => {
+  const sandbox = mkSandbox("pi-flow-shim-skip-noexec-");
+  const packageRoot = path.join(sandbox, "pkg");
+  const dispatcherSrc = await seedDispatcher(packageRoot);
+  const shimDir = path.join(sandbox, "home", ".pi", "agent", "bin");
+  await fs.mkdir(shimDir, { recursive: true });
+  const shimPath = path.join(shimDir, "pi-flow");
+  // Pre-install the identical dispatcher content WITHOUT the exec bit (mode 0o644).
+  const content = await fs.readFile(dispatcherSrc);
+  await fs.writeFile(shimPath, content, { mode: 0o644 });
+
+  const ui = makeNotifier();
+  const result = await runHelperShimSetup({
+    shimPath,
+    dispatcherSrc,
+    effectiveTarget: "user",
+    ui,
+  });
+
+  assert.equal(result.status, "skipped");
+  // Even though content was identical, the exec bit must be restored.
+  const stat = await fs.lstat(shimPath);
+  assert.ok(
+    (stat.mode & 0o111) !== 0,
+    `expected exec bit set after identical-skip; mode=${stat.mode.toString(8)}`,
+  );
+  const after = await fs.readFile(shimPath);
+  assert.ok(after.equals(content), "content must be unchanged after skip");
+});
+
+test("runHelperShimSetup: user target — stale owned dispatcher missing exec bit is refreshed and executable", async () => {
+  const sandbox = mkSandbox("pi-flow-shim-refresh-noexec-");
+  const packageRoot = path.join(sandbox, "pkg");
+  const dispatcherSrc = await seedDispatcher(packageRoot);
+  const shimDir = path.join(sandbox, "home", ".pi", "agent", "bin");
+  await fs.mkdir(shimDir, { recursive: true });
+  const shimPath = path.join(shimDir, "pi-flow");
+  // Pre-install a stale dispatcher (same signature, different bytes) WITHOUT the exec bit.
+  await fs.writeFile(
+    shimPath,
+    "#!/usr/bin/env node\n" +
+      "/**\n" +
+      " * pi-flow-dispatch.mjs — the stable per-cwd helper launcher.\n" +
+      " */\nconsole.log('old-version');\n",
+    { mode: 0o644 },
+  );
+
+  const ui = makeNotifier();
+  const result = await runHelperShimSetup({
+    shimPath,
+    dispatcherSrc,
+    effectiveTarget: "user",
+    ui,
+  });
+
+  assert.equal(result.status, "refreshed");
+  const stat = await fs.lstat(shimPath);
+  assert.ok(
+    (stat.mode & 0o111) !== 0,
+    `expected exec bit set after refresh; mode=${stat.mode.toString(8)}`,
+  );
+  const after = await fs.readFile(shimPath);
+  const src = await fs.readFile(dispatcherSrc);
+  assert.ok(after.equals(src), "refreshed shim must match new dispatcher source");
+});
+
+test("runHelperShimSetup: migrates legacy symlink pointing at managed pi-flow-core bin", async () => {
+  const sandbox = mkSandbox("pi-flow-shim-migrate-");
+  const packageRoot = path.join(sandbox, "pkg");
+  const dispatcherSrc = await seedDispatcher(packageRoot);
+  // Seed a real managed pi-flow-core package (has package.json + bin/pi-flow.mjs).
+  const legacyCoreRoot = path.join(sandbox, "legacy-core");
+  const legacyBin = await seedManagedPiFlowCore(legacyCoreRoot);
+  const shimDir = path.join(sandbox, "home", ".pi", "agent", "bin");
+  await fs.mkdir(shimDir, { recursive: true });
+  const shimPath = path.join(shimDir, "pi-flow");
+  // Pre-install as a legacy symlink pointing at the managed core's bin.
+  await fs.symlink(legacyBin, shimPath);
+
+  const ui = makeNotifier();
+  const result = await runHelperShimSetup({
+    shimPath,
+    dispatcherSrc,
+    effectiveTarget: "user",
+    ui,
+  });
+
+  assert.equal(result.status, "migrated");
+  assert.equal(result.shimPath, shimPath);
+
+  // Must now be a real file (not a symlink) with dispatcher content.
+  const stat = await fs.lstat(shimPath);
+  assert.equal(
+    stat.isSymbolicLink(),
+    false,
+    "shim must be a real file after migration",
+  );
+  assert.equal(stat.isFile(), true);
+  assert.ok(
+    (stat.mode & 0o111) !== 0,
+    `expected exec bit set after migration; mode=${stat.mode.toString(8)}`,
+  );
+  const after = await fs.readFile(shimPath);
+  const src = await fs.readFile(dispatcherSrc);
+  assert.ok(after.equals(src), "migrated shim must match dispatcher source");
+
+  assert.equal(
+    ui.calls.some(
+      (c) =>
+        c.message.includes("helper-runner shim") && c.message.includes("migrated"),
+    ),
+    true,
+  );
+});
+
+test("runHelperShimSetup: user target — divergent (non-pi-flow) symlink preserved as conflict", async () => {
   const sandbox = mkSandbox("pi-flow-shim-divergent-");
   const packageRoot = path.join(sandbox, "pkg");
-  const shimTarget = await seedShimTarget(packageRoot);
+  const dispatcherSrc = await seedDispatcher(packageRoot);
+  // A foreign target: plain file, no package.json for @aphotic/pi-flow-core.
   const otherPkg = path.join(sandbox, "other", "bin");
   await fs.mkdir(otherPkg, { recursive: true });
   const otherTarget = path.join(otherPkg, "pi-flow.mjs");
@@ -351,7 +549,7 @@ test("runHelperShimSetup: user target — divergent symlink reported as conflict
   const ui = makeNotifier();
   const result = await runHelperShimSetup({
     shimPath,
-    shimTarget,
+    dispatcherSrc,
     effectiveTarget: "user",
     ui,
   });
@@ -359,9 +557,8 @@ test("runHelperShimSetup: user target — divergent symlink reported as conflict
   assert.equal(result.status, "conflict");
   assert.ok(result.conflict, "expected conflict detail");
   assert.equal(result.conflict!.reason, "divergent symlink");
-  assert.equal(result.conflict!.expected, shimTarget);
-  assert.equal(result.conflict!.actual, otherTarget);
 
+  // Symlink must be untouched.
   const linkTarget = await fs.readlink(shimPath);
   const resolved = path.resolve(shimDir, linkTarget);
   assert.equal(resolved, otherTarget);
@@ -377,10 +574,10 @@ test("runHelperShimSetup: user target — divergent symlink reported as conflict
   );
 });
 
-test("runHelperShimSetup: user target — real file at shim path reported as conflict and preserved", async () => {
+test("runHelperShimSetup: user target — foreign real file at shim path reported as conflict and preserved", async () => {
   const sandbox = mkSandbox("pi-flow-shim-realfile-");
   const packageRoot = path.join(sandbox, "pkg");
-  const shimTarget = await seedShimTarget(packageRoot);
+  const dispatcherSrc = await seedDispatcher(packageRoot);
   const shimDir = path.join(sandbox, "home", ".pi", "agent", "bin");
   await fs.mkdir(shimDir, { recursive: true });
   const shimPath = path.join(shimDir, "pi-flow");
@@ -389,7 +586,7 @@ test("runHelperShimSetup: user target — real file at shim path reported as con
   const ui = makeNotifier();
   const result = await runHelperShimSetup({
     shimPath,
-    shimTarget,
+    dispatcherSrc,
     effectiveTarget: "user",
     ui,
   });
@@ -408,14 +605,14 @@ test("runHelperShimSetup: user target — real file at shim path reported as con
 test("runHelperShimSetup: project target — missing shim emits guidance and does not create", async () => {
   const sandbox = mkSandbox("pi-flow-shim-project-missing-");
   const packageRoot = path.join(sandbox, "pkg");
-  const shimTarget = await seedShimTarget(packageRoot);
+  const dispatcherSrc = await seedDispatcher(packageRoot);
   const shimDir = path.join(sandbox, "home", ".pi", "agent", "bin");
   const shimPath = path.join(shimDir, "pi-flow");
 
   const ui = makeNotifier();
   const result = await runHelperShimSetup({
     shimPath,
-    shimTarget,
+    dispatcherSrc,
     effectiveTarget: "project",
     ui,
   });
@@ -431,33 +628,36 @@ test("runHelperShimSetup: project target — missing shim emits guidance and doe
   assert.ok(guidanceCall, `expected guidance notify; got ${JSON.stringify(ui.calls)}`);
 });
 
-test("runHelperShimSetup: project target — existing matching shim reported as skipped", async () => {
+test("runHelperShimSetup: project target — identical dispatcher skipped", async () => {
   const sandbox = mkSandbox("pi-flow-shim-project-skip-");
   const packageRoot = path.join(sandbox, "pkg");
-  const shimTarget = await seedShimTarget(packageRoot);
+  const dispatcherSrc = await seedDispatcher(packageRoot);
   const shimDir = path.join(sandbox, "home", ".pi", "agent", "bin");
   await fs.mkdir(shimDir, { recursive: true });
   const shimPath = path.join(shimDir, "pi-flow");
-  await fs.symlink(shimTarget, shimPath);
+  // Pre-install the identical dispatcher content.
+  const content = await fs.readFile(dispatcherSrc);
+  await fs.writeFile(shimPath, content, { mode: 0o755 });
 
   const ui = makeNotifier();
   const result = await runHelperShimSetup({
     shimPath,
-    shimTarget,
+    dispatcherSrc,
     effectiveTarget: "project",
     ui,
   });
 
   assert.equal(result.status, "skipped");
-  const linkTarget = await fs.readlink(shimPath);
-  const resolved = path.resolve(shimDir, linkTarget);
-  assert.equal(resolved, shimTarget);
+  // Still a real file with same content.
+  const stat = await fs.lstat(shimPath);
+  assert.equal(stat.isSymbolicLink(), false);
 });
 
-test("runHelperShimSetup: project target — existing divergent symlink preserved with guidance", async () => {
+test("runHelperShimSetup: project target — foreign divergent symlink preserved with guidance", async () => {
   const sandbox = mkSandbox("pi-flow-shim-project-preserve-");
   const packageRoot = path.join(sandbox, "pkg");
-  const shimTarget = await seedShimTarget(packageRoot);
+  const dispatcherSrc = await seedDispatcher(packageRoot);
+  // A foreign target: no @aphotic/pi-flow-core package.json.
   const otherPkg = path.join(sandbox, "other", "bin");
   await fs.mkdir(otherPkg, { recursive: true });
   const otherTarget = path.join(otherPkg, "pi-flow.mjs");
@@ -470,15 +670,14 @@ test("runHelperShimSetup: project target — existing divergent symlink preserve
   const ui = makeNotifier();
   const result = await runHelperShimSetup({
     shimPath,
-    shimTarget,
+    dispatcherSrc,
     effectiveTarget: "project",
     ui,
   });
 
   assert.equal(result.status, "preserved-other");
-  assert.equal(result.conflict?.expected, shimTarget);
-  assert.equal(result.conflict?.actual, otherTarget);
 
+  // Symlink must be untouched.
   const linkTarget = await fs.readlink(shimPath);
   const resolved = path.resolve(shimDir, linkTarget);
   assert.equal(resolved, otherTarget);

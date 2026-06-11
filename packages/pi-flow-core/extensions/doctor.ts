@@ -8,14 +8,13 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createRequire } from "node:module";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
-  SlashCommandInfo,
 } from "@earendil-works/pi-coding-agent";
 import {
   resolveScope,
+  DISPATCHER_SIGNATURE,
   type DurableTarget,
   type SetupConflict,
   type SetupScope,
@@ -23,10 +22,17 @@ import {
 import {
   type PiFlowCorePackage,
   realpathOrNull,
-  packageRootFromBin,
   readPiFlowCorePackage,
   findEnclosingCoreRoot,
 } from "./package-resolution.ts";
+import {
+  resolveBinToCore as _resolveBinToCore,
+  parseDeclaredPackages as _parseDeclaredPackages,
+  resolveEffectiveCoreRoot,
+  resolveUserCoreRoot,
+  resolveSpecToCoreRoot as _resolveSpecToCoreRoot,
+  abbreviatePath,
+} from "./lib/effective-package.mjs";
 
 export type SurfaceKind =
   | "helper-shim"
@@ -38,12 +44,22 @@ export type SurfaceKind =
   | "declared-package";
 
 export type Classification =
-  | "active" // realpath === active package root
+  | "active" // realpath === effective pi-flow-core root
   | "local-dev" // a source checkout within the active working tree (intentional)
-  | "stale-skew" // a different package that is neither active nor a recognized checkout
+  | "stale-skew" // a resolution surface pointing at a root that is neither effective, a recognized inactive install, nor a checkout
+  | "inactive-overridden" // a real pi-flow install whose scope a higher-priority effective scope overrides (neutral)
+  | "inactive-shadowed" // a real pi-flow install in a non-effective scope, shadowed by the effective install (neutral)
   | "absent" // the surface path does not exist (informational)
   | "unresolved" // the surface exists but its pi-flow target could not be resolved
   | "non-pi-flow"; // resolves to something that is not a pi-flow-core package
+
+/** The resolution-path surface kinds — the ones whose skew matters. */
+export const RESOLUTION_KINDS: SurfaceKind[] = [
+  "helper-shim",
+  "user-agents",
+  "project-agents",
+  "node-bin",
+];
 
 export interface SurfaceReport {
   kind: SurfaceKind;
@@ -53,6 +69,14 @@ export interface SurfaceReport {
   pkg?: PiFlowCorePackage; // resolved package (name@version) at realpath
   classification: Classification;
   detail?: string; // e.g. declared spec string + "pinned"/"floating", or notes
+  /**
+   * The root this surface is intended to resolve to — its own scope's effective
+   * root rather than the cwd effective root (e.g. user agents compare against
+   * the user/global install even under a project override). Defaults to the cwd
+   * effective root when unset. Used by --strict so a surface is only flagged
+   * divergent against its intended comparison root.
+   */
+  compareRoot?: string;
 }
 
 export interface BinResolution {
@@ -64,47 +88,70 @@ export interface BinResolution {
 
 /**
  * Resolve a bin/pi-flow(.mjs) path to the pi-flow-core package that actually
- * executes, mirroring runtime delegation. First compute PACKAGE_ROOT via
- * packageRootFromBin (runner parity) and try readPiFlowCorePackage on it (a
- * direct core runner). If that root is instead the aggregate `@aphotic/pi-flow`
- * wrapper, reproduce its `createRequire(...).resolve(
- * "@aphotic/pi-flow-core/bin/pi-flow.mjs")` delegation and resolve the bundled/
- * dependency core. Returns { core } with viaAggregate set when the path went
- * through the wrapper; core is null only when the bin is genuinely not pi-flow.
+ * executes, mirroring runtime delegation. Delegates to the shared
+ * effective-package module. Returns { core } with viaAggregate set when the
+ * path went through the aggregate wrapper; core is null only when the bin is
+ * genuinely not pi-flow.
  */
 export async function resolveBinToCore(binPath: string): Promise<BinResolution> {
-  const root = await packageRootFromBin(binPath);
-  if (!root) return { core: null };
+  return _resolveBinToCore(binPath);
+}
 
-  const direct = await readPiFlowCorePackage(root);
-  if (direct) return { core: direct };
+/** Absolute path to a package root's bundled stable dispatcher launcher. */
+function dispatcherPathFor(root: string): string {
+  return path.join(root, "bin", "pi-flow-dispatch.mjs");
+}
 
-  // The bin's PACKAGE_ROOT may be the aggregate `@aphotic/pi-flow` wrapper.
-  let pkg: Record<string, unknown>;
+/**
+ * Stale-bytes axis: content-compare the installed dispatcher at `installedPath`
+ * against the active package's bin/pi-flow-dispatch.mjs. Returns true only when
+ * both files are readable and their bytes differ — i.e. the installed launcher
+ * is out of date and needs a re-copy. A missing installed file (it isn't a
+ * dispatcher) or a missing active dispatcher (nothing to compare against) is not
+ * stale. This says nothing about which core the dispatcher resolves at runtime.
+ */
+export async function isDispatcherStale(args: {
+  installedPath: string;
+  activeRoot: string;
+}): Promise<boolean> {
+  const { installedPath, activeRoot } = args;
+  let installed: Buffer;
   try {
-    const content = await fs.readFile(path.join(root, "package.json"), "utf8");
-    pkg = JSON.parse(content) as Record<string, unknown>;
+    installed = await fs.readFile(installedPath);
   } catch {
-    return { core: null };
+    return false;
   }
-
-  if (!pkg || typeof pkg !== "object" || pkg.name !== "@aphotic/pi-flow") {
-    return { core: null };
-  }
-
-  const viaAggregate = {
-    name: pkg.name as string,
-    version: String(pkg.version),
-    root,
-  };
+  let active: Buffer;
   try {
-    const req = createRequire(path.join(root, "bin", "pi-flow.mjs"));
-    const coreBin = req.resolve("@aphotic/pi-flow-core/bin/pi-flow.mjs");
-    const coreRoot = await packageRootFromBin(coreBin);
-    const core = coreRoot ? await readPiFlowCorePackage(coreRoot) : null;
-    return { core, viaAggregate };
+    active = await fs.readFile(dispatcherPathFor(activeRoot));
   } catch {
-    return { core: null, viaAggregate };
+    return false;
+  }
+  return !installed.equals(active);
+}
+
+/**
+ * True iff the real file at `filePath` is our stable dispatcher launcher —
+ * recognized by the dispatcher signature, or by byte-equality with the active
+ * package's dispatcher. Anything else (a foreign script, a legacy core bin copy)
+ * reads as not-ours and is preserved untouched.
+ */
+async function isDispatcherFile(
+  filePath: string,
+  activeRoot: string,
+): Promise<boolean> {
+  let buf: Buffer;
+  try {
+    buf = await fs.readFile(filePath);
+  } catch {
+    return false;
+  }
+  if (buf.toString("utf8", 0, 512).includes(DISPATCHER_SIGNATURE)) return true;
+  try {
+    const active = await fs.readFile(dispatcherPathFor(activeRoot));
+    return buf.equals(active);
+  } catch {
+    return false;
   }
 }
 
@@ -115,14 +162,31 @@ export interface DeclaredPackage {
   kind: "npm" | "local";
   /** true when an npm spec carries an explicit @<version> pin */
   pinned: boolean;
+  /** extracted package name for npm specs (undefined for local specs) */
+  name?: string;
 }
 
 export interface DoctorDiagnosis {
   active: PiFlowCorePackage; // the executing ("intended") package
+  effective: PiFlowCorePackage; // the package at the effective root for this cwd (== active when they coincide)
   scope: SetupScope;
+  homeDir: string; // the home directory used for this diagnosis (for path abbreviation)
+  effectiveRoot: string; // the pi-flow-core root Pi resolves to for this cwd
+  effectiveScope: "project" | "user"; // which scope supplied the effective root
   surfaces: SurfaceReport[];
   hasSkew: boolean; // overall failure verdict
   skewKinds: SurfaceKind[]; // resolution-path surfaces classified stale-skew
+  strictDivergence: SurfaceKind[]; // under --strict, resolution surfaces not on the effective root (empty in default mode)
+  absentCandidates: string[]; // install/bin candidate paths that were absent (for --all inventory)
+  /**
+   * Stale-bytes axis for an installed helper-shim dispatcher: true iff a real
+   * dispatcher file is installed and its bytes differ from the active package's
+   * bin/pi-flow-dispatch.mjs (so --fix should re-copy it). This is independent
+   * of the runtime-target axis (the dispatcher surface's classification): a
+   * dispatcher can be byte-aligned yet resolve a divergent effective target, and
+   * vice versa.
+   */
+  staleDispatcher: boolean;
 }
 
 export interface BuildDiagnosisOptions {
@@ -130,36 +194,21 @@ export interface BuildDiagnosisOptions {
   cwd: string;
   homeDir: string;
   scope: SetupScope;
+  /** require every effective resolution surface to resolve to the effective root */
+  strict?: boolean;
   /** injectable for tests; defaults read the real filesystem */
 }
 
 /**
  * Parse the `packages` array of a parsed `.pi/settings.json` object into
- * DeclaredPackage rows. String entries are local path specs; object entries
- * with a string `source` are npm or local depending on the `npm:` prefix.
- * Malformed entries are ignored; returns [] when `packages` is missing.
+ * DeclaredPackage rows. String entries beginning `npm:` are npm specs; other
+ * string entries are local path specs. Object entries with a string `source`
+ * are classified by the same `npm:` prefix rule. Malformed entries are
+ * ignored; returns [] when `packages` is missing. Delegates to the shared
+ * effective-package module.
  */
 export function parseDeclaredPackages(settingsJson: unknown): DeclaredPackage[] {
-  if (!settingsJson || typeof settingsJson !== "object") return [];
-  const packages = (settingsJson as Record<string, unknown>).packages;
-  if (!Array.isArray(packages)) return [];
-
-  const out: DeclaredPackage[] = [];
-  for (const entry of packages) {
-    if (typeof entry === "string") {
-      out.push({ spec: entry, kind: "local", pinned: false });
-      continue;
-    }
-    if (entry && typeof entry === "object") {
-      const source = (entry as Record<string, unknown>).source;
-      if (typeof source !== "string") continue;
-      const kind: "npm" | "local" = source.startsWith("npm:") ? "npm" : "local";
-      const pinned =
-        kind === "npm" && /@[^/@]+$/.test(source.slice("npm:".length));
-      out.push({ spec: source, kind, pinned });
-    }
-  }
-  return out;
+  return _parseDeclaredPackages(settingsJson);
 }
 
 /**
@@ -175,20 +224,80 @@ export function isLocalDevCheckout(realpath: string, cwd: string): boolean {
   return !realpath.includes(nodeModulesSeg) && !realpath.includes(piNpmSeg);
 }
 
-/** Classify a surface against the active package root. */
+/**
+ * Decide whether a real-but-inactive pi-flow install reads as overridden or
+ * shadowed, from its own scope, the effective scope, and whether the project
+ * declares a pi-flow `packages` entry.
+ *
+ * - A user/global install is "overridden" when a higher-priority project
+ *   override is in effect (the project scope supersedes it).
+ * - A project install is "overridden" only when a project pi-flow entry is
+ *   actually in effect (`effectiveScope === "project"` and the project declared
+ *   an entry); otherwise — e.g. an untrusted project or an unresolvable
+ *   declaration leaving the user/global package effective — it is a leftover
+ *   "shadowed" by the effective install, not overridden by a project package.
+ */
+export function decideInactiveClassification(opts: {
+  surfaceScope: "user" | "project";
+  effectiveScope: "project" | "user";
+  declaresProjectEntry: boolean;
+}): "inactive-overridden" | "inactive-shadowed" {
+  const { surfaceScope, effectiveScope, declaresProjectEntry } = opts;
+  if (surfaceScope === "user") {
+    return effectiveScope === "project"
+      ? "inactive-overridden"
+      : "inactive-shadowed";
+  }
+  return effectiveScope === "project" && declaresProjectEntry
+    ? "inactive-overridden"
+    : "inactive-shadowed";
+}
+
+/**
+ * Classify a surface against the effective pi-flow-core root. Order: absent →
+ * unresolved → active (realpath === effectiveRoot) → local-dev (in-tree
+ * checkout) → a recognized inactive install (its precomputed inactive
+ * classification) → stale-skew, reserved for a *resolution* surface whose
+ * realpath is none of the above. A non-resolution surface pointing elsewhere is
+ * a neutral inactive install (never skew).
+ */
 export function classifySurface(opts: {
   activeRoot: string;
+  effectiveRoot: string;
   cwd: string;
   realpath: string | null;
   exists: boolean;
+  isResolutionKind: boolean;
+  inactiveInstallRoots: Map<string, Classification>;
 }): Classification {
-  const { activeRoot, cwd, realpath, exists } = opts;
+  const {
+    effectiveRoot,
+    cwd,
+    realpath,
+    exists,
+    isResolutionKind,
+    inactiveInstallRoots,
+  } = opts;
   if (!exists) return "absent";
   if (realpath == null) return "unresolved";
-  if (realpath === activeRoot) return "active";
+  if (realpath === effectiveRoot) return "active";
   if (isLocalDevCheckout(realpath, cwd)) return "local-dev";
-  return "stale-skew";
+  const inactive = inactiveInstallRoots.get(realpath);
+  if (inactive) return inactive;
+  if (isResolutionKind) return "stale-skew";
+  // A non-resolution (install/declared) surface pointing somewhere other than
+  // the effective root or a recognized install is still neutral, never skew.
+  return "inactive-shadowed";
 }
+
+/** A per-surface classifier closure produced by buildDiagnosis. `compareRoot`
+ * overrides the effective root for scope-aware surfaces (e.g. user agents). */
+type Classify = (args: {
+  realpath: string | null;
+  exists: boolean;
+  kind: SurfaceKind;
+  compareRoot?: string;
+}) => Classification;
 
 /** Resolve a bin surface (helper shim or node bin) into a SurfaceReport. */
 async function binSurfaceReport(opts: {
@@ -197,11 +306,9 @@ async function binSurfaceReport(opts: {
   inspectedPath: string;
   resolvePath: string;
   exists: boolean;
-  activeRoot: string;
-  cwd: string;
+  classify: Classify;
 }): Promise<SurfaceReport> {
-  const { kind, label, inspectedPath, resolvePath, exists, activeRoot, cwd } =
-    opts;
+  const { kind, label, inspectedPath, resolvePath, exists, classify } = opts;
   if (!exists) {
     return { kind, label, inspectedPath, classification: "absent" };
   }
@@ -212,11 +319,10 @@ async function binSurfaceReport(opts: {
     : undefined;
 
   if (core) {
-    const classification = classifySurface({
-      activeRoot,
-      cwd,
+    const classification = classify({
       realpath: core.root,
       exists: true,
+      kind,
     });
     return {
       kind,
@@ -237,15 +343,18 @@ async function binSurfaceReport(opts: {
   return { kind, label, inspectedPath, classification: "non-pi-flow" };
 }
 
-/** Resolve an agents symlink directory into a single SurfaceReport. */
+/** Resolve an agents symlink directory into a single SurfaceReport. The
+ * `compareRoot` lets a scope's agents be judged against their own scope's root
+ * (e.g. user agents against the user install even when a project override is
+ * effective). */
 async function agentsSurfaceReport(opts: {
   kind: SurfaceKind;
   label: string;
   dir: string;
-  activeRoot: string;
-  cwd: string;
+  classify: Classify;
+  compareRoot?: string;
 }): Promise<SurfaceReport> {
-  const { kind, label, dir, activeRoot, cwd } = opts;
+  const { kind, label, dir, classify, compareRoot } = opts;
   let entries: string[];
   try {
     entries = await fs.readdir(dir);
@@ -275,8 +384,10 @@ async function agentsSurfaceReport(opts: {
   }
 
   const rank: Record<Classification, number> = {
-    "stale-skew": 4,
-    "local-dev": 3,
+    "stale-skew": 5,
+    "local-dev": 4,
+    "inactive-overridden": 3,
+    "inactive-shadowed": 3,
     active: 2,
     "non-pi-flow": 1,
     unresolved: 0,
@@ -285,11 +396,11 @@ async function agentsSurfaceReport(opts: {
   let worst: { core: PiFlowCorePackage; classification: Classification } | null =
     null;
   for (const core of roots.values()) {
-    const classification = classifySurface({
-      activeRoot,
-      cwd,
+    const classification = classify({
       realpath: core.root,
       exists: true,
+      kind,
+      compareRoot,
     });
     if (!worst || rank[classification] > rank[worst.classification]) {
       worst = { core, classification };
@@ -309,6 +420,7 @@ async function agentsSurfaceReport(opts: {
     pkg: worst!.core,
     classification: worst!.classification,
     detail,
+    compareRoot,
   };
 }
 
@@ -316,17 +428,16 @@ async function agentsSurfaceReport(opts: {
 async function installSurfaceReports(opts: {
   kind: SurfaceKind;
   candidates: { path: string; label: string }[];
-  activeRoot: string;
-  cwd: string;
+  classify: Classify;
 }): Promise<SurfaceReport[]> {
-  const { kind, candidates, activeRoot, cwd } = opts;
+  const { kind, candidates, classify } = opts;
   const out: SurfaceReport[] = [];
   for (const c of candidates) {
     const rp = await realpathOrNull(c.path);
     if (!rp) continue; // absent — informational, no row
     const core = await readPiFlowCorePackage(c.path);
     const classification = core
-      ? classifySurface({ activeRoot, cwd, realpath: core.root, exists: true })
+      ? classify({ realpath: core.root, exists: true, kind })
       : "unresolved";
     out.push({
       kind,
@@ -343,10 +454,9 @@ async function installSurfaceReports(opts: {
 /** Resolve declared packages from .pi/settings.json into SurfaceReports. */
 async function declaredSurfaceReports(opts: {
   settingsPath: string;
-  activeRoot: string;
-  cwd: string;
+  classify: Classify;
 }): Promise<SurfaceReport[]> {
-  const { settingsPath, activeRoot, cwd } = opts;
+  const { settingsPath, classify } = opts;
   let parsed: unknown;
   try {
     const content = await fs.readFile(settingsPath, "utf8");
@@ -356,23 +466,42 @@ async function declaredSurfaceReports(opts: {
   }
 
   const settingsDir = path.dirname(settingsPath);
+  // settingsPath = <cwd>/.pi/settings.json, so settingsDir = <cwd>/.pi, baseDir = <cwd>
+  const baseDir = path.dirname(settingsDir);
   const out: SurfaceReport[] = [];
   for (const declared of parseDeclaredPackages(parsed)) {
-    const detail = `${declared.spec} (${declared.pinned ? "pinned" : "floating"}, ${declared.kind})`;
+    let detail = `${declared.spec} (${declared.pinned ? "pinned" : "floating"}, ${declared.kind})`;
     let realpath: string | undefined;
     let classification: Classification = "unresolved";
     if (declared.kind === "local") {
+      // Local specs resolve relative to baseDir (cwd), matching the shared
+      // effective resolver — not relative to the settings dir (<cwd>/.pi).
       const resolved = await realpathOrNull(
-        path.resolve(settingsDir, declared.spec),
+        path.resolve(baseDir, declared.spec),
       );
       if (resolved) {
         realpath = resolved;
-        classification = classifySurface({
-          activeRoot,
-          cwd,
+        classification = classify({
           realpath: resolved,
           exists: true,
+          kind: "declared-package",
         });
+      }
+    } else if (declared.kind === "npm") {
+      const core = await _resolveSpecToCoreRoot({
+        spec: declared.spec,
+        kind: declared.kind,
+        name: declared.name,
+        baseDir,
+      });
+      if (core) {
+        realpath = core.root;
+        classification = classify({
+          realpath: core.root,
+          exists: true,
+          kind: "declared-package",
+        });
+        detail = `${declared.spec} (${declared.pinned ? "pinned" : "floating"}, ${declared.kind}) → v${core.version}`;
       }
     }
     out.push({
@@ -394,7 +523,7 @@ async function declaredSurfaceReports(opts: {
 export async function buildDiagnosis(
   opts: BuildDiagnosisOptions,
 ): Promise<DoctorDiagnosis> {
-  const { activeRoot, cwd, homeDir, scope } = opts;
+  const { activeRoot, cwd, homeDir, scope, strict } = opts;
 
   const active =
     (await readPiFlowCorePackage(activeRoot)) ??
@@ -404,9 +533,162 @@ export async function buildDiagnosis(
       version: "unknown",
     } satisfies PiFlowCorePackage);
 
-  const surfaces: SurfaceReport[] = [];
+  // The effective pi-flow-core root Pi resolves to for this cwd (honoring a
+  // trusted project override, else the user/global install). When neither
+  // resolves, the executing package is what is effectively active.
+  const resolvedEffective = await resolveEffectiveCoreRoot({ cwd, homeDir });
+  const effectiveRoot = resolvedEffective?.root ?? activeRoot;
+  const effectiveScope: "project" | "user" = resolvedEffective?.scope ?? "user";
 
-  // helper-shim
+  // The package identity at the effective root — distinct from `active` when an
+  // override/local-dev resolution diverges from the executing package.
+  const effective =
+    effectiveRoot === activeRoot
+      ? active
+      : ((await readPiFlowCorePackage(effectiveRoot)) ??
+        ({
+          root: effectiveRoot,
+          name: "@aphotic/pi-flow-core",
+          version: "unknown",
+        } satisfies PiFlowCorePackage));
+
+  // Whether the project declares a pi-flow `packages` entry at all — used to
+  // distinguish an overridden project install from a leftover shadowed one.
+  const declaresProjectEntry = await projectDeclaresPiFlow(cwd);
+
+  // Install candidate locations, by scope. Reused to both build surface rows
+  // and to recognize inactive installs (so a resolution surface pointing at one
+  // is not mis-flagged stale-skew).
+  const projectInstallCandidates: { path: string; label: string }[] = [
+    {
+      path: path.join(
+        cwd,
+        ".pi",
+        "npm",
+        "node_modules",
+        "@aphotic",
+        "pi-flow-core",
+      ),
+      label: "project install (<cwd>/.pi/npm/.../pi-flow-core)",
+    },
+    {
+      path: path.join(
+        cwd,
+        ".pi",
+        "npm",
+        "node_modules",
+        "@aphotic",
+        "pi-flow",
+        "node_modules",
+        "@aphotic",
+        "pi-flow-core",
+      ),
+      label: "project install meta (<cwd>/.pi/npm/.../pi-flow/.../pi-flow-core)",
+    },
+  ];
+  const userInstallCandidates: { path: string; label: string }[] = [
+    {
+      path: path.join(
+        homeDir,
+        ".pi",
+        "agent",
+        "npm",
+        "node_modules",
+        "@aphotic",
+        "pi-flow-core",
+      ),
+      label: "user install (~/.pi/agent/npm/.../pi-flow-core)",
+    },
+    {
+      path: path.join(
+        homeDir,
+        ".pi",
+        "agent",
+        "npm",
+        "node_modules",
+        "@aphotic",
+        "pi-flow",
+        "node_modules",
+        "@aphotic",
+        "pi-flow-core",
+      ),
+      label: "user install meta (~/.pi/agent/npm/.../pi-flow/.../pi-flow-core)",
+    },
+  ];
+
+  // The user/global install root, resolved independently of any project
+  // override (including ~/.pi/agent/settings.json declared local/npm packages,
+  // which may live outside ~/.pi/agent/npm). Used for scope-aware user agents
+  // (they may legitimately serve the user root even when a project override is
+  // effective) and to recognize that root as a neutral inactive install.
+  const userResolvedRoot =
+    effectiveScope === "user"
+      ? effectiveRoot
+      : ((await resolveUserCoreRoot({ homeDir }))?.root ?? null);
+  const userRoot = userResolvedRoot ?? effectiveRoot;
+
+  // Recognized inactive installs: real pi-flow cores at a known install
+  // location whose root is not the effective root. Mapped to their resolved
+  // (overridden vs shadowed) classification.
+  const inactiveInstallRoots = new Map<string, Classification>();
+  for (const [surfaceScope, candidates] of [
+    ["project", projectInstallCandidates],
+    ["user", userInstallCandidates],
+  ] as const) {
+    for (const c of candidates) {
+      const core = await readPiFlowCorePackage(c.path);
+      if (!core || core.root === effectiveRoot) continue;
+      if (inactiveInstallRoots.has(core.root)) continue;
+      inactiveInstallRoots.set(
+        core.root,
+        decideInactiveClassification({
+          surfaceScope,
+          effectiveScope,
+          declaresProjectEntry,
+        }),
+      );
+    }
+  }
+
+  // The settings-declared user/global root (which may sit outside the fixed npm
+  // candidates) is also a recognized inactive install when a project override is
+  // effective, so surfaces resolving to it read as neutral rather than skew.
+  if (
+    userResolvedRoot &&
+    userResolvedRoot !== effectiveRoot &&
+    !inactiveInstallRoots.has(userResolvedRoot)
+  ) {
+    inactiveInstallRoots.set(
+      userResolvedRoot,
+      decideInactiveClassification({
+        surfaceScope: "user",
+        effectiveScope,
+        declaresProjectEntry,
+      }),
+    );
+  }
+
+  const classify: Classify = ({ realpath, exists, kind, compareRoot }) =>
+    classifySurface({
+      activeRoot,
+      effectiveRoot: compareRoot ?? effectiveRoot,
+      cwd,
+      realpath,
+      exists,
+      isResolutionKind: RESOLUTION_KINDS.includes(kind),
+      inactiveInstallRoots,
+    });
+
+  const surfaces: SurfaceReport[] = [];
+  let staleDispatcher = false;
+
+  // helper-shim. The shim has two recognized forms:
+  //  - the new stable dispatcher (a real file copy of bin/pi-flow-dispatch.mjs),
+  //    evaluated on two independent axes — its installed bytes vs the active
+  //    package's dispatcher (stale-bytes), and its effective runtime target for
+  //    this cwd (the per-cwd core it would actually spawn);
+  //  - the legacy owned symlink, classified via resolveBinToCore as before.
+  const shimLabel = "helper shim (~/.pi/agent/bin/pi-flow)";
   const shimPath = path.join(homeDir, ".pi", "agent", "bin", "pi-flow");
   {
     let st: Awaited<ReturnType<typeof fs.lstat>> | undefined;
@@ -418,11 +700,44 @@ export async function buildDiagnosis(
     if (!st) {
       surfaces.push({
         kind: "helper-shim",
-        label: "helper shim (~/.pi/agent/bin/pi-flow)",
+        label: shimLabel,
         inspectedPath: shimPath,
         classification: "absent",
       });
+    } else if (
+      !st.isSymbolicLink() &&
+      st.isFile() &&
+      (await isDispatcherFile(shimPath, activeRoot))
+    ) {
+      // Dispatcher form — the two independent axes.
+      // (a) stale-bytes: installed launcher vs the active package's dispatcher.
+      const stale = await isDispatcherStale({ installedPath: shimPath, activeRoot });
+      staleDispatcher = stale;
+      // (b) runtime-target: the per-cwd delegate the dispatcher would spawn.
+      const runtime = await resolveEffectiveCoreRoot({ cwd, homeDir });
+      const runtimeRoot = runtime?.root ?? null;
+      const pkg = runtimeRoot
+        ? ((await readPiFlowCorePackage(runtimeRoot)) ?? undefined)
+        : undefined;
+      const classification = classify({
+        realpath: runtimeRoot,
+        exists: true,
+        kind: "helper-shim",
+      });
+      const detail = stale
+        ? "dispatcher (stale-dispatcher: bytes differ from active)"
+        : "dispatcher (bytes aligned with active)";
+      surfaces.push({
+        kind: "helper-shim",
+        label: shimLabel,
+        inspectedPath: shimPath,
+        realpath: runtimeRoot ?? undefined,
+        pkg,
+        classification,
+        detail,
+      });
     } else {
+      // Legacy symlink (or a foreign real file) — classify via resolveBinToCore.
       let resolvePath = shimPath;
       if (st.isSymbolicLink()) {
         const link = await fs.readlink(shimPath);
@@ -431,36 +746,34 @@ export async function buildDiagnosis(
       surfaces.push(
         await binSurfaceReport({
           kind: "helper-shim",
-          label: "helper shim (~/.pi/agent/bin/pi-flow)",
+          label: shimLabel,
           inspectedPath: shimPath,
           resolvePath,
           exists: true,
-          activeRoot,
-          cwd,
+          classify,
         }),
       );
     }
   }
 
-  // user-agents
+  // user-agents — judged against the user/global install root.
   surfaces.push(
     await agentsSurfaceReport({
       kind: "user-agents",
       label: "user agents (~/.pi/agent/agents)",
       dir: path.join(homeDir, ".pi", "agent", "agents"),
-      activeRoot,
-      cwd,
+      classify,
+      compareRoot: userRoot,
     }),
   );
 
-  // project-agents
+  // project-agents — judged against the effective project root.
   surfaces.push(
     await agentsSurfaceReport({
       kind: "project-agents",
       label: "project agents (<cwd>/.pi/agents)",
       dir: path.join(cwd, ".pi", "agents"),
-      activeRoot,
-      cwd,
+      classify,
     }),
   );
 
@@ -468,35 +781,8 @@ export async function buildDiagnosis(
   surfaces.push(
     ...(await installSurfaceReports({
       kind: "project-install",
-      candidates: [
-        {
-          path: path.join(
-            cwd,
-            ".pi",
-            "npm",
-            "node_modules",
-            "@aphotic",
-            "pi-flow-core",
-          ),
-          label: "project install (<cwd>/.pi/npm/.../pi-flow-core)",
-        },
-        {
-          path: path.join(
-            cwd,
-            ".pi",
-            "npm",
-            "node_modules",
-            "@aphotic",
-            "pi-flow",
-            "node_modules",
-            "@aphotic",
-            "pi-flow-core",
-          ),
-          label: "project install meta (<cwd>/.pi/npm/.../pi-flow/.../pi-flow-core)",
-        },
-      ],
-      activeRoot,
-      cwd,
+      candidates: projectInstallCandidates,
+      classify,
     })),
   );
 
@@ -504,37 +790,8 @@ export async function buildDiagnosis(
   surfaces.push(
     ...(await installSurfaceReports({
       kind: "user-install",
-      candidates: [
-        {
-          path: path.join(
-            homeDir,
-            ".pi",
-            "agent",
-            "npm",
-            "node_modules",
-            "@aphotic",
-            "pi-flow-core",
-          ),
-          label: "user install (~/.pi/agent/npm/.../pi-flow-core)",
-        },
-        {
-          path: path.join(
-            homeDir,
-            ".pi",
-            "agent",
-            "npm",
-            "node_modules",
-            "@aphotic",
-            "pi-flow",
-            "node_modules",
-            "@aphotic",
-            "pi-flow-core",
-          ),
-          label: "user install meta (~/.pi/agent/npm/.../pi-flow/.../pi-flow-core)",
-        },
-      ],
-      activeRoot,
-      cwd,
+      candidates: userInstallCandidates,
+      classify,
     })),
   );
 
@@ -576,8 +833,7 @@ export async function buildDiagnosis(
         inspectedPath: c.path,
         resolvePath: c.path,
         exists: true,
-        activeRoot,
-        cwd,
+        classify,
       }),
     );
   }
@@ -586,26 +842,80 @@ export async function buildDiagnosis(
   surfaces.push(
     ...(await declaredSurfaceReports({
       settingsPath: path.join(cwd, ".pi", "settings.json"),
-      activeRoot,
-      cwd,
+      classify,
     })),
   );
 
-  const resolutionKinds: SurfaceKind[] = [
-    "helper-shim",
-    "user-agents",
-    "project-agents",
-    "node-bin",
-  ];
   const skewKinds = surfaces
     .filter(
       (s) =>
-        resolutionKinds.includes(s.kind) && s.classification === "stale-skew",
+        RESOLUTION_KINDS.includes(s.kind) && s.classification === "stale-skew",
     )
     .map((s) => s.kind);
   const hasSkew = skewKinds.length > 0;
 
-  return { active, scope, surfaces, hasSkew, skewKinds };
+  // --strict: every effective resolution surface must resolve to its intended
+  // comparison root — the cwd effective root, or a scope's own root for
+  // scope-aware surfaces (e.g. user agents against the user/global install even
+  // under a project override). A clean-by-default local-dev or otherwise-
+  // divergent surface fails; a scope-aligned user agent does not.
+  const strictDivergence: SurfaceKind[] = strict
+    ? surfaces
+        .filter(
+          (s) =>
+            RESOLUTION_KINDS.includes(s.kind) &&
+            s.realpath != null &&
+            s.realpath !== (s.compareRoot ?? effectiveRoot),
+        )
+        .map((s) => s.kind)
+    : [];
+
+  // Absent candidates: install/bin candidate paths that were silently skipped
+  // (not present on disk). Used by --all inventory mode.
+  const surfacePaths = new Set(surfaces.map((s) => s.inspectedPath));
+  const allCandidates = [
+    ...projectInstallCandidates,
+    ...userInstallCandidates,
+    ...nodeBinCandidates,
+  ];
+  const absentCandidates = allCandidates
+    .map((c) => c.path)
+    .filter((p) => !surfacePaths.has(p));
+
+  return {
+    active,
+    effective,
+    scope,
+    homeDir,
+    effectiveRoot,
+    effectiveScope,
+    surfaces,
+    hasSkew,
+    skewKinds,
+    strictDivergence,
+    absentCandidates,
+    staleDispatcher,
+  };
+}
+
+/** Whether <cwd>/.pi/settings.json declares a pi-flow `packages` entry (an npm
+ * pi-flow identity or any local spec, which may resolve to pi-flow). */
+async function projectDeclaresPiFlow(cwd: string): Promise<boolean> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(
+      await fs.readFile(path.join(cwd, ".pi", "settings.json"), "utf8"),
+    );
+  } catch {
+    return false;
+  }
+  for (const row of parseDeclaredPackages(parsed)) {
+    if (row.kind === "local") return true;
+    if (row.name === "@aphotic/pi-flow" || row.name === "@aphotic/pi-flow-core") {
+      return true;
+    }
+  }
+  return false;
 }
 
 export interface ReconcileTargetResult {
@@ -781,52 +1091,237 @@ export async function repairLink(args: {
   };
 }
 
+/**
+ * Repair the installed dispatcher launcher at `shimPath` by re-copying the
+ * active package's bin/pi-flow-dispatch.mjs, honoring the never-clobber-foreign
+ * posture. Outcomes mirror repairLink's vocabulary:
+ *  - created: nothing was present; the dispatcher copy was written;
+ *  - skipped: an up-to-date dispatcher copy already exists;
+ *  - repaired: a stale dispatcher copy was refreshed to the active bytes;
+ *  - conflict: a foreign file or a directory occupies the path — left untouched.
+ * The desired target (`to`) is the active dispatcher source so the report and
+ * target-root derivation stay consistent with symlink repairs.
+ */
+export async function repairDispatcher(args: {
+  shimPath: string;
+  dispatcherSrc: string;
+}): Promise<RepairResult> {
+  const { shimPath, dispatcherSrc } = args;
+  const to = dispatcherSrc;
+
+  let st: Awaited<ReturnType<typeof fs.lstat>>;
+  try {
+    st = await fs.lstat(shimPath);
+  } catch (err: any) {
+    if (err && err.code === "ENOENT") {
+      await fs.mkdir(path.dirname(shimPath), { recursive: true });
+      const content = await fs.readFile(dispatcherSrc);
+      await fs.writeFile(shimPath, content, { mode: 0o755 });
+      await fs.chmod(shimPath, 0o755);
+      return { path: shimPath, outcome: "created", to };
+    }
+    throw err;
+  }
+
+  if (st.isDirectory()) {
+    return {
+      path: shimPath,
+      outcome: "conflict",
+      to,
+      conflict: {
+        path: shimPath,
+        reason: "directory at target — refusing to overwrite",
+      },
+    };
+  }
+
+  if (st.isFile()) {
+    const [existing, source] = await Promise.all([
+      fs.readFile(shimPath),
+      fs.readFile(dispatcherSrc),
+    ]);
+    const ours =
+      existing.toString("utf8", 0, 512).includes(DISPATCHER_SIGNATURE) ||
+      existing.equals(source);
+    if (!ours) {
+      // Foreign real file — preserve.
+      return {
+        path: shimPath,
+        outcome: "conflict",
+        to,
+        conflict: {
+          path: shimPath,
+          reason: "real file at target — refusing to overwrite",
+        },
+      };
+    }
+    if (existing.equals(source)) {
+      // Up-to-date bytes, but the owned file may have lost its exec bit; restore
+      // it so a "skipped" repair never leaves pi-flow non-executable on PATH.
+      await fs.chmod(shimPath, 0o755);
+      return { path: shimPath, outcome: "skipped", to };
+    }
+    await fs.writeFile(shimPath, source, { mode: 0o755 });
+    // writeFile leaves an existing inode's mode untouched; chmod to guarantee
+    // the refreshed dispatcher is executable.
+    await fs.chmod(shimPath, 0o755);
+    return { path: shimPath, outcome: "repaired", to };
+  }
+
+  // Anything else (e.g. a socket/fifo) — refuse to touch.
+  return {
+    path: shimPath,
+    outcome: "conflict",
+    to,
+    conflict: {
+      path: shimPath,
+      reason: "non-regular file at target — refusing to overwrite",
+    },
+  };
+}
+
 const TAGS: Record<Classification, string> = {
   active: "[active]",
   "local-dev": "[local-dev]",
   "stale-skew": "[SKEW]",
+  "inactive-overridden": "[inactive]",
+  "inactive-shadowed": "[inactive]",
   absent: "[absent]",
   unresolved: "[unresolved]",
   "non-pi-flow": "[non-pi-flow]",
 };
 
-/** Render a DoctorDiagnosis into a human-readable report string. */
-export function renderReport(d: DoctorDiagnosis): string {
-  const lines: string[] = [];
-  lines.push(
-    `Active pi-flow package: ${d.active.name}@${d.active.version} (${d.active.root})`,
-  );
-  for (const s of d.surfaces) {
-    const tag = TAGS[s.classification];
-    lines.push(`  ${tag} ${s.label}`);
-    const pkgPart = s.pkg ? ` [${s.pkg.name}@${s.pkg.version}]` : "";
-    const detailPart = s.detail ? ` — ${s.detail}` : "";
-    lines.push(`    -> ${s.realpath ?? "(unresolved)"}${pkgPart}${detailPart}`);
+/** Width of the widest tag "[non-pi-flow]" — all tags are padded to this. */
+const TAG_WIDTH = 13; // "[non-pi-flow]".length
+
+function renderSurfaceRow(s: SurfaceReport, homeDir: string): string[] {
+  const tag = TAGS[s.classification].padEnd(TAG_WIDTH);
+  const version = s.pkg ? `v${s.pkg.version}` : "";
+  const displayPath = abbreviatePath(s.realpath ?? s.inspectedPath, homeDir);
+  const parts = [`  ${tag}  ${s.label}`];
+  if (version) parts[0] += `  ${version}`;
+  parts[0] += `  ${displayPath}`;
+  if (s.detail) parts[0] += `  — ${s.detail}`;
+  // Sub-type continuation line for inactive installs.
+  if (s.classification === "inactive-overridden") {
+    parts.push(`  ${"".padEnd(TAG_WIDTH)}    overridden by project package`);
+  } else if (s.classification === "inactive-shadowed") {
+    parts.push(`  ${"".padEnd(TAG_WIDTH)}    shadowed — user package effective`);
   }
+  return parts;
+}
+
+/** Render a DoctorDiagnosis into a human-readable grouped report string. */
+export function renderReport(d: DoctorDiagnosis, opts?: { all?: boolean }): string {
+  const { all = false } = opts ?? {};
+  const lines: string[] = [];
+
+  // Verdict header
   lines.push(
-    d.hasSkew
-      ? "SKEW DETECTED — helper/template/skill resolution can use a different pi-flow version than the active skills."
-      : "OK — all managed pi-flow surfaces resolve to the active package.",
+    d.hasSkew ? "pi-flow doctor — SKEW DETECTED" : "pi-flow doctor — OK, no skew",
   );
+  // Package identity line(s). When the executing package and the effective
+  // package coincide, a single line carries the scope note. When they diverge
+  // (override/local-dev), label the executing package explicitly and add a
+  // separate effective line so the scope note describes the right root/version.
+  const scopeNote =
+    d.effectiveScope === "project" ? "(project override)" : "(user/global)";
+  if (d.active.root === d.effectiveRoot) {
+    lines.push(
+      `  ${d.active.name}@${d.active.version}  ${abbreviatePath(d.active.root, d.homeDir)}  ${scopeNote}`,
+    );
+  } else {
+    lines.push(
+      `  ${d.active.name}@${d.active.version}  ${abbreviatePath(d.active.root, d.homeDir)}  (executing)`,
+    );
+    lines.push(
+      `  effective: ${d.effective.name}@${d.effective.version}  ${abbreviatePath(d.effective.root, d.homeDir)}  ${scopeNote}`,
+    );
+  }
+  lines.push("");
+
+  // Group surfaces into three categories
+  const effectiveSurfaces = d.surfaces.filter(
+    (s) =>
+      s.classification !== "inactive-overridden" &&
+      s.classification !== "inactive-shadowed" &&
+      s.classification !== "stale-skew",
+  );
+  const inactiveSurfaces = d.surfaces.filter(
+    (s) =>
+      s.classification === "inactive-overridden" ||
+      s.classification === "inactive-shadowed",
+  );
+  const skewSurfaces = d.surfaces.filter(
+    (s) => s.classification === "stale-skew",
+  );
+
+  // Effective surfaces section
+  lines.push("Effective surfaces");
+  if (effectiveSurfaces.length === 0) {
+    lines.push("  (none)");
+  } else {
+    for (const s of effectiveSurfaces) {
+      lines.push(...renderSurfaceRow(s, d.homeDir));
+    }
+  }
+  lines.push("");
+
+  // Inactive installs section
+  lines.push("Inactive installs");
+  if (inactiveSurfaces.length === 0) {
+    lines.push("  (none)");
+  } else {
+    for (const s of inactiveSurfaces) {
+      lines.push(...renderSurfaceRow(s, d.homeDir));
+    }
+  }
+  lines.push("");
+
+  // Skew section
+  lines.push("Skew");
+  if (skewSurfaces.length === 0) {
+    lines.push("  (none)");
+  } else {
+    for (const s of skewSurfaces) {
+      lines.push(...renderSurfaceRow(s, d.homeDir));
+    }
+  }
+
+  // --all: absent candidate inventory
+  if (all && d.absentCandidates.length > 0) {
+    lines.push("");
+    lines.push("Absent candidates");
+    for (const p of d.absentCandidates) {
+      lines.push(`  [absent]  ${abbreviatePath(p, d.homeDir)}`);
+    }
+  }
+
   return lines.join("\n");
 }
 
 export interface DoctorArgs {
   help: boolean;
   fix: boolean;
+  strict: boolean;
+  all: boolean;
   source?: string; // value following --source
 }
 
-/** Parse "/flow:doctor" args. Recognizes --help|-h, --fix, --source <value>. */
+/** Parse "/flow:doctor" args. Recognizes --help|-h, --fix, --strict, --all, --source <value>. */
 export function parseDoctorArgs(raw: string): DoctorArgs {
   const tokens = raw.split(/\s+/).filter((t) => t.length > 0);
-  const args: DoctorArgs = { help: false, fix: false };
+  const args: DoctorArgs = { help: false, fix: false, strict: false, all: false };
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
     if (t === "--help" || t === "-h") {
       args.help = true;
     } else if (t === "--fix") {
       args.fix = true;
+    } else if (t === "--strict") {
+      args.strict = true;
+    } else if (t === "--all") {
+      args.all = true;
     } else if (t === "--source") {
       if (i + 1 < tokens.length) {
         args.source = tokens[i + 1];
@@ -851,6 +1346,15 @@ export function helpText(): string {
     "      repoint the helper shim and agent symlinks at the reconcile target.",
     "  /flow:doctor --fix --source <target>",
     "      repoint at an explicitly named target (required when ambiguous).",
+    "",
+    "Flags:",
+    "  --strict",
+    "      airtight same-root check: every effective resolution surface must",
+    "      resolve to the effective root (local-dev divergence fails). Reports",
+    "      error when any resolution surface diverges, even without stale-skew.",
+    "  --all",
+    "      deeper inventory including absent install/bin candidates; adds an",
+    "      Absent candidates section to the report.",
     "",
     "--source <target> forms:",
     "  1. An absolute path to an @aphotic/pi-flow-core root — a directory with",
@@ -884,6 +1388,8 @@ export async function runDoctorFix(args: {
   activeRoot: string;
   cwd: string;
   declaredSpecsForTarget: string[]; // declared specs that already name this target (may be empty)
+  /** active package's bin/pi-flow-dispatch.mjs — the source for a dispatcher copy */
+  dispatcherSrc?: string;
 }): Promise<DoctorFixReport> {
   const {
     target,
@@ -893,34 +1399,43 @@ export async function runDoctorFix(args: {
     activeRoot,
     cwd,
     declaredSpecsForTarget,
+    dispatcherSrc,
   } = args;
 
   const shimTarget = path.join(target.root, "bin", "pi-flow.mjs");
   const guidance: string[] = [];
 
+  // Determine the current shim form so we repair the right kind of surface
+  // without ever deleting an inactive install (we only touch the shim itself).
+  let shimStat: Awaited<ReturnType<typeof fs.lstat>> | undefined;
+  try {
+    shimStat = await fs.lstat(shimPath);
+  } catch (err: any) {
+    if (err && err.code === "ENOENT") shimStat = undefined;
+    else throw err;
+  }
+
   let shim: RepairResult | null;
-  if (effectiveTarget === "project") {
-    let absent = false;
-    try {
-      await fs.lstat(shimPath);
-    } catch (err: any) {
-      if (err && err.code === "ENOENT") absent = true;
-      else throw err;
-    }
-    if (absent) {
-      shim = null;
-      guidance.push(
-        `no helper shim at ${shimPath}; run /flow:setup --target user (or re-run from a user-scope install) to create it.`,
-      );
-    } else {
-      shim = await repairLink({
-        linkPath: shimPath,
-        desiredTarget: shimTarget,
-        activeRoot,
-        cwd,
-      });
-    }
+  if (shimStat?.isSymbolicLink()) {
+    // Legacy owned symlink — repoint to the target's bin (back-compat).
+    shim = await repairLink({
+      linkPath: shimPath,
+      desiredTarget: shimTarget,
+      activeRoot,
+      cwd,
+    });
+  } else if (!shimStat && effectiveTarget === "project") {
+    // No shim, and this scope cannot own the global one — guidance only.
+    shim = null;
+    guidance.push(
+      `no helper shim at ${shimPath}; run /flow:setup --target user (or re-run from a user-scope install) to create it.`,
+    );
+  } else if (dispatcherSrc) {
+    // Dispatcher form: refresh a stale installed launcher, create an absent
+    // one (user scope), and preserve any foreign file — never clobber.
+    shim = await repairDispatcher({ shimPath, dispatcherSrc });
   } else {
+    // No dispatcher source available — fall back to a legacy symlink repoint.
     shim = await repairLink({
       linkPath: shimPath,
       desiredTarget: shimTarget,
@@ -1019,10 +1534,19 @@ async function resolveCandidateRoot(
   return v.ok && v.target ? v.target : null;
 }
 
-/** Read and parse declared local-spec roots from <cwd>/.pi/settings.json. */
-async function readDeclaredLocalSpecs(
+/**
+ * Declared specs whose resolved root equals the chosen target root. Both local
+ * and npm rows are scanned: local specs resolve through the reconcile candidate
+ * path, while npm specs resolve through the same shared `resolveSpecToCoreRoot`
+ * resolver `declaredSurfaceReports` uses. This way an entry such as
+ * `packages: ["npm:@aphotic/pi-flow-core"]` that already names the effective
+ * target is recognized, so the fix-report durability note is suppressed instead
+ * of misleadingly telling the user to add or update `.pi/settings.json`.
+ */
+export async function declaredSpecsNamingTarget(
   cwd: string,
-): Promise<{ spec: string; abs: string }[]> {
+  targetRoot: string,
+): Promise<string[]> {
   const settingsPath = path.join(cwd, ".pi", "settings.json");
   let parsed: unknown;
   try {
@@ -1030,53 +1554,56 @@ async function readDeclaredLocalSpecs(
   } catch {
     return [];
   }
-  const settingsDir = path.dirname(settingsPath);
-  const out: { spec: string; abs: string }[] = [];
-  for (const declared of parseDeclaredPackages(parsed)) {
-    if (declared.kind !== "local") continue;
-    out.push({ spec: declared.spec, abs: path.resolve(settingsDir, declared.spec) });
-  }
-  return out;
-}
-
-/** Gather unique-by-root reconcile candidates: declared local roots plus the
- * roots of loaded flow: commands. (The active package is added by the caller.) */
-async function gatherDeclaredOrLoaded(opts: {
-  cwd: string;
-  commands: SlashCommandInfo[];
-}): Promise<PiFlowCorePackage[]> {
-  const { cwd, commands } = opts;
-  const byRoot = new Map<string, PiFlowCorePackage>();
-
-  for (const { abs } of await readDeclaredLocalSpecs(cwd)) {
-    const core = await resolveCandidateRoot(abs, cwd);
-    if (core) byRoot.set(core.root, core);
-  }
-
-  for (const entry of commands) {
-    if (!entry.name.startsWith("flow:")) continue;
-    const baseDir = entry.sourceInfo?.baseDir;
-    if (!baseDir) continue;
-    const rp = await realpathOrNull(baseDir);
-    if (!rp) continue;
-    const core = await findEnclosingCoreRoot(rp);
-    if (core) byRoot.set(core.root, core);
-  }
-
-  return [...byRoot.values()];
-}
-
-/** Declared specs whose resolved root equals the chosen target root. */
-async function declaredSpecsNamingTarget(
-  cwd: string,
-  targetRoot: string,
-): Promise<string[]> {
   const out: string[] = [];
-  for (const { spec, abs } of await readDeclaredLocalSpecs(cwd)) {
-    const core = await resolveCandidateRoot(abs, cwd);
-    if (core && core.root === targetRoot) out.push(spec);
+  for (const declared of parseDeclaredPackages(parsed)) {
+    let root: string | null = null;
+    if (declared.kind === "local") {
+      // Local specs resolve relative to cwd, matching the shared effective
+      // resolver (and declaredSurfaceReports) — not relative to <cwd>/.pi.
+      const core = await resolveCandidateRoot(
+        path.resolve(cwd, declared.spec),
+        cwd,
+      );
+      root = core?.root ?? null;
+    } else {
+      const core = await _resolveSpecToCoreRoot({
+        spec: declared.spec,
+        kind: declared.kind,
+        name: declared.name,
+        baseDir: cwd,
+      });
+      root = core?.root ?? null;
+    }
+    if (root && root === targetRoot) out.push(declared.spec);
   }
   return out;
+}
+
+/**
+ * Plan a default (`--fix` without `--source`) repair from the effective
+ * diagnosis. The target package and repair scope come from the package Pi
+ * actually resolves to for this cwd — a trusted project override when present,
+ * else the user/global install — never from the executing command scope. This
+ * is what lets a user-installed doctor sitting inside a trusted project override
+ * repair the project agents instead of repointing the (already-correct) user
+ * root and leaving the project-scope agents stale.
+ */
+export function planDefaultFix(args: {
+  diagnosis: DoctorDiagnosis;
+  homeDir: string;
+  cwd: string;
+}): {
+  target: PiFlowCorePackage;
+  effectiveTarget: DurableTarget;
+  agentsDir: string;
+} {
+  const { diagnosis, homeDir, cwd } = args;
+  const effectiveTarget: DurableTarget = diagnosis.effectiveScope;
+  const agentsDir =
+    effectiveTarget === "user"
+      ? path.join(homeDir, ".pi", "agent", "agents")
+      : path.join(cwd, ".pi", "agents");
+  return { target: diagnosis.effective, effectiveTarget, agentsDir };
 }
 
 export function registerDoctor(pi: ExtensionAPI): void {
@@ -1115,18 +1642,29 @@ export function registerDoctor(pi: ExtensionAPI): void {
           cwd: ctx.cwd,
           homeDir: os.homedir(),
           scope,
+          strict: parsed.strict,
         });
 
         if (!parsed.fix) {
+          const isError =
+            diagnosis.hasSkew ||
+            (parsed.strict && diagnosis.strictDivergence.length > 0);
           ctx.ui.notify(
-            renderReport(diagnosis),
-            diagnosis.hasSkew ? "error" : "info",
+            renderReport(diagnosis, { all: parsed.all }),
+            isError ? "error" : "info",
           );
           return;
         }
 
-        // --fix: resolve the target.
-        let target: PiFlowCorePackage;
+        // --fix: derive the target package and repair scope from the effective
+        // model (the package Pi resolves to for this cwd), not the executing
+        // command scope. An explicit --source overrides only the target package.
+        const plan = planDefaultFix({
+          diagnosis,
+          homeDir: os.homedir(),
+          cwd: ctx.cwd,
+        });
+        let target: PiFlowCorePackage = plan.target;
         if (parsed.source) {
           const validation = await validateExplicitTarget(parsed.source, ctx.cwd);
           if (!validation.ok || !validation.target) {
@@ -1137,27 +1675,9 @@ export function registerDoctor(pi: ExtensionAPI): void {
             return;
           }
           target = validation.target;
-        } else {
-          const declaredOrLoaded = await gatherDeclaredOrLoaded({
-            cwd: ctx.cwd,
-            commands: pi.getCommands(),
-          });
-          const reconcile = resolveReconcileTarget({ active, declaredOrLoaded });
-          if (reconcile.kind === "ambiguous") {
-            const list = (reconcile.candidates ?? [])
-              .map((c) => `  - ${c.root} (${c.name}@${c.version})`)
-              .join("\n");
-            ctx.ui.notify(
-              `multiple candidate pi-flow-core packages:\n${list}\nre-run with --source <one-of-these>`,
-              "error",
-            );
-            return;
-          }
-          target = reconcile.target!;
         }
 
-        const effectiveTarget: DurableTarget =
-          scope === "temporary" ? "user" : scope;
+        const effectiveTarget: DurableTarget = plan.effectiveTarget;
         const shimPath = path.join(
           os.homedir(),
           ".pi",
@@ -1165,10 +1685,7 @@ export function registerDoctor(pi: ExtensionAPI): void {
           "bin",
           "pi-flow",
         );
-        const agentsDir =
-          effectiveTarget === "user"
-            ? path.join(os.homedir(), ".pi", "agent", "agents")
-            : path.join(ctx.cwd, ".pi", "agents");
+        const agentsDir = plan.agentsDir;
 
         const declaredSpecsForTarget = await declaredSpecsNamingTarget(
           ctx.cwd,
@@ -1183,6 +1700,11 @@ export function registerDoctor(pi: ExtensionAPI): void {
           activeRoot: ownPackageRoot,
           cwd: ctx.cwd,
           declaredSpecsForTarget,
+          dispatcherSrc: path.join(
+            ownPackageRoot,
+            "bin",
+            "pi-flow-dispatch.mjs",
+          ),
         });
 
         const hasConflict =

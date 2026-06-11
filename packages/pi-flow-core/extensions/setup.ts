@@ -1,8 +1,9 @@
 /**
  * /flow:setup — symlink bundled pi-flow agent definitions into the
  * @aphotic/pi-mux-subagents discovery directory matching the install scope,
- * and (for user-scope setup) create the ~/.pi/agent/bin/pi-flow helper-runner
- * shim so `pi-flow` resolves on PATH inside Pi tool/subagent contexts.
+ * and (for user-scope setup) install the ~/.pi/agent/bin/pi-flow dispatcher
+ * as a real file copy of bin/pi-flow-dispatch.mjs so it survives core version
+ * changes.
  */
 
 import fs from "node:fs/promises";
@@ -13,6 +14,11 @@ import type {
   ExtensionCommandContext,
   SlashCommandInfo,
 } from "@earendil-works/pi-coding-agent";
+import {
+  packageRootFromBin,
+  readPiFlowCorePackage,
+  realpathOrNull,
+} from "./lib/effective-package.mjs";
 
 export type SetupScope = "user" | "project" | "temporary";
 export type DurableTarget = "user" | "project";
@@ -56,6 +62,10 @@ export interface ResolveScopeResult {
 
 const TEMPORARY_REFUSAL_MESSAGE =
   "/flow:setup detected a temporary package load (pi -e). Re-run with --target user or --target project to perform a durable setup.";
+
+/** Signature string present in our stable dispatcher file. */
+export const DISPATCHER_SIGNATURE =
+  "pi-flow-dispatch.mjs — the stable per-cwd helper launcher";
 
 export async function resolveScope(
   opts: ResolveScopeOptions,
@@ -197,6 +207,8 @@ export async function runSetup(opts: RunSetupOptions): Promise<SetupResult> {
 export type HelperShimStatus =
   | "created"
   | "skipped"
+  | "refreshed"
+  | "migrated"
   | "conflict"
   | "absent-project"
   | "preserved-other";
@@ -209,15 +221,38 @@ export interface HelperShimResult {
 
 export interface RunHelperShimOptions {
   shimPath: string;
-  shimTarget: string;
+  /** Path to the active package's bin/pi-flow-dispatch.mjs (the source to copy). */
+  dispatcherSrc: string;
   effectiveTarget: DurableTarget;
   ui: SetupNotifier;
+}
+
+/** Returns true when the bytes at filePath begin with the dispatcher signature. */
+async function isDispatcherContent(filePath: string): Promise<boolean> {
+  try {
+    const buf = await fs.readFile(filePath);
+    return buf.toString("utf8", 0, 512).includes(DISPATCHER_SIGNATURE);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Returns true when symlinkTarget (an absolute path that the shim points to)
+ * resolves via realpath into a validated @aphotic/pi-flow-core package's
+ * bin/pi-flow.mjs — i.e. it is a "managed" legacy pi-flow helper.
+ */
+async function isManagedPiFlowCoreLink(symlinkTarget: string): Promise<boolean> {
+  const coreRoot = await packageRootFromBin(symlinkTarget);
+  if (!coreRoot) return false;
+  const pkg = await readPiFlowCorePackage(coreRoot);
+  return pkg !== null;
 }
 
 export async function runHelperShimSetup(
   opts: RunHelperShimOptions,
 ): Promise<HelperShimResult> {
-  const { shimPath, shimTarget, effectiveTarget, ui } = opts;
+  const { shimPath, dispatcherSrc, effectiveTarget, ui } = opts;
 
   let stat: Awaited<ReturnType<typeof fs.lstat>> | undefined;
   try {
@@ -227,6 +262,7 @@ export async function runHelperShimSetup(
   }
 
   if (stat === undefined) {
+    // No shim present.
     if (effectiveTarget === "project") {
       ui.notify(
         `/flow:setup helper-runner shim (project): no shim at ${shimPath}. Run /flow:setup --target user to install the global helper-runner shim.`,
@@ -235,9 +271,13 @@ export async function runHelperShimSetup(
       return { status: "absent-project", shimPath };
     }
     await fs.mkdir(path.dirname(shimPath), { recursive: true });
-    await fs.symlink(shimTarget, shimPath);
+    const content = await fs.readFile(dispatcherSrc);
+    await fs.writeFile(shimPath, content, { mode: 0o755 });
+    // writeFile's mode only applies on create; chmod unconditionally so the
+    // dispatcher is executable regardless of umask or a pre-existing inode.
+    await fs.chmod(shimPath, 0o755);
     ui.notify(
-      `/flow:setup helper-runner shim (user):\n  created: ${shimPath} -> ${shimTarget}\nReload Pi or run /reload to make pi-flow available on PATH.`,
+      `/flow:setup helper-runner shim (user):\n  created: ${shimPath}\nReload Pi or run /reload to make pi-flow available on PATH.`,
       "info",
     );
     return { status: "created", shimPath };
@@ -245,39 +285,93 @@ export async function runHelperShimSetup(
 
   if (stat.isSymbolicLink()) {
     const linkTarget = await fs.readlink(shimPath);
-    const resolvedActual = path.resolve(path.dirname(shimPath), linkTarget);
-    if (resolvedActual === shimTarget) {
+    const absTarget = path.resolve(path.dirname(shimPath), linkTarget);
+
+    if (await isManagedPiFlowCoreLink(absTarget)) {
+      // Legacy owned symlink → migrate to dispatcher file copy.
+      await fs.unlink(shimPath);
+      const content = await fs.readFile(dispatcherSrc);
+      await fs.writeFile(shimPath, content, { mode: 0o755 });
+      await fs.chmod(shimPath, 0o755);
       ui.notify(
-        `/flow:setup helper-runner shim (${effectiveTarget}):\n  skipped: ${shimPath} (already points to this package)`,
+        `/flow:setup helper-runner shim (${effectiveTarget}):\n  migrated: ${shimPath} (replaced legacy managed symlink with dispatcher copy)\nReload Pi or run /reload to make pi-flow available on PATH.`,
         "info",
       );
-      return { status: "skipped", shimPath };
+      return { status: "migrated", shimPath };
     }
+
+    // Divergent/foreign symlink — preserve.
+    const resolvedActual = (await realpathOrNull(absTarget)) ?? absTarget;
     const conflict: SetupConflict = {
       path: shimPath,
       reason: "divergent symlink",
-      expected: shimTarget,
+      expected: dispatcherSrc,
       actual: resolvedActual,
     };
     if (effectiveTarget === "project") {
       ui.notify(
-        `/flow:setup helper-runner shim (project):\n  preserved: ${shimPath} (points to ${resolvedActual}; this package's bin is ${shimTarget}). Run /flow:setup --target user to install this package's shim, or remove the existing one first.`,
+        `/flow:setup helper-runner shim (project):\n  preserved: ${shimPath} (divergent symlink; not a managed pi-flow-core). Run /flow:setup --target user to install this package's shim, or remove the existing one first.`,
         "info",
       );
       return { status: "preserved-other", shimPath, conflict };
     }
     ui.notify(
-      `/flow:setup helper-runner shim (user):\n  conflict: ${shimPath} — divergent symlink (expected ${shimTarget}, actual ${resolvedActual})`,
+      `/flow:setup helper-runner shim (user):\n  conflict: ${shimPath} — divergent symlink (expected dispatcher copy, actual target ${resolvedActual})`,
       "error",
     );
     return { status: "conflict", shimPath, conflict };
   }
 
-  const reason = stat.isDirectory()
-    ? "directory at target — refusing to overwrite"
-    : "real file at target — refusing to overwrite";
-  const conflict: SetupConflict = { path: shimPath, reason };
+  if (!stat.isDirectory()) {
+    // Regular file — check if it's our dispatcher.
+    if (await isDispatcherContent(shimPath)) {
+      const [existing, source] = await Promise.all([
+        fs.readFile(shimPath),
+        fs.readFile(dispatcherSrc),
+      ]);
+      if (existing.equals(source)) {
+        // Bytes match, but the owned file may have lost its exec bit; repair it
+        // so a "skipped" report never leaves pi-flow non-executable on PATH.
+        await fs.chmod(shimPath, 0o755);
+        ui.notify(
+          `/flow:setup helper-runner shim (${effectiveTarget}):\n  skipped: ${shimPath} (dispatcher already up to date)`,
+          "info",
+        );
+        return { status: "skipped", shimPath };
+      }
+      await fs.writeFile(shimPath, source, { mode: 0o755 });
+      // writeFile leaves an existing inode's mode untouched; chmod to guarantee
+      // the refreshed dispatcher is executable.
+      await fs.chmod(shimPath, 0o755);
+      ui.notify(
+        `/flow:setup helper-runner shim (${effectiveTarget}):\n  refreshed: ${shimPath} (updated stale dispatcher)\nReload Pi or run /reload to make pi-flow available on PATH.`,
+        "info",
+      );
+      return { status: "refreshed", shimPath };
+    }
 
+    // Foreign real file — preserve.
+    const conflict: SetupConflict = {
+      path: shimPath,
+      reason: "real file at target — refusing to overwrite",
+    };
+    if (effectiveTarget === "project") {
+      ui.notify(
+        `/flow:setup helper-runner shim (project):\n  preserved: ${shimPath} (real file at target — refusing to overwrite). Run /flow:setup --target user to install this package's shim, or remove the existing entry first.`,
+        "info",
+      );
+      return { status: "preserved-other", shimPath, conflict };
+    }
+    ui.notify(
+      `/flow:setup helper-runner shim (user):\n  conflict: ${shimPath} — real file at target — refusing to overwrite`,
+      "error",
+    );
+    return { status: "conflict", shimPath, conflict };
+  }
+
+  // Directory — preserve.
+  const reason = "directory at target — refusing to overwrite";
+  const conflict: SetupConflict = { path: shimPath, reason };
   if (effectiveTarget === "project") {
     ui.notify(
       `/flow:setup helper-runner shim (project):\n  preserved: ${shimPath} (${reason}). Run /flow:setup --target user to install this package's shim, or remove the existing entry first.`,
@@ -306,7 +400,7 @@ function parseExplicitTarget(args: string): DurableTarget | undefined {
 export function registerSetup(pi: ExtensionAPI): void {
   pi.registerCommand("flow:setup", {
     description:
-      "Symlink bundled pi-flow agent definitions into the matching @aphotic/pi-mux-subagents discovery directory.",
+      "Symlink bundled pi-flow agent definitions into the matching @aphotic/pi-mux-subagents discovery directory and install/refresh the user helper dispatcher.",
     handler: async (args: string, ctx: ExtensionCommandContext) => {
       try {
         const ownPackageRoot = await fs.realpath(
@@ -353,10 +447,14 @@ export function registerSetup(pi: ExtensionAPI): void {
             "bin",
             "pi-flow",
           );
-          const shimTarget = path.join(ownPackageRoot, "bin", "pi-flow.mjs");
+          const dispatcherSrc = path.join(
+            ownPackageRoot,
+            "bin",
+            "pi-flow-dispatch.mjs",
+          );
           await runHelperShimSetup({
             shimPath,
-            shimTarget,
+            dispatcherSrc,
             effectiveTarget,
             ui: notifier,
           });
