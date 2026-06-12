@@ -939,7 +939,7 @@ test("buildDiagnosis: project package effective but only user flow config warns 
   await fs.mkdir(home, { recursive: true });
   await fs.mkdir(cwd, { recursive: true });
 
-  const userRoot = await seedUserInstall(home, "1.0.0");
+  await seedUserInstall(home, "1.0.0");
   const overrideRoot = path.join(cwd, "packages", "pi-flow-core");
   await seedCore(overrideRoot, "1.0.0");
   await seedTrust(home, cwd);

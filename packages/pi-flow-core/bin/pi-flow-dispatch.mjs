@@ -27,7 +27,7 @@ import os from "node:os";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
 /**
  * Fixed, ordered bootstrap candidate locations (relative to a homeDir) for the

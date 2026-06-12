@@ -1645,7 +1645,7 @@ export async function declaredSpecsNamingTarget(
   }
   const out: string[] = [];
   for (const declared of parseDeclaredPackages(parsed)) {
-    let root: string | null = null;
+    let root: string | null;
     if (declared.kind === "local") {
       // Local specs resolve relative to cwd, matching the shared effective
       // resolver (and declaredSurfaceReports) — not relative to <cwd>/.pi.
