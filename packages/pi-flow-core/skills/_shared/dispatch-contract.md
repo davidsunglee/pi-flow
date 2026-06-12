@@ -4,9 +4,9 @@
 
 This file is the single authority for every pi-flow workflow dispatch: the runtime config schema, the task-entry shape, the flow.json → dispatch-parameter mapping, the executionPolicy injection rule, the canonical hard-stop templates, and the coordinator dispatch procedure. Dispatch sites reference this file and supply only site-specific variation (agent name, prompt, role→tier mapping, serial vs parallel, per-site extras). Consolidating here shrinks future contract changes — and an eventual subagent-framework swap — from a twelve-site sweep to one contract plus the two resolution helpers.
 
-## Input: ~/.pi/agent/flow.json
+## Input: resolved flow config
 
-The dispatch inputs are read from `~/.pi/agent/flow.json`.
+The dispatch inputs are read from the resolved flow config — explicit `--flow-config` override, else project-local `<working-dir>/.pi/flow.json`, else user/global `~/.pi/agent/flow.json`. See [flow-config-resolution.md](flow-config-resolution.md) for the precedence and selection contract.
 
 Expected JSON shape:
 
@@ -56,7 +56,7 @@ Per-site extras (e.g., fastlane's `thinking: "high"`, define-spec's `systemPromp
 
 ### Leaf dispatch
 
-Run `pi-flow helper _shared/resolve-model-dispatch --model-tier <tier> --agent <agent>`. The helper resolves the section-qualified tier path to `model`, extracts the provider prefix, looks up `subagentDispatch[<prefix>]` for `cli`, validates `executionPolicy`, and prints `{"model", "cli", "provider", "tier", "executionPolicy"}` — the complete envelope. The site copies `model`, `cli`, and `executionPolicy` into its task entry with no second config read.
+Run `pi-flow helper _shared/resolve-model-dispatch --model-tier <tier> --agent <agent>`. The helper resolves the section-qualified tier path to `model`, extracts the provider prefix, looks up `subagentDispatch[<prefix>]` for `cli`, validates `executionPolicy`, and prints `{"model", "cli", "provider", "tier", "executionPolicy"}` — the complete envelope. The site copies `model`, `cli`, and `executionPolicy` into its task entry with no second config read. Sites with a known workspace root pass `--working-dir <dir>` so project-local `.pi/flow.json` is honored; top-level sites may rely on the cwd default (see [flow-config-resolution.md](flow-config-resolution.md)).
 
 ### Coordinator dispatch
 
@@ -85,7 +85,7 @@ Every dispatch site MUST stop on any of the failure conditions listed in `## Can
 **Template (1) — Missing/unreadable file:**
 
 ```
-~/.pi/agent/flow.json missing or unreadable — cannot dispatch <agent>.
+flow.json missing or unreadable; searched <locations> — cannot dispatch <agent>.
 ```
 
 **Template (2) — Missing/empty selected tier:**
@@ -136,11 +136,11 @@ Parameters `<agent>`, `<tier>`, `<provider>`, `<model>`, and `<error>` are subst
 
 ## Coordinator dispatch procedure
 
-A coordinator (`plan-refiner` or `code-refiner`) must run on a `pi` CLI because nested subagent-orchestration tools (`subagent_run_serial` / `subagent_run_parallel`) are exposed only on `pi`; without `pi`, the coordinator cannot dispatch its workers. The Pi requirement is a system invariant, not user configuration: coordinator dispatch hardcodes `cli: "pi"` and there is no `cli` key to configure. Coordinator dispatch is therefore decoupled from the leaf tier→provider→`subagentDispatch[<prefix>]` path — a perfectly valid leaf `subagentDispatch` map (e.g. `anthropic → claude`, `openai-codex → codex`) needs no entry resolving to `pi`. Instead, the coordinator model chain is named explicitly in the `coordinatorSubagentDispatch` section of `~/.pi/agent/flow.json`. When that section is missing or unusable, a hard stop is the only correct outcome — silently falling back to tier-based coordinator resolution or to an inline review is forbidden, as it conceals a broken dispatch path.
+A coordinator (`plan-refiner` or `code-refiner`) must run on a `pi` CLI because nested subagent-orchestration tools (`subagent_run_serial` / `subagent_run_parallel`) are exposed only on `pi`; without `pi`, the coordinator cannot dispatch its workers. The Pi requirement is a system invariant, not user configuration: coordinator dispatch hardcodes `cli: "pi"` and there is no `cli` key to configure. Coordinator dispatch is therefore decoupled from the leaf tier→provider→`subagentDispatch[<prefix>]` path — a perfectly valid leaf `subagentDispatch` map (e.g. `anthropic → claude`, `openai-codex → codex`) needs no entry resolving to `pi`. Instead, the coordinator model chain is named explicitly in the `coordinatorSubagentDispatch` section of the resolved flow config. When that section is missing or unusable, a hard stop is the only correct outcome — silently falling back to tier-based coordinator resolution or to an inline review is forbidden, as it conceals a broken dispatch path.
 
 Procedure:
 
-1. Run `pi-flow helper _shared/resolve-coordinator-dispatch --agent <agent>`, where `<agent>` is the coordinator agent name (`plan-refiner` or `code-refiner`). The helper reads `~/.pi/agent/flow.json`, validates the `coordinatorSubagentDispatch` section wholesale (no entry-skipping), and on success prints `{"modelChain": [...], "cli": "pi", "executionPolicy": ...}` on stdout.
+1. Run `pi-flow helper _shared/resolve-coordinator-dispatch --agent <agent>`, where `<agent>` is the coordinator agent name (`plan-refiner` or `code-refiner`). The helper reads the resolved flow config, validates the `coordinatorSubagentDispatch` section wholesale (no entry-skipping), and on success prints `{"modelChain": [...], "cli": "pi", "executionPolicy": ...}` on stdout.
 2. If the helper exits non-zero, surface its stderr message verbatim — it is one of the canonical templates in `## Canonical templates` above — and do NOT dispatch. There is no fallback to tier-based coordinator resolution under any failure.
 3. On success, attempt the coordinator dispatch for each `modelChain` entry in order via `subagent_run_serial` with that entry passed verbatim as `model` (entries are exact model identifiers, not tier aliases — no provider-prefix extraction and no `subagentDispatch[<prefix>]` lookup occurs), `cli: "pi"`, and the envelope's `executionPolicy`. There is no up-front availability probing. On dispatch failure (model unavailable, transport error, etc.), record the failure and advance to the next entry.
 4. Stop iterating when a dispatch succeeds. The successful `(model, "pi")` pair is the outcome of the procedure; the caller uses those exact values for its `subagent_run_serial` task.

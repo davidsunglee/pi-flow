@@ -60,7 +60,7 @@ test('dispatch-contract canonical leaf templates 1 through 5 are preserved byte-
   const content = readFileSync(sharedPath('dispatch-contract.md'), 'utf8');
 
   assert.ok(
-    content.includes('~/.pi/agent/flow.json missing or unreadable — cannot dispatch <agent>.'),
+    content.includes('flow.json missing or unreadable; searched <locations> — cannot dispatch <agent>.'),
     'Template (1): missing/unreadable file message must be present byte-equal'
   );
 
