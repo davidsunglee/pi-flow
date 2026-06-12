@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -12,6 +13,7 @@ FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 COMPLETE = os.path.join(FIXTURES, "flow-complete.json")
 NO_DISPATCH = os.path.join(FIXTURES, "flow-no-dispatch.json")
 MISSING_PROVIDER = os.path.join(FIXTURES, "flow-missing-provider.json")
+PROJECT_LOCAL = os.path.join(FIXTURES, "flow-project-local.json")
 
 
 def run(args):
@@ -19,6 +21,15 @@ def run(args):
         [sys.executable, SCRIPT] + args,
         capture_output=True,
         text=True,
+    )
+
+
+def run_env(args, home, script=SCRIPT):
+    return subprocess.run(
+        [sys.executable, script] + args,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "HOME": home},
     )
 
 
@@ -89,7 +100,7 @@ class TestResolveModelDispatch(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(
             result.stderr,
-            "~/.pi/agent/flow.json missing or unreadable — cannot dispatch coder.\n",
+            "flow.json missing or unreadable; searched /nonexistent — cannot dispatch coder.\n",
         )
 
     def test_template_2_missing_tier(self):
@@ -291,6 +302,123 @@ class TestResolveModelDispatch(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         data = json.loads(result.stdout)
         self.assertEqual(data["executionPolicy"], "unrestricted")
+
+    def test_project_local_takes_precedence_over_user(self):
+        with tempfile.TemporaryDirectory() as proj, tempfile.TemporaryDirectory() as home:
+            os.makedirs(os.path.join(proj, ".pi"))
+            shutil.copyfile(PROJECT_LOCAL, os.path.join(proj, ".pi", "flow.json"))
+            # User config deliberately omits modelTiers.frontier
+            user_cfg = {
+                "modelTiers": {"capable": "anthropic/claude-opus-4-7"},
+                "subagentDispatch": {"anthropic": "claude"},
+                "executionPolicy": "guarded",
+            }
+            os.makedirs(os.path.join(home, ".pi", "agent"))
+            with open(os.path.join(home, ".pi", "agent", "flow.json"), "w") as f:
+                json.dump(user_cfg, f)
+            result = run_env(
+                ["--model-tier", "modelTiers.frontier", "--agent", "planner", "--working-dir", proj],
+                home=home,
+            )
+            self.assertEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+            self.assertEqual(data["model"], "anthropic/claude-project-frontier")
+
+    def test_user_fallback_when_no_project_config(self):
+        with tempfile.TemporaryDirectory() as proj, tempfile.TemporaryDirectory() as home:
+            user_cfg = {
+                "modelTiers": {"capable": "anthropic/claude-opus-4-7"},
+                "subagentDispatch": {"anthropic": "claude"},
+                "executionPolicy": "guarded",
+            }
+            os.makedirs(os.path.join(home, ".pi", "agent"))
+            with open(os.path.join(home, ".pi", "agent", "flow.json"), "w") as f:
+                json.dump(user_cfg, f)
+            result = run_env(
+                ["--model-tier", "modelTiers.capable", "--agent", "coder", "--working-dir", proj],
+                home=home,
+            )
+            self.assertEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+            self.assertEqual(data["model"], "anthropic/claude-opus-4-7")
+
+    def test_explicit_flow_config_wins_over_project(self):
+        with tempfile.TemporaryDirectory() as proj, tempfile.TemporaryDirectory() as home:
+            os.makedirs(os.path.join(proj, ".pi"))
+            shutil.copyfile(PROJECT_LOCAL, os.path.join(proj, ".pi", "flow.json"))
+            explicit_cfg = {
+                "modelTiers": {"capable": "anthropic/explicit-model"},
+                "subagentDispatch": {"anthropic": "claude"},
+                "executionPolicy": "guarded",
+            }
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+                json.dump(explicit_cfg, f)
+                explicit_path = f.name
+            try:
+                result = run_env(
+                    ["--model-tier", "modelTiers.capable", "--agent", "coder",
+                     "--flow-config", explicit_path, "--working-dir", proj],
+                    home=home,
+                )
+                self.assertEqual(result.returncode, 0)
+                data = json.loads(result.stdout)
+                self.assertEqual(data["model"], "anthropic/explicit-model")
+            finally:
+                os.unlink(explicit_path)
+
+    @unittest.skipIf(os.geteuid() == 0, "chmod 0 is bypassed by root")
+    def test_unreadable_explicit_fails_hard(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump({"modelTiers": {}, "subagentDispatch": {}, "executionPolicy": "guarded"}, f)
+            path = f.name
+        try:
+            os.chmod(path, 0)
+            result = run(["--model-tier", "modelTiers.capable", "--agent", "coder", "--flow-config", path])
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(
+                result.stderr,
+                f"flow.json missing or unreadable; searched {os.path.abspath(path)} — cannot dispatch coder.\n",
+            )
+        finally:
+            os.chmod(path, 0o644)
+            os.unlink(path)
+
+    def test_missing_everywhere_lists_both_searched_paths(self):
+        with tempfile.TemporaryDirectory() as proj, tempfile.TemporaryDirectory() as home:
+            project_abspath = os.path.abspath(os.path.join(proj, ".pi", "flow.json"))
+            result = run_env(
+                ["--model-tier", "modelTiers.capable", "--agent", "coder", "--working-dir", proj],
+                home=home,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(
+                result.stderr,
+                f"flow.json missing or unreadable; searched {project_abspath}, ~/.pi/agent/flow.json — cannot dispatch coder.\n",
+            )
+
+    def test_selected_but_malformed_project_does_not_fall_back_to_user(self):
+        with tempfile.TemporaryDirectory() as proj, tempfile.TemporaryDirectory() as home:
+            os.makedirs(os.path.join(proj, ".pi"))
+            with open(os.path.join(proj, ".pi", "flow.json"), "w") as f:
+                f.write("not json")
+            user_cfg = {
+                "modelTiers": {"capable": "anthropic/claude-opus-4-7"},
+                "subagentDispatch": {"anthropic": "claude"},
+                "executionPolicy": "guarded",
+            }
+            os.makedirs(os.path.join(home, ".pi", "agent"))
+            with open(os.path.join(home, ".pi", "agent", "flow.json"), "w") as f:
+                json.dump(user_cfg, f)
+            project_abspath = os.path.abspath(os.path.join(proj, ".pi", "flow.json"))
+            result = run_env(
+                ["--model-tier", "modelTiers.capable", "--agent", "coder", "--working-dir", proj],
+                home=home,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(
+                result.stderr,
+                f"flow.json missing or unreadable; searched {project_abspath} — cannot dispatch coder.\n",
+            )
 
 
 if __name__ == "__main__":

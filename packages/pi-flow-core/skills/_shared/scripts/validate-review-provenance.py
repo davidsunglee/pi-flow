@@ -6,7 +6,8 @@ matches an allowed model tier.
 Inputs:
   --review-file    Path to the review markdown file
   --allowed-tiers  Comma-separated tier paths (e.g. "crossProviderModelTiers.capable,modelTiers.capable")
-  --flow-config    Path to flow config JSON file (default: ~/.pi/agent/flow.json)
+  --flow-config    Explicit flow config path override (default: resolve project-local then user/global)
+  --working-dir    Workflow workspace root for project-local flow config resolution (default: cwd)
 
 Outputs (stdout, JSON on success):
   {"provider_model": "<provider>/<model>", "cli": "<cli>", "matched_tier": "<tier>"}
@@ -16,13 +17,13 @@ Failure labels (written to stderr as JSON {"failure": "<label>"}, exit 1):
   format mismatch
   inline-substring forbidden
   model/cli mismatch (expected <pairs> got <observed>)
-  flow.json missing or unreadable
+  flow.json missing or unreadable; searched <locations>
 """
 import argparse
 import json
-import os
 import re
 import sys
+from flow_config_resolution import resolve_flow_config, FlowConfigError, missing_config_clause
 
 REVIEWER_RE = re.compile(r"^\*\*Reviewer:\*\* [^/]+/[^ ]+ via [a-zA-Z0-9_-]+$")
 
@@ -54,7 +55,7 @@ def main():
             "  format mismatch\n"
             "  inline-substring forbidden\n"
             "  model/cli mismatch (expected <pairs> got <observed>)\n"
-            "  flow.json missing or unreadable\n"
+            "  flow.json missing or unreadable; searched <locations>\n"
         ),
     )
     parser.add_argument("--review-file", required=True, help="Path to the review markdown file")
@@ -65,8 +66,13 @@ def main():
     )
     parser.add_argument(
         "--flow-config",
-        default="~/.pi/agent/flow.json",
-        help="Path to flow config JSON file (default: ~/.pi/agent/flow.json)",
+        default=None,
+        help="Explicit flow config path override (default: resolve project-local then user/global)",
+    )
+    parser.add_argument(
+        "--working-dir",
+        default=None,
+        help="Workflow workspace root for project-local flow config resolution (default: cwd)",
     )
     args = parser.parse_args()
 
@@ -99,19 +105,26 @@ def main():
     observed_model = parts[0]
     observed_cli = parts[1]
 
-    path = os.path.expanduser(args.flow_config)
     try:
-        with open(path) as f:
+        config_path, _scope, searched = resolve_flow_config(
+            working_dir=args.working_dir,
+            flow_config_override=args.flow_config,
+        )
+    except FlowConfigError as exc:
+        fail(missing_config_clause(exc.searched))
+
+    try:
+        with open(config_path) as f:
             data = json.load(f)
     except (IOError, OSError, json.JSONDecodeError):
-        fail("flow.json missing or unreadable")
+        fail(missing_config_clause(searched))
 
     if not isinstance(data, dict):
-        fail("flow.json missing or unreadable")
+        fail(missing_config_clause(searched))
 
     dispatch = data.get("subagentDispatch")
     if not isinstance(dispatch, dict):
-        fail("flow.json missing or unreadable")
+        fail(missing_config_clause(searched))
     tiers = [t.strip() for t in args.allowed_tiers.split(",") if t.strip()]
 
     expected_pairs = []

@@ -119,7 +119,7 @@ class TestValidateReviewProvenance(unittest.TestCase):
         ])
         self.assertNotEqual(result.returncode, 0)
         data = json.loads(result.stderr)
-        self.assertEqual(data["failure"], "flow.json missing or unreadable")
+        self.assertEqual(data["failure"], "flow.json missing or unreadable; searched /nonexistent/path/flow.json")
 
     def test_non_object_subagent_dispatch(self):
         data = {
@@ -139,7 +139,7 @@ class TestValidateReviewProvenance(unittest.TestCase):
             ])
             self.assertNotEqual(result.returncode, 0)
             payload = json.loads(result.stderr)
-            self.assertEqual(payload["failure"], "flow.json missing or unreadable")
+            self.assertEqual(payload["failure"], f"flow.json missing or unreadable; searched {os.path.abspath(tmp_path)}")
             self.assertNotIn("Traceback", result.stderr)
         finally:
             os.unlink(tmp_path)
@@ -156,7 +156,7 @@ class TestValidateReviewProvenance(unittest.TestCase):
             ])
             self.assertNotEqual(result.returncode, 0)
             data = json.loads(result.stderr)
-            self.assertEqual(data["failure"], "flow.json missing or unreadable")
+            self.assertEqual(data["failure"], f"flow.json missing or unreadable; searched {os.path.abspath(tmp_path)}")
             self.assertNotIn("Traceback", result.stderr)
         finally:
             os.unlink(tmp_path)

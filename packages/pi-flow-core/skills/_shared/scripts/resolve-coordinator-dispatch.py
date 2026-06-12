@@ -13,7 +13,8 @@ inside coordinatorSubagentDispatch are ignored.
 Inputs:
   --agent        Coordinator agent name used in error messages
                  (e.g. "plan-refiner", "code-refiner")
-  --flow-config  Path to flow config JSON file (default: ~/.pi/agent/flow.json)
+  --flow-config  Explicit flow config path override (default: resolve project-local then user/global)
+  --working-dir  Workflow workspace root for project-local flow config resolution (default: cwd)
 
 Output (stdout, JSON) on success:
   {
@@ -24,7 +25,7 @@ Output (stdout, JSON) on success:
 
 Failure templates (written to stderr, exit 1):
   Template 1 — file missing or unreadable (shared with resolve-model-dispatch.py):
-    ~/.pi/agent/flow.json missing or unreadable — cannot dispatch <agent>.
+    flow.json missing or unreadable; searched <locations> — cannot dispatch <agent>.
   Missing section — coordinatorSubagentDispatch absent or not a JSON object:
     flow.json has no coordinatorSubagentDispatch section — cannot dispatch <agent>.
   No usable modelChain — modelChain missing, not an array, empty, or containing any
@@ -35,8 +36,8 @@ Failure templates (written to stderr, exit 1):
 """
 import argparse
 import json
-import os
 import sys
+from flow_config_resolution import resolve_flow_config, FlowConfigError, missing_config_clause
 
 
 def die(msg):
@@ -56,17 +57,29 @@ def main():
     )
     parser.add_argument(
         "--flow-config",
-        default="~/.pi/agent/flow.json",
-        help="Path to flow config JSON file (default: ~/.pi/agent/flow.json)",
+        default=None,
+        help="Explicit flow config path override (default: resolve project-local then user/global)",
+    )
+    parser.add_argument(
+        "--working-dir",
+        default=None,
+        help="Workflow workspace root for project-local flow config resolution (default: cwd)",
     )
     args = parser.parse_args()
 
-    path = os.path.expanduser(args.flow_config)
     try:
-        with open(path) as f:
+        config_path, _scope, searched = resolve_flow_config(
+            working_dir=args.working_dir,
+            flow_config_override=args.flow_config,
+        )
+    except FlowConfigError as exc:
+        die(f"{missing_config_clause(exc.searched)} — cannot dispatch {args.agent}.")
+
+    try:
+        with open(config_path) as f:
             data = json.load(f)
     except (IOError, OSError, json.JSONDecodeError):
-        die(f"~/.pi/agent/flow.json missing or unreadable — cannot dispatch {args.agent}.")
+        die(f"{missing_config_clause(searched)} — cannot dispatch {args.agent}.")
 
     section = data.get("coordinatorSubagentDispatch") if isinstance(data, dict) else None
     if not isinstance(section, dict):

@@ -6,7 +6,8 @@ Inputs:
   --model-tier   Section-qualified dot path into flow.json
                  (e.g. "modelTiers.capable", "crossProviderModelTiers.capable")
   --agent        Agent name used in error messages (e.g. "coder", "verifier")
-  --flow-config  Path to flow config JSON file (default: ~/.pi/agent/flow.json)
+  --flow-config  Explicit flow config path override (default: resolve project-local then user/global)
+  --working-dir  Workflow workspace root for project-local flow config resolution (default: cwd)
 
 Outputs (stdout, JSON):
   {
@@ -19,7 +20,7 @@ Outputs (stdout, JSON):
 
 Failure templates (written to stderr, exit 1):
   Template 1 — file missing or unreadable:
-    ~/.pi/agent/flow.json missing or unreadable — cannot dispatch <agent>.
+    flow.json missing or unreadable; searched <locations> — cannot dispatch <agent>.
   Template 2 — tier key absent or value empty:
     flow.json has no usable "<tier>" model — cannot dispatch <agent>.
   Template 3 — subagentDispatch map absent:
@@ -31,8 +32,8 @@ Failure templates (written to stderr, exit 1):
 """
 import argparse
 import json
-import os
 import sys
+from flow_config_resolution import resolve_flow_config, FlowConfigError, missing_config_clause
 
 
 def die(msg):
@@ -70,8 +71,13 @@ def main():
     )
     parser.add_argument(
         "--flow-config",
-        default="~/.pi/agent/flow.json",
-        help="Path to flow config JSON file (default: ~/.pi/agent/flow.json)",
+        default=None,
+        help="Explicit flow config path override (default: resolve project-local then user/global)",
+    )
+    parser.add_argument(
+        "--working-dir",
+        default=None,
+        help="Workflow workspace root for project-local flow config resolution (default: cwd)",
     )
     args, unknown = parser.parse_known_args()
     if unknown:
@@ -79,12 +85,19 @@ def main():
     if args.model_tier is None:
         parser.error("the following arguments are required: --model-tier")
 
-    path = os.path.expanduser(args.flow_config)
     try:
-        with open(path) as f:
+        config_path, _scope, searched = resolve_flow_config(
+            working_dir=args.working_dir,
+            flow_config_override=args.flow_config,
+        )
+    except FlowConfigError as exc:
+        die(f"{missing_config_clause(exc.searched)} — cannot dispatch {args.agent}.")
+
+    try:
+        with open(config_path) as f:
             data = json.load(f)
     except (IOError, OSError, json.JSONDecodeError):
-        die(f"~/.pi/agent/flow.json missing or unreadable — cannot dispatch {args.agent}.")
+        die(f"{missing_config_clause(searched)} — cannot dispatch {args.agent}.")
 
     if not isinstance(data, dict):
         die(f'flow.json has no usable "{args.model_tier}" model — cannot dispatch {args.agent}.')

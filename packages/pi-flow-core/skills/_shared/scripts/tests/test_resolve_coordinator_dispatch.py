@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -13,6 +14,7 @@ LEAF_SCRIPT = os.path.join(
 )
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 COORDINATOR = os.path.join(FIXTURES, "flow-coordinator.json")
+PROJECT_LOCAL = os.path.join(FIXTURES, "flow-project-local.json")
 
 
 def run(args, script=SCRIPT):
@@ -20,6 +22,15 @@ def run(args, script=SCRIPT):
         [sys.executable, script] + args,
         capture_output=True,
         text=True,
+    )
+
+
+def run_env(args, home, script=SCRIPT):
+    return subprocess.run(
+        [sys.executable, script] + args,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "HOME": home},
     )
 
 
@@ -94,7 +105,7 @@ class TestResolveCoordinatorDispatch(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(
             result.stderr,
-            "~/.pi/agent/flow.json missing or unreadable — cannot dispatch plan-refiner.\n",
+            "flow.json missing or unreadable; searched /nonexistent — cannot dispatch plan-refiner.\n",
         )
 
     def test_missing_section(self):
@@ -211,6 +222,110 @@ class TestResolveCoordinatorDispatch(unittest.TestCase):
             result.stderr,
             'flow.json has no usable executionPolicy ("guarded" or "unrestricted") — cannot dispatch plan-refiner.\n',
         )
+
+    def test_project_local_takes_precedence_over_user(self):
+        with tempfile.TemporaryDirectory() as proj, tempfile.TemporaryDirectory() as home:
+            os.makedirs(os.path.join(proj, ".pi"))
+            shutil.copyfile(PROJECT_LOCAL, os.path.join(proj, ".pi", "flow.json"))
+            result = run_env(
+                ["--agent", "plan-refiner", "--working-dir", proj],
+                home=home,
+            )
+            self.assertEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+            self.assertEqual(data["modelChain"], ["openai-codex/gpt-5.4"])
+
+    def test_user_fallback_when_no_project_config(self):
+        with tempfile.TemporaryDirectory() as proj, tempfile.TemporaryDirectory() as home:
+            user_cfg = {
+                "coordinatorSubagentDispatch": {"modelChain": ["anthropic/claude-opus-4-7"]},
+                "executionPolicy": "guarded",
+            }
+            os.makedirs(os.path.join(home, ".pi", "agent"))
+            with open(os.path.join(home, ".pi", "agent", "flow.json"), "w") as f:
+                json.dump(user_cfg, f)
+            result = run_env(
+                ["--agent", "plan-refiner", "--working-dir", proj],
+                home=home,
+            )
+            self.assertEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+            self.assertEqual(data["modelChain"], ["anthropic/claude-opus-4-7"])
+
+    def test_explicit_flow_config_wins_over_project(self):
+        with tempfile.TemporaryDirectory() as proj, tempfile.TemporaryDirectory() as home:
+            os.makedirs(os.path.join(proj, ".pi"))
+            shutil.copyfile(PROJECT_LOCAL, os.path.join(proj, ".pi", "flow.json"))
+            explicit_cfg = {
+                "coordinatorSubagentDispatch": {"modelChain": ["anthropic/claude-sonnet-4-6"]},
+                "executionPolicy": "guarded",
+            }
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+                json.dump(explicit_cfg, f)
+                explicit_path = f.name
+            try:
+                result = run_env(
+                    ["--agent", "plan-refiner", "--flow-config", explicit_path, "--working-dir", proj],
+                    home=home,
+                )
+                self.assertEqual(result.returncode, 0)
+                data = json.loads(result.stdout)
+                self.assertEqual(data["modelChain"], ["anthropic/claude-sonnet-4-6"])
+            finally:
+                os.unlink(explicit_path)
+
+    @unittest.skipIf(os.geteuid() == 0, "chmod 0 is bypassed by root")
+    def test_unreadable_explicit_fails_hard(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump({"coordinatorSubagentDispatch": {"modelChain": ["openai-codex/gpt-5.4"]}, "executionPolicy": "guarded"}, f)
+            path = f.name
+        try:
+            os.chmod(path, 0)
+            result = run(["--agent", "plan-refiner", "--flow-config", path])
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(
+                result.stderr,
+                f"flow.json missing or unreadable; searched {os.path.abspath(path)} — cannot dispatch plan-refiner.\n",
+            )
+        finally:
+            os.chmod(path, 0o644)
+            os.unlink(path)
+
+    def test_missing_everywhere_lists_both_searched_paths(self):
+        with tempfile.TemporaryDirectory() as proj, tempfile.TemporaryDirectory() as home:
+            project_abspath = os.path.abspath(os.path.join(proj, ".pi", "flow.json"))
+            result = run_env(
+                ["--agent", "plan-refiner", "--working-dir", proj],
+                home=home,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(
+                result.stderr,
+                f"flow.json missing or unreadable; searched {project_abspath}, ~/.pi/agent/flow.json — cannot dispatch plan-refiner.\n",
+            )
+
+    def test_selected_but_malformed_project_does_not_fall_back_to_user(self):
+        with tempfile.TemporaryDirectory() as proj, tempfile.TemporaryDirectory() as home:
+            os.makedirs(os.path.join(proj, ".pi"))
+            with open(os.path.join(proj, ".pi", "flow.json"), "w") as f:
+                f.write("not json")
+            user_cfg = {
+                "coordinatorSubagentDispatch": {"modelChain": ["anthropic/claude-opus-4-7"]},
+                "executionPolicy": "guarded",
+            }
+            os.makedirs(os.path.join(home, ".pi", "agent"))
+            with open(os.path.join(home, ".pi", "agent", "flow.json"), "w") as f:
+                json.dump(user_cfg, f)
+            project_abspath = os.path.abspath(os.path.join(proj, ".pi", "flow.json"))
+            result = run_env(
+                ["--agent", "plan-refiner", "--working-dir", proj],
+                home=home,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(
+                result.stderr,
+                f"flow.json missing or unreadable; searched {project_abspath} — cannot dispatch plan-refiner.\n",
+            )
 
     def test_leaf_resolution_unaffected_by_coordinator_section(self):
         result = run(
