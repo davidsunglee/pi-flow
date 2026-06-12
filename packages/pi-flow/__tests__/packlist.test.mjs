@@ -136,8 +136,8 @@ test('pnpm pack is documented as unusable for the aggregate (bundledDependencies
     'package.json must expose a pack:aggregate release script',
   );
   assert.ok(
-    Array.isArray(pkg.bundledDependencies) && pkg.bundledDependencies.length === 3,
-    'source package.json must declare the three bundledDependencies',
+    Array.isArray(pkg.bundledDependencies) && pkg.bundledDependencies.length === 4,
+    'source package.json must declare the four bundledDependencies',
   );
 });
 

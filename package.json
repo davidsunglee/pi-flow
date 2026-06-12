@@ -21,7 +21,8 @@
   },
   "pi": {
     "skills": [
-      "packages/pi-flow-core/skills/*/SKILL.md"
+      "packages/pi-flow-core/skills/*/SKILL.md",
+      "packages/pi-release/skills/*/SKILL.md"
     ],
     "extensions": [
       "packages/pi-flow-core/extensions/commands.ts",

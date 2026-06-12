@@ -32,6 +32,9 @@ importers:
       '@aphotic/pi-ideas':
         specifier: workspace:*
         version: link:../pi-ideas
+      '@aphotic/pi-release':
+        specifier: workspace:*
+        version: link:../pi-release
 
   packages/pi-flow-core:
     dependencies:

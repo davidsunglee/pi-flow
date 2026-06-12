@@ -6,8 +6,8 @@
   "keywords": ["pi-package"],
   "bin": { "pi-flow": "./bin/pi-flow.mjs" },
   "files": ["bin"],
-  "dependencies": { "@aphotic/pi-flow-core": "workspace:*", "@aphotic/pi-flow-ux": "workspace:*", "@aphotic/pi-ideas": "workspace:*" },
-  "bundledDependencies": ["@aphotic/pi-flow-core", "@aphotic/pi-flow-ux", "@aphotic/pi-ideas"],
+  "dependencies": { "@aphotic/pi-flow-core": "workspace:*", "@aphotic/pi-flow-ux": "workspace:*", "@aphotic/pi-ideas": "workspace:*", "@aphotic/pi-release": "workspace:*" },
+  "bundledDependencies": ["@aphotic/pi-flow-core", "@aphotic/pi-flow-ux", "@aphotic/pi-ideas", "@aphotic/pi-release"],
   "peerDependencies": { "@aphotic/pi-mux-subagents": ">=0.3.0" },
   "scripts": {
     "test:node": "find __tests__ -name '*.test.mjs' -print0 | xargs -0 node --test --test-reporter tap",
@@ -17,7 +17,7 @@
     "publish:aggregate": "node scripts/pack-aggregate.mjs --publish"
   },
   "pi": {
-    "skills": ["node_modules/@aphotic/pi-flow-core/skills/*/SKILL.md"],
+    "skills": ["node_modules/@aphotic/pi-flow-core/skills/*/SKILL.md", "node_modules/@aphotic/pi-release/skills/*/SKILL.md"],
     "extensions": ["node_modules/@aphotic/pi-flow-core/extensions/commands.ts", "node_modules/@aphotic/pi-flow-ux/extensions/index.ts"],
     "themes": ["node_modules/@aphotic/pi-flow-ux/themes/nord.json"]
   },

@@ -82,7 +82,7 @@ test('repo root declares a Pi package manifest for git installs', () => {
   );
   assert.deepEqual(
     pkg.pi?.skills,
-    ['packages/pi-flow-core/skills/*/SKILL.md'],
+    ['packages/pi-flow-core/skills/*/SKILL.md', 'packages/pi-release/skills/*/SKILL.md'],
     'root pi.skills must point at the core skills from the git checkout root',
   );
   assert.deepEqual(
@@ -149,6 +149,19 @@ test('root pi-flow bin target exists and is executable by node', () => {
     `root pi-flow bin target must execute; got status=${probe.status}, stderr=${(probe.stderr || '').slice(0, 800)}`,
   );
   assert.match(probe.stdout || '', /test-runner-dispatch\.md\n?$/);
+});
+
+test('root pi.skills[1] glob resolves to the pi-release skill', () => {
+  const pkg = readRootPackage();
+  const globPattern = pkg.pi?.skills?.[1];
+  assert.ok(globPattern, 'root pi.skills[1] glob must be defined');
+
+  const found = expandGlob(globPattern, ROOT_DIR)
+    .filter(path => basename(path) === 'SKILL.md')
+    .map(path => basename(dirname(path)))
+    .sort();
+
+  assert.deepEqual(found, ['release']);
 });
 
 test('pi can load the git-install package shape from the repo root', () => {

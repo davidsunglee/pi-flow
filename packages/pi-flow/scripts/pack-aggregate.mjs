@@ -41,6 +41,7 @@ export const BUNDLED_PACKAGES = [
   { name: '@aphotic/pi-flow-core', dir: 'pi-flow-core' },
   { name: '@aphotic/pi-flow-ux', dir: 'pi-flow-ux' },
   { name: '@aphotic/pi-ideas', dir: 'pi-ideas' },
+  { name: '@aphotic/pi-release', dir: 'pi-release' },
 ];
 
 // Resource paths (relative to the aggregate package root inside the tarball)
@@ -56,6 +57,7 @@ export const REQUIRED_BUNDLED_PATHS = [
   // pi-ideas's runtime dependency must travel with the bundle so the idea tool
   // (loaded via pi-flow-core) resolves without a separate install.
   'node_modules/@aphotic/pi-ideas/node_modules/typebox/package.json',
+  'node_modules/@aphotic/pi-release/skills/release/SKILL.md',
 ];
 
 export const EXPECTED_SKILL_NAMES = [
@@ -366,7 +368,7 @@ function main() {
   process.stdout.write(JSON.stringify({ tarball, stageDir: stageDir ?? null }) + '\n');
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     main();
   } catch (err) {
