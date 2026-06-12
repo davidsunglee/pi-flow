@@ -33,6 +33,7 @@ Protocol error labels (emitted in stderr JSON .failure on non-zero exit):
   failing_identifiers_count_mismatch -- propagated from parse-test-runner-artifact.py
   non_reconcilable_count_mismatch    -- propagated from parse-test-runner-artifact.py
   raw_output_marker_missing          -- propagated from parse-test-runner-artifact.py
+  nonzero_exit_without_failure_evidence -- propagated; EXIT_CODE != 0 with both buckets empty
 """
 
 import argparse
@@ -119,6 +120,7 @@ Protocol error labels (in stderr JSON .failure):
   failing_identifiers_count_mismatch raw line count != FAILING_IDENTIFIERS_COUNT
   non_reconcilable_count_mismatch    entry count != NON_RECONCILABLE_COUNT
   raw_output_marker_missing          '--- RAW RUN OUTPUT BELOW ---' line absent
+  nonzero_exit_without_failure_evidence  EXIT_CODE != 0 but both failure buckets empty
 """,
     )
     parser.add_argument("--artifact", required=True, metavar="PATH",

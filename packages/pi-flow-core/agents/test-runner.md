@@ -66,6 +66,8 @@ The resulting collection is a deduplicated set.
 
 **Counting.** `FAILING_IDENTIFIERS_COUNT` is the size of the stable-identifier set. The non-reconcilable count (whose header label is `NON_RECONCILABLE_COUNT`) is the count of distinct non-reconcilable failure events the runner could identify (one entry each); when the runner cannot enumerate distinct events but knows at least one such failure occurred (e.g. exit code != 0 with no stable identifier extractable), record exactly one composite entry naming the failure mode. Both counts may be 0; both may be non-zero in the same run. When `EXIT_CODE == 0`, both counts MUST be 0 (no failures of any kind).
 
+**Non-zero exit MUST carry evidence.** When `EXIT_CODE != 0`, at least one of the two buckets MUST be non-empty: either a stable identifier exists for the failure, or — if no stable per-test identifier can be extracted (e.g. a lint/build failure, a crash before any test name, a non-zero exit from an aggregate command such as `lint && test`) — you MUST record exactly one composite `NON_RECONCILABLE_FAILURES` entry naming the failure mode, quoting a short verbatim excerpt of the failing output. A non-zero exit with BOTH buckets empty is a protocol violation: it claims the command failed while recording nothing about why, and the downstream parser rejects such an artifact deterministically (`nonzero_exit_without_failure_evidence`) rather than accepting it as a clean/pass run. Never emit a non-zero-exit artifact with both buckets empty.
+
 ## Artifact Format
 
 Write the artifact file with this exact structure, byte-for-byte. The `PHASE:` line is included only when the orchestrator supplied a `## Phase Label` section in the prompt; otherwise omit that line entirely and start the artifact with `COMMAND:`.

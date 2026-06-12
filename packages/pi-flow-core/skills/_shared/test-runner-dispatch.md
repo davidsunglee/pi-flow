@@ -60,7 +60,7 @@ Failures are reported as one of these structured reasons (label-style, not free-
 - **`handoff_missing`** — No anchored `TEST_RESULT_ARTIFACT:` line in the dispatched final message AND the on-disk artifact at `artifact_path` is missing/empty/stale (the freshness-baseline fallback did not accept).
 - **`handoff_path_mismatch`** — Marker path does not equal `artifact_path`.
 - **`artifact_missing`** — File does not exist or is empty.
-- **`artifact_malformed`** — `parse-test-runner-artifact.py` checks fail (header order, integer-parse, count reconciliation, raw-output marker, etc.).
+- **`artifact_malformed`** — `parse-test-runner-artifact.py` checks fail (header order, integer-parse, count reconciliation, raw-output marker, etc.). This also covers the `nonzero_exit_without_failure_evidence` protocol violation: a structurally valid artifact reporting `EXIT_CODE != 0` with both `FAILING_IDENTIFIERS` and `NON_RECONCILABLE_FAILURES` empty is rejected deterministically (it cannot be accepted as a clean baseline / pass), since the test-runner contract requires exactly one composite non-reconcilable entry whenever a command exits non-zero with no extractable stable identifier.
 
 ## Callers
 

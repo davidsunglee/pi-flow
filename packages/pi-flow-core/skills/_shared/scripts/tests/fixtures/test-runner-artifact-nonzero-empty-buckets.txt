@@ -1,0 +1,20 @@
+PHASE: baseline
+COMMAND: npm run lint && npm test
+WORKING_DIRECTORY: /tmp/project
+EXIT_CODE: 1
+TIMESTAMP: 2026-06-12T10:00:00Z
+FAILING_IDENTIFIERS_COUNT: 0
+FAILING_IDENTIFIERS:
+END_FAILING_IDENTIFIERS
+NON_RECONCILABLE_COUNT: 0
+NON_RECONCILABLE_FAILURES:
+END_NON_RECONCILABLE_FAILURES
+
+--- RAW RUN OUTPUT BELOW ---
+> project@1.0.0 lint
+> eslint .
+
+/tmp/project/src/index.js
+  12:7  error  'foo' is assigned a value but never used  no-unused-vars
+
+✖ 1 problem (1 error, 0 warnings)

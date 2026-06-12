@@ -222,5 +222,34 @@ class TestReconcileNonzeroExitNoOverrideSignal(unittest.TestCase):
         self.assertNotIn("exit0_override", data)
 
 
+class TestNonzeroExitWithoutFailureEvidenceFailsClosed(unittest.TestCase):
+    def test_capture_nonzero_empty_buckets_fails_closed(self):
+        # A non-zero exit with empty buckets must not capture as a clean baseline.
+        rc, data, _, stderr, stderr_data = run_script(
+            "--artifact", fixture("test-runner-artifact-nonzero-empty-buckets.txt"),
+            "--mode", "capture",
+        )
+        self.assertNotEqual(rc, 0)
+        self.assertIsNone(data)
+        self.assertIsNotNone(stderr_data)
+        self.assertEqual(
+            stderr_data["failure"], "nonzero_exit_without_failure_evidence"
+        )
+
+    def test_reconcile_nonzero_empty_buckets_fails_closed(self):
+        # The same artifact in reconcile mode must not classify as pass.
+        rc, data, _, stderr, stderr_data = run_script(
+            "--artifact", fixture("test-runner-artifact-nonzero-empty-buckets.txt"),
+            "--mode", "reconcile",
+            "--baseline-failures", fixture("baseline-failures-empty.json"),
+        )
+        self.assertNotEqual(rc, 0)
+        self.assertIsNone(data)
+        self.assertIsNotNone(stderr_data)
+        self.assertEqual(
+            stderr_data["failure"], "nonzero_exit_without_failure_evidence"
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

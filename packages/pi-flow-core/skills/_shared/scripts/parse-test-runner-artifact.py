@@ -15,6 +15,7 @@ Failure labels (emitted in stderr JSON .failure on non-zero exit):
   failing_identifiers_count_mismatch  -- raw line count != FAILING_IDENTIFIERS_COUNT
   non_reconcilable_count_mismatch     -- entry count != NON_RECONCILABLE_COUNT
   raw_output_marker_missing  -- '--- RAW RUN OUTPUT BELOW ---' line absent
+  nonzero_exit_without_failure_evidence  -- EXIT_CODE != 0 but both failure buckets empty
 
 When --freshness-baseline is supplied together with --final-message and --expected-path,
 a missing-marker fallback is performed: if the on-disk artifact is fresh (mtime > baseline)
@@ -38,6 +39,16 @@ When the exit code is non-zero, or it is 0 with already-empty buckets, none of
 these fields appear and the buckets pass through unchanged. All structural
 validations run first and are unchanged; the override is a semantic invariant
 applied only to artifacts that are already structurally valid.
+
+The complementary invariant fails closed: a structurally valid artifact that
+reports EXIT_CODE != 0 with BOTH failure buckets empty carries no evidence of
+what failed, so it cannot be accepted as a clean pass. Such an artifact is
+rejected deterministically with the failure label
+nonzero_exit_without_failure_evidence. The test-runner contract obliges the
+runner to record exactly one composite NON_RECONCILABLE_FAILURES entry naming
+the failure mode whenever a command exits non-zero and no stable identifiers can
+be extracted; an empty-bucket non-zero artifact is therefore a protocol
+violation rather than a passing run.
 """
 
 import argparse
@@ -158,6 +169,30 @@ def _apply_exit0_override(result):
     return result
 
 
+def _check_failure_evidence(result, path):
+    """Fail closed when a non-zero exit carries no failure evidence.
+
+    A structurally valid artifact reporting EXIT_CODE != 0 with both
+    FAILING_IDENTIFIERS and NON_RECONCILABLE_FAILURES empty is a protocol
+    violation: the command failed but the runner recorded nothing about why.
+    The test-runner contract requires exactly one composite NON_RECONCILABLE
+    entry whenever a non-zero exit yields no stable identifiers, so such an
+    artifact must be rejected deterministically rather than misclassified as a
+    clean/pass run. The exit-0 override never reaches this path because it only
+    fires for EXIT_CODE 0.
+    """
+    if result["exit_code"] == 0:
+        return result
+    if result["failing_identifiers"] or result["non_reconcilable_failures"]:
+        return result
+    _fail(
+        "nonzero_exit_without_failure_evidence",
+        path,
+        f"EXIT_CODE {result['exit_code']} with empty FAILING_IDENTIFIERS and "
+        "NON_RECONCILABLE_FAILURES; no failure evidence to reconcile",
+    )
+
+
 def parse_artifact(path):
     try:
         with open(path, "r") as f:
@@ -263,6 +298,7 @@ def parse_artifact(path):
         "non_reconcilable_count": non_rec_count,
         "non_reconcilable_failures": non_rec_entries,
     }
+    _check_failure_evidence(result, path)
     return _apply_exit0_override(result)
 
 
@@ -280,6 +316,7 @@ Failure labels (in stderr JSON .failure):
   failing_identifiers_count_mismatch raw line count != FAILING_IDENTIFIERS_COUNT
   non_reconcilable_count_mismatch    entry count != NON_RECONCILABLE_COUNT
   raw_output_marker_missing          '--- RAW RUN OUTPUT BELOW ---' line absent
+  nonzero_exit_without_failure_evidence  EXIT_CODE != 0 but both failure buckets empty
 
 Success JSON output includes 'used_fallback' boolean: true when the missing-marker
 fallback was used, false when the marker was present and valid or the handoff

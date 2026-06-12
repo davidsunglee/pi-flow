@@ -652,5 +652,93 @@ class TestExit0Override(unittest.TestCase):
         self.assertGreater(len(data["non_reconcilable_failures"]), 0)
 
 
+class TestNonzeroExitWithoutFailureEvidence(unittest.TestCase):
+    def test_nonzero_exit_empty_buckets_fixture_fails_closed(self):
+        # 2026-06-12 case: EXIT_CODE 1 (ESLint failure) but both buckets empty.
+        # This must NOT be accepted as a clean baseline.
+        rc, data, _, stderr = run_script(
+            "--artifact",
+            fixture("test-runner-artifact-nonzero-empty-buckets.txt"),
+        )
+        self.assertNotEqual(rc, 0)
+        self.assertIsNone(data)
+        err = json.loads(stderr)
+        self.assertEqual(err["failure"], "nonzero_exit_without_failure_evidence")
+
+    def test_nonzero_exit_empty_buckets_inline_fails_closed(self):
+        content = (
+            "PHASE: baseline\n"
+            "COMMAND: pytest\n"
+            "WORKING_DIRECTORY: /tmp\n"
+            "EXIT_CODE: 2\n"
+            "TIMESTAMP: 2026-06-12T10:00:00Z\n"
+            "FAILING_IDENTIFIERS_COUNT: 0\n"
+            "FAILING_IDENTIFIERS:\n"
+            "END_FAILING_IDENTIFIERS\n"
+            "NON_RECONCILABLE_COUNT: 0\n"
+            "NON_RECONCILABLE_FAILURES:\n"
+            "END_NON_RECONCILABLE_FAILURES\n"
+            "\n"
+            "--- RAW RUN OUTPUT BELOW ---\n"
+            "build failed\n"
+        )
+        path = write_temp_artifact(content)
+        try:
+            rc, data, _, stderr = run_script("--artifact", path)
+            self.assertNotEqual(rc, 0)
+            self.assertIsNone(data)
+            err = json.loads(stderr)
+            self.assertEqual(err["failure"], "nonzero_exit_without_failure_evidence")
+        finally:
+            os.unlink(path)
+
+    def test_nonzero_exit_with_stable_identifier_still_passes(self):
+        # Guard: a non-zero exit WITH evidence must still parse cleanly.
+        rc, data, _, _ = run_script(
+            "--artifact", fixture("test-runner-artifact-stable-failures.txt")
+        )
+        self.assertEqual(rc, 0)
+        self.assertIsNotNone(data)
+        self.assertEqual(data["exit_code"], 1)
+
+    def test_nonzero_exit_with_non_reconcilable_still_passes(self):
+        # Guard: a non-zero exit WITH a composite non-reconcilable entry passes.
+        content = (
+            "PHASE: baseline\n"
+            "COMMAND: npm run lint\n"
+            "WORKING_DIRECTORY: /tmp\n"
+            "EXIT_CODE: 1\n"
+            "TIMESTAMP: 2026-06-12T10:00:00Z\n"
+            "FAILING_IDENTIFIERS_COUNT: 0\n"
+            "FAILING_IDENTIFIERS:\n"
+            "END_FAILING_IDENTIFIERS\n"
+            "NON_RECONCILABLE_COUNT: 1\n"
+            "NON_RECONCILABLE_FAILURES:\n"
+            "eslint exited 1: 1 problem (1 error, 0 warnings)\n"
+            "END_NON_RECONCILABLE_FAILURES\n"
+            "\n"
+            "--- RAW RUN OUTPUT BELOW ---\n"
+            "eslint output\n"
+        )
+        path = write_temp_artifact(content)
+        try:
+            rc, data, _, _ = run_script("--artifact", path)
+            self.assertEqual(rc, 0)
+            self.assertIsNotNone(data)
+            self.assertEqual(data["exit_code"], 1)
+            self.assertEqual(len(data["non_reconcilable_failures"]), 1)
+        finally:
+            os.unlink(path)
+
+    def test_zero_exit_empty_buckets_unaffected(self):
+        # Guard: EXIT_CODE 0 with empty buckets is the clean case and must pass.
+        rc, data, _, _ = run_script(
+            "--artifact", fixture("test-runner-artifact-clean.txt")
+        )
+        self.assertEqual(rc, 0)
+        self.assertIsNotNone(data)
+        self.assertEqual(data["exit_code"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
