@@ -99,6 +99,15 @@ test('package.json declares @aphotic/pi-ideas as workspace dependency', () => {
   );
 });
 
+test('package.json declares @aphotic/pi-release as workspace dependency', () => {
+  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  assert.equal(
+    pkg.dependencies?.['@aphotic/pi-release'],
+    'workspace:*',
+    'dependencies["@aphotic/pi-release"] must equal "workspace:*"'
+  );
+});
+
 test('package.json keywords includes pi-package', () => {
   const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
   assert.ok(
@@ -218,6 +227,25 @@ test('pi.skills glob through node_modules resolves to the 15 expected SKILL.md f
     found,
     expected,
     `Resolved skill set must match the 15-name spec list. Got: ${found.join(', ')}`
+  );
+});
+
+test('pi.skills forwards the @aphotic/pi-release release skill glob', () => {
+  const pkg = JSON.parse(readFileSync(pkgPath('package.json'), 'utf8'));
+  const skills = pkg.pi?.skills || [];
+  const releaseGlob = 'node_modules/@aphotic/pi-release/skills/*/SKILL.md';
+  assert.ok(
+    skills.includes(releaseGlob),
+    `pi.skills must include "${releaseGlob}"; got ${JSON.stringify(skills)}`
+  );
+
+  const matches = expandGlob(releaseGlob, PKG_DIR);
+  const skillDirs = matches
+    .filter(p => basename(p) === 'SKILL.md')
+    .map(p => basename(dirname(p)));
+  assert.ok(
+    skillDirs.includes('release'),
+    `expanding "${releaseGlob}" must yield a 'release' SKILL.md; got: ${skillDirs.join(', ')}`
   );
 });
 

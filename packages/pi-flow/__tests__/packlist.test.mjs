@@ -63,6 +63,13 @@ test('tarball bundles all 15 core workflow skills', () => {
   );
 });
 
+test('tarball bundles the @aphotic/pi-release release skill', () => {
+  assert.ok(
+    entries.includes('node_modules/@aphotic/pi-release/skills/release/SKILL.md'),
+    'tarball must bundle node_modules/@aphotic/pi-release/skills/release/SKILL.md',
+  );
+});
+
 test('tarball is NOT a thin shell of only bin/README/LICENSE/package.json', () => {
   // Regression guard for the original bug: an aggregate that shipped only its own
   // bin/README/LICENSE/package.json with no bundled subpackages. The presence of
@@ -96,7 +103,7 @@ test('packed aggregate manifest declares bundledDependencies and pins exact vers
   assert.equal(show.status, 0, `tar -xzOf package.json failed: ${show.stderr}`);
   const pkg = JSON.parse(show.stdout);
 
-  for (const name of ['@aphotic/pi-flow-core', '@aphotic/pi-flow-ux', '@aphotic/pi-ideas']) {
+  for (const name of ['@aphotic/pi-flow-core', '@aphotic/pi-flow-ux', '@aphotic/pi-ideas', '@aphotic/pi-release']) {
     assert.ok(
       Array.isArray(pkg.bundledDependencies) && pkg.bundledDependencies.includes(name),
       `packed bundledDependencies must include ${name}`,
