@@ -188,13 +188,13 @@ test('old four-tier coordinator chain strings are gone', () => {
 test('refine skill flow-config stop strings are preserved byte-equal', () => {
   const refinePlan = readFileSync(skillPath('refine-plan'), 'utf8');
   assert.ok(
-    refinePlan.includes('refine-plan requires ~/.pi/agent/flow.json — see flow config setup.'),
+    refinePlan.includes('refine-plan: flow.json missing or unreadable; searched <locations> — see flow config setup.'),
     'refine-plan SKILL.md must contain the flow-config stop string byte-equal'
   );
 
   const refineCode = readFileSync(skillPath('refine-code'), 'utf8');
   assert.ok(
-    refineCode.includes('refine-code requires ~/.pi/agent/flow.json — see flow config setup.'),
+    refineCode.includes('refine-code: flow.json missing or unreadable; searched <locations> — see flow config setup.'),
     'refine-code SKILL.md must contain the flow-config stop string byte-equal'
   );
 });

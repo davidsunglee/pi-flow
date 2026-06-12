@@ -72,11 +72,21 @@ refine-plan: no coverage source available and --structural-only not set. Provide
 
 ## Step 5: Read flow config
 
+Resolve the active flow config:
+
 ```bash
-cat ~/.pi/agent/flow.json | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin), indent=2))"
+pi-flow helper _shared/resolve-flow-config --working-dir <WORKING_DIR>
 ```
 
-If the file is missing or unreadable, stop with: "refine-plan requires ~/.pi/agent/flow.json — see flow config setup."
+On non-zero exit, stop with: "refine-plan: flow.json missing or unreadable; searched <locations> — see flow config setup." (substitute the helper's reported `<locations>` from its stderr).
+
+On success, parse `.path` (and `.scope`) from the helper's JSON, set `FLOW_CONFIG_PATH` to `.path`, and optionally display the resolved config:
+
+```bash
+python3 -m json.tool "$FLOW_CONFIG_PATH"
+```
+
+The resolution contract (precedence, working-dir semantics, the `searched` list, and the `<locations>` rendering) lives in [skills/_shared/flow-config-resolution.md](../_shared/flow-config-resolution.md).
 
 ### Dispatch resolution
 
@@ -107,7 +117,7 @@ Set `STARTING_ERA = max_existing + 1`. If no matches found, `STARTING_ERA = 1`.
 
 Read [refine-plan-prompt.md](refine-plan-prompt.md) in this directory.
 
-Fill `refine-plan-prompt.md` by invoking `pi-flow helper refine-plan/fill-refine-plan-prompt --plan-path "<PLAN_PATH from Step 1>" --task-artifact "<Task artifact line or empty>" --source-idea "<Source idea line or empty>" --source-spec "<Source spec line or empty>" --scout-brief "<Scout brief line or empty>" --original-spec-inline <path-to-task-description-text-or--for-stdin> --structural-only-note <path-to-structural-only-note-text-or--for-stdin> --max-iterations <MAX_ITERATIONS> --starting-era <STARTING_ERA> --review-output-path <REVIEW_OUTPUT_PATH> --working-dir <WORKING_DIR> --flow-config <path-to-flow-config-json> --carry-over-review "<CARRY_OVER_REVIEW or empty>" --output <filled-prompt-path>`. The helper enforces single-pass literal substitution and fails closed on any unreplaced placeholder. Pass the `CARRY_OVER_REVIEW` value (path or empty string) unchanged — whatever value Step 1 received (caller-set or internally re-set by Step 10) is threaded through verbatim.
+Fill `refine-plan-prompt.md` by invoking `pi-flow helper refine-plan/fill-refine-plan-prompt --plan-path "<PLAN_PATH from Step 1>" --task-artifact "<Task artifact line or empty>" --source-idea "<Source idea line or empty>" --source-spec "<Source spec line or empty>" --scout-brief "<Scout brief line or empty>" --original-spec-inline <path-to-task-description-text-or--for-stdin> --structural-only-note <path-to-structural-only-note-text-or--for-stdin> --max-iterations <MAX_ITERATIONS> --starting-era <STARTING_ERA> --review-output-path <REVIEW_OUTPUT_PATH> --working-dir <WORKING_DIR> --flow-config <FLOW_CONFIG_PATH from Step 5> --carry-over-review "<CARRY_OVER_REVIEW or empty>" --output <filled-prompt-path>`. The helper enforces single-pass literal substitution and fails closed on any unreplaced placeholder. Pass the `CARRY_OVER_REVIEW` value (path or empty string) unchanged — whatever value Step 1 received (caller-set or internally re-set by Step 10) is threaded through verbatim.
 
 ### Step 7.5: Compose structural-only note
 
@@ -142,7 +152,7 @@ Validate every parsed path with `test -s <path>` (non-empty regular file). On an
 
 Run this validation only on `STATUS: approved`, `STATUS: approved_with_concerns`, or `STATUS: not_approved_within_budget`; skip on `STATUS: failed` (no review file is guaranteed to exist on failure).
 
-For each review file path in the `## Review Files` list parsed in Step 9, invoke `pi-flow helper _shared/validate-review-provenance --review-file <path> --allowed-tiers crossProviderModelTiers.capable,modelTiers.capable`. On non-zero exit, set `STATUS = failed` with reason `review provenance validation failed at <path>: <specific check>` (where `<specific check>` is the `failure` field from the script's stderr JSON) and skip to Step 11. Do NOT proceed to Step 10's commit gate after a validation failure.
+For each review file path in the `## Review Files` list parsed in Step 9, invoke `pi-flow helper _shared/validate-review-provenance --review-file <path> --allowed-tiers crossProviderModelTiers.capable,modelTiers.capable --working-dir <WORKING_DIR>`. On non-zero exit, set `STATUS = failed` with reason `review provenance validation failed at <path>: <specific check>` (where `<specific check>` is the `failure` field from the script's stderr JSON) and skip to Step 11. Do NOT proceed to Step 10's commit gate after a validation failure.
 
 When all paths pass validation, proceed to Step 9.7.
 

@@ -26,7 +26,7 @@ b. **Classify recipes.** Classify each `Verify:` recipe as either command-style 
 
 c. **Fill the verifier prompt.** Fill `$(pi-flow template execute-plan/verify-task-prompt)` via `pi-flow helper execute-plan/assemble-verifier-prompt`, passing the inputs above.
 
-d. **Resolve dispatch.** Resolve the dispatch envelope `(model, cli, executionPolicy)` by invoking `pi-flow helper _shared/resolve-model-dispatch --model-tier crossProviderModelTiers.standard --agent verifier`. On resolution failure, surface the byte-equal canonical Templates (1)–(5) per `skills/_shared/dispatch-contract.md`.
+d. **Resolve dispatch.** Resolve the dispatch envelope `(model, cli, executionPolicy)` by invoking `pi-flow helper _shared/resolve-model-dispatch --model-tier crossProviderModelTiers.standard --agent verifier --working-dir <working-dir>`. On resolution failure, surface the byte-equal canonical Templates (1)–(5) per `skills/_shared/dispatch-contract.md`.
 
 e. **Dispatch the verifier.** Dispatch a single `verifier` subagent via:
 

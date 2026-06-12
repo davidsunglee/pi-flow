@@ -144,7 +144,7 @@ If a task has no tier, apply this rubric:
 - Multiple files or integration concerns -> `standard`.
 - Design judgment or broad codebase understanding -> `capable`.
 
-For each task, invoke `pi-flow helper _shared/resolve-model-dispatch --model-tier <mapped tier path> --agent coder` and pass the resolved `model`, `cli`, and `executionPolicy` on every orchestration call, even when `cli` is `pi`. On non-zero exit, surface the byte-equal canonical Templates (1)-(5) from [`../_shared/dispatch-contract.md`](../_shared/dispatch-contract.md) and stop.
+For each task, invoke `pi-flow helper _shared/resolve-model-dispatch --model-tier <mapped tier path> --agent coder --working-dir <working-dir>` and pass the resolved `model`, `cli`, and `executionPolicy` on every orchestration call, even when `cli` is `pi`. On non-zero exit, surface the byte-equal canonical Templates (1)-(5) from [`../_shared/dispatch-contract.md`](../_shared/dispatch-contract.md) and stop.
 
 ## Step 7: Baseline test capture
 

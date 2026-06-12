@@ -145,7 +145,7 @@ No worktree creation. Fastlane operates in the current workspace only.
 Resolve `(model, cli, executionPolicy)` with:
 
 ~~~
-pi-flow helper _shared/resolve-model-dispatch --model-tier modelTiers.<model_tier> --agent coder
+pi-flow helper _shared/resolve-model-dispatch --model-tier modelTiers.<model_tier> --agent coder --working-dir <working-dir>
 ~~~
 
 `<model_tier>` is the Step 2 run-state alias (`efficient`/`standard`/`capable`/`frontier`) mapped into the `modelTiers` section. On non-zero exit, surface the helper's stderr (canonical templates (1)–(5)) byte-equal and stop.

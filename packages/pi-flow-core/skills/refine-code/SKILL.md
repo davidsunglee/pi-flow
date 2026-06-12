@@ -28,9 +28,13 @@ If `BASE_SHA` or `HEAD_SHA` is not provided, stop with an error — the skill ca
 
 ## Step 2: Read flow config
 
+Resolve the active flow config:
+
 ```bash
-cat ~/.pi/agent/flow.json | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin), indent=2))"
+pi-flow helper _shared/resolve-flow-config --working-dir <WORKING_DIR>
 ```
+
+On success, parse `.path` from the helper's JSON and set `FLOW_CONFIG_PATH` to `.path`. The resolution contract lives in [skills/_shared/flow-config-resolution.md](../_shared/flow-config-resolution.md).
 
 The flow config provides tier mappings used by the coordinator's workers:
 - `crossProviderModelTiers.capable` — first-pass and final verification reviews
@@ -43,11 +47,11 @@ The coordinator model itself is not a tier mapping: it comes from the `coordinat
 
 Read [skills/_shared/dispatch-contract.md](../_shared/dispatch-contract.md) and follow it to validate the `coordinatorSubagentDispatch` section and obtain the coordinator `modelChain` plus `executionPolicy` before Step 4. The shared file is the single authority for the validation-helper invocation, the `modelChain` iteration order, the hardcoded `cli: "pi"` invariant, and the canonical hard-stop templates. Do not duplicate that procedure here. If the validation helper hard-stops, do not dispatch — surface the canonical template verbatim to the caller and exit.
 
-If the file doesn't exist or is unreadable, stop with: "refine-code requires ~/.pi/agent/flow.json — see flow config setup."
+If the resolve-flow-config helper from Step 2 exits non-zero, stop with: "refine-code: flow.json missing or unreadable; searched <locations> — see flow config setup." (substitute the helper's reported `<locations>` from its stderr).
 
 ## Step 3: Assemble coordinator prompt
 
-Invoke `pi-flow helper refine-code/fill-refine-code-prompt --plan-goal <path|-> --plan-contents <path|-> --base-sha <BASE_SHA> --head-sha <HEAD_SHA> --review-output-path <REVIEW_OUTPUT_PATH> --max-iterations <MAX_ITERATIONS> --flow-config <path> --working-dir <WORKING_DIR> --carry-over-review "<carry-over review path or empty>" --output <filled-prompt-path>`. It performs single-pass substitution and fails closed on unreplaced placeholders.
+Invoke `pi-flow helper refine-code/fill-refine-code-prompt --plan-goal <path|-> --plan-contents <path|-> --base-sha <BASE_SHA> --head-sha <HEAD_SHA> --review-output-path <REVIEW_OUTPUT_PATH> --max-iterations <MAX_ITERATIONS> --flow-config <FLOW_CONFIG_PATH from Step 2> --working-dir <WORKING_DIR> --carry-over-review "<carry-over review path or empty>" --output <filled-prompt-path>`. It performs single-pass substitution and fails closed on unreplaced placeholders.
 
 ## Step 4: Dispatch code-refiner
 
@@ -113,8 +117,8 @@ Run this validation only on `STATUS: approved`, `STATUS: approved_with_concerns`
 
 Use the path the coordinator reported in its `## Review File` block (the latest versioned `<REVIEW_OUTPUT_PATH>-v<ERA>.md`) as `<path>`.
 
-- On `STATUS: approved` or `STATUS: approved_with_concerns`: invoke `pi-flow helper _shared/validate-review-provenance --review-file <path> --allowed-tiers crossProviderModelTiers.capable`.
-- On `STATUS: not_approved_within_budget`: invoke `pi-flow helper _shared/validate-review-provenance --review-file <path> --allowed-tiers crossProviderModelTiers.capable,modelTiers.standard`.
+- On `STATUS: approved` or `STATUS: approved_with_concerns`: invoke `pi-flow helper _shared/validate-review-provenance --review-file <path> --allowed-tiers crossProviderModelTiers.capable --working-dir <WORKING_DIR>`.
+- On `STATUS: not_approved_within_budget`: invoke `pi-flow helper _shared/validate-review-provenance --review-file <path> --allowed-tiers crossProviderModelTiers.capable,modelTiers.standard --working-dir <WORKING_DIR>`.
 
 On non-zero exit, surface `refine-code: review provenance validation failed at <path>: <specific check>` to the caller and do not report the stashed success.
 
