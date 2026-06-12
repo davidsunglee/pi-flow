@@ -8,9 +8,20 @@ Two modes:
              artifact and emits a baseline snapshot JSON. That JSON is itself a
              valid baseline file for later reconcile mode. Classifies the run as
              clean, stable-failures-only, or contains-non-reconcilable-evidence.
+             When the parsed artifact carries the exit-0 override, the output
+             additionally includes exit0_override: true,
+             discarded_failing_identifiers_count, and
+             discarded_non_reconcilable_count (present only when the override
+             fired); classification is clean because the parser already emptied
+             the buckets.
 
   reconcile  (Steps 12.2/14/16): Compares current run against a saved baseline
-             and reports whether any new failures appear.
+             and reports whether any new failures appear. When the parsed
+             artifact carries the exit-0 override, the output additionally
+             includes exit0_override: true, discarded_failing_identifiers_count,
+             and discarded_non_reconcilable_count (present only when the override
+             fired); classification is pass because the parser already emptied
+             the buckets.
 
 Protocol error labels (emitted in stderr JSON .failure on non-zero exit):
   baseline_failures_invalid          -- baseline JSON missing, malformed, or wrong shape
@@ -75,6 +86,24 @@ def _load_baseline(path):
     return baseline
 
 
+def _attach_override_signal(result, parsed):
+    """Propagate the parser's exit-0 override signal into the reconcile output.
+
+    The parser already discarded the contradictory buckets, so classification
+    needs no change; this only surfaces the signal (flag + discarded counts) so
+    the caller can warn. Fields are added only when the override fired.
+    """
+    if parsed.get("exit0_override"):
+        result["exit0_override"] = True
+        result["discarded_failing_identifiers_count"] = parsed.get(
+            "discarded_failing_identifiers_count", 0
+        )
+        result["discarded_non_reconcilable_count"] = parsed.get(
+            "discarded_non_reconcilable_count", 0
+        )
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -123,7 +152,7 @@ Protocol error labels (in stderr JSON .failure):
             "non_reconcilable_at_baseline": non_reconcilable_failures,
             "classification": classification,
         }
-        print(json.dumps(result, indent=2))
+        print(json.dumps(_attach_override_signal(result, parsed), indent=2))
         sys.exit(0)
 
     # reconcile mode
@@ -148,7 +177,7 @@ Protocol error labels (in stderr JSON .failure):
         "current_non_baseline_stable": current_non_baseline_stable,
         "classification": classification,
     }
-    print(json.dumps(result, indent=2))
+    print(json.dumps(_attach_override_signal(result, parsed), indent=2))
     sys.exit(0)
 
 

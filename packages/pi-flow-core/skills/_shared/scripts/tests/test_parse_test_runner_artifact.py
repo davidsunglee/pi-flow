@@ -582,5 +582,75 @@ class TestFinalMessageHandoffFallback(unittest.TestCase):
             os.unlink(message_path)
 
 
+class TestExit0Override(unittest.TestCase):
+    def test_exit0_bogus_non_reconcilable_discarded(self):
+        # 2026-06-09 case: EXIT_CODE 0 but NON_RECONCILABLE_COUNT 1 (passing stdout).
+        rc, data, _, _ = run_script(
+            "--artifact",
+            fixture("test-runner-artifact-exit0-bogus-non-reconcilable.txt"),
+        )
+        self.assertEqual(rc, 0)
+        self.assertIsNotNone(data)
+        self.assertEqual(data["exit_code"], 0)
+        self.assertEqual(data["failing_identifiers"], [])
+        self.assertEqual(data["non_reconcilable_failures"], [])
+        self.assertEqual(data["non_reconcilable_count"], 0)
+        self.assertEqual(data["failing_identifiers_count"], 0)
+        self.assertTrue(data["exit0_override"])
+        self.assertEqual(data["discarded_non_reconcilable_count"], 1)
+        self.assertEqual(len(data["discarded_non_reconcilable_failures"]), 1)
+
+    def test_exit0_bogus_failing_identifiers_discarded(self):
+        content = (
+            "COMMAND: npm test\n"
+            "WORKING_DIRECTORY: /tmp/project\n"
+            "EXIT_CODE: 0\n"
+            "TIMESTAMP: 2026-06-09T12:00:00Z\n"
+            "FAILING_IDENTIFIERS_COUNT: 2\n"
+            "FAILING_IDENTIFIERS:\n"
+            "tests/test_a.py::test_one\n"
+            "tests/test_b.py::test_two\n"
+            "END_FAILING_IDENTIFIERS\n"
+            "NON_RECONCILABLE_COUNT: 0\n"
+            "NON_RECONCILABLE_FAILURES:\n"
+            "END_NON_RECONCILABLE_FAILURES\n"
+            "\n"
+            "--- RAW RUN OUTPUT BELOW ---\n"
+            "All tests passed.\n"
+        )
+        path = write_temp_artifact(content)
+        try:
+            rc, data, _, _ = run_script("--artifact", path)
+            self.assertEqual(rc, 0)
+            self.assertIsNotNone(data)
+            self.assertEqual(data["failing_identifiers"], [])
+            self.assertEqual(data["failing_identifiers_count"], 0)
+            self.assertTrue(data["exit0_override"])
+            self.assertEqual(data["discarded_failing_identifiers_count"], 2)
+            self.assertEqual(
+                data["discarded_failing_identifiers"],
+                ["tests/test_a.py::test_one", "tests/test_b.py::test_two"],
+            )
+        finally:
+            os.unlink(path)
+
+    def test_exit0_empty_buckets_no_signal(self):
+        rc, data, _, _ = run_script(
+            "--artifact", fixture("test-runner-artifact-clean.txt")
+        )
+        self.assertEqual(rc, 0)
+        self.assertIsNotNone(data)
+        self.assertNotIn("exit0_override", data)
+
+    def test_nonzero_exit_buckets_honored_no_signal(self):
+        rc, data, _, _ = run_script(
+            "--artifact", fixture("test-runner-artifact-non-reconcilable.txt")
+        )
+        self.assertEqual(rc, 0)
+        self.assertIsNotNone(data)
+        self.assertNotIn("exit0_override", data)
+        self.assertGreater(len(data["non_reconcilable_failures"]), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

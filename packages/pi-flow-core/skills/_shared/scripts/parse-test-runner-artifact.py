@@ -24,6 +24,20 @@ validation is then run as today.
 Success JSON output includes a top-level 'used_fallback' boolean:
   true  -- the missing-marker fallback was used for the marker portion of the parse
   false -- the marker was present and valid, or the handoff invocation was skipped
+
+EXIT_CODE 0 is treated as an authoritative pass. When a structurally valid
+artifact reports EXIT_CODE 0 with a non-empty FAILING_IDENTIFIERS or
+NON_RECONCILABLE_FAILURES bucket, both buckets (and their counts) are
+overridden to empty and these audit fields are added to the success JSON:
+  exit0_override                       true (present only when the override fired)
+  discarded_failing_identifiers_count  declared FAILING_IDENTIFIERS_COUNT before override
+  discarded_non_reconcilable_count     declared NON_RECONCILABLE_COUNT before override
+  discarded_failing_identifiers        the discarded stable-identifier list
+  discarded_non_reconcilable_failures  the discarded non-reconcilable entries
+When the exit code is non-zero, or it is 0 with already-empty buckets, none of
+these fields appear and the buckets pass through unchanged. All structural
+validations run first and are unchanged; the override is a semantic invariant
+applied only to artifacts that are already structurally valid.
 """
 
 import argparse
@@ -113,6 +127,35 @@ def _split_non_reconcilable_entries(lines, expected_count=None):
     if expected_count == 1 and len(entries) > 1:
         return ["\n".join(lines)]
     return entries
+
+
+def _apply_exit0_override(result):
+    """Treat EXIT_CODE 0 as an authoritative pass.
+
+    The test-runner contract declares exit-0 implies both buckets empty, but
+    Codex intermittently emits a structurally valid artifact reporting
+    EXIT_CODE 0 with non-empty buckets (observed 2026-06-09: passing stdout
+    copied into NON_RECONCILABLE_FAILURES). Such an artifact would otherwise
+    false-block the integration gate. When the exit code is 0 and either bucket
+    is non-empty, discard the contradictory buckets (and zero their counts so
+    the count == len(list) invariant holds) and expose the override via a flag,
+    the discarded counts, and the discarded contents for audit. A non-zero exit
+    code is left untouched.
+    """
+    if result["exit_code"] != 0:
+        return result
+    if not result["failing_identifiers"] and not result["non_reconcilable_failures"]:
+        return result
+    result["exit0_override"] = True
+    result["discarded_failing_identifiers_count"] = result["failing_identifiers_count"]
+    result["discarded_non_reconcilable_count"] = result["non_reconcilable_count"]
+    result["discarded_failing_identifiers"] = result["failing_identifiers"]
+    result["discarded_non_reconcilable_failures"] = result["non_reconcilable_failures"]
+    result["failing_identifiers"] = []
+    result["failing_identifiers_count"] = 0
+    result["non_reconcilable_failures"] = []
+    result["non_reconcilable_count"] = 0
+    return result
 
 
 def parse_artifact(path):
@@ -209,7 +252,7 @@ def parse_artifact(path):
             f"declared {non_rec_count}, found {len(non_rec_entries)}",
         )
 
-    return {
+    result = {
         "phase": phase,
         "command": command,
         "working_directory": working_directory,
@@ -220,6 +263,7 @@ def parse_artifact(path):
         "non_reconcilable_count": non_rec_count,
         "non_reconcilable_failures": non_rec_entries,
     }
+    return _apply_exit0_override(result)
 
 
 def main():

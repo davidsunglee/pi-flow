@@ -176,5 +176,51 @@ class TestPropagatesArtifactMissingOrEmpty(unittest.TestCase):
         self.assertEqual(stderr_data["failure"], "artifact_missing_or_empty")
 
 
+class TestReconcileExit0OverridePasses(unittest.TestCase):
+    def test_reconcile_exit0_bogus_non_reconcilable_passes(self):
+        rc, data, _, _, _ = run_script(
+            "--artifact",
+            fixture("test-runner-artifact-exit0-bogus-non-reconcilable.txt"),
+            "--mode", "reconcile",
+            "--baseline-failures", fixture("baseline-failures-empty.json"),
+        )
+        self.assertEqual(rc, 0)
+        self.assertIsNotNone(data)
+        self.assertEqual(data["classification"], "pass")
+        self.assertEqual(data["current_non_reconcilable"], [])
+        self.assertEqual(data["current_non_baseline_stable"], [])
+        self.assertTrue(data["exit0_override"])
+        self.assertEqual(data["discarded_non_reconcilable_count"], 1)
+
+
+class TestCaptureExit0OverrideClean(unittest.TestCase):
+    def test_capture_exit0_bogus_non_reconcilable_clean(self):
+        rc, data, _, _, _ = run_script(
+            "--artifact",
+            fixture("test-runner-artifact-exit0-bogus-non-reconcilable.txt"),
+            "--mode", "capture",
+        )
+        self.assertEqual(rc, 0)
+        self.assertIsNotNone(data)
+        self.assertEqual(data["classification"], "clean")
+        self.assertEqual(data["baseline_failures"], [])
+        self.assertTrue(data["exit0_override"])
+        self.assertEqual(data["discarded_non_reconcilable_count"], 1)
+
+
+class TestReconcileNonzeroExitNoOverrideSignal(unittest.TestCase):
+    def test_reconcile_nonzero_exit_still_fails_no_signal(self):
+        rc, data, _, _, _ = run_script(
+            "--artifact",
+            fixture("test-runner-artifact-non-reconcilable.txt"),
+            "--mode", "reconcile",
+            "--baseline-failures", fixture("baseline-failures-empty.json"),
+        )
+        self.assertEqual(rc, 0)
+        self.assertIsNotNone(data)
+        self.assertEqual(data["classification"], "fail")
+        self.assertNotIn("exit0_override", data)
+
+
 if __name__ == "__main__":
     unittest.main()
