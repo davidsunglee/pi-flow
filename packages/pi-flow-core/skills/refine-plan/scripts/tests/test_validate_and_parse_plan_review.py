@@ -228,6 +228,42 @@ class ValidateAndParsePlanReviewTest(unittest.TestCase):
         err = json.loads(proc.stderr)
         self.assertEqual(err["failure"], "inline-substring forbidden")
 
+    def test_working_dir_forwarded_without_explicit_flow_config(self):
+        """Script accepts --working-dir and resolves project-local config when --flow-config is omitted."""
+        temp_dir = tempfile.mkdtemp()
+        pi_dir = os.path.join(temp_dir, ".pi")
+        os.makedirs(pi_dir)
+        project_config = os.path.join(pi_dir, "flow.json")
+        with open(project_config, "w") as handle:
+            json.dump({
+                "crossProviderModelTiers": {"capable": "openai/reviewer-v1"},
+                "modelTiers": {"capable": "anthropic/reviewer-fallback"},
+                "subagentDispatch": {
+                    "openai": "pi",
+                    "anthropic": "claude",
+                    "inline": "pi",
+                },
+                "executionPolicy": "guarded",
+            }, handle)
+
+        review_path = os.path.join(FIXTURES, "review-approved.md")
+        final_message = write_final_message(review_path)
+        try:
+            proc = run_script(
+                "--final-message", final_message,
+                "--expected-path", review_path,
+                "--reviewer-provenance", EXPECTED_PROVENANCE,
+                "--allowed-tiers", "crossProviderModelTiers.capable,modelTiers.capable",
+                "--working-dir", temp_dir,
+            )
+        finally:
+            os.unlink(final_message)
+            shutil.rmtree(temp_dir)
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        data = json.loads(proc.stdout)
+        self.assertEqual(data["verdict"], "Approved")
+
     def test_missing_verdict_label_fails_closed(self):
         temp_dir = tempfile.mkdtemp()
         review_path = os.path.join(temp_dir, "review-no-verdict.md")

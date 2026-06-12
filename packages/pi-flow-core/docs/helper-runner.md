@@ -105,6 +105,9 @@ pi-flow helper _shared/reconcile-test-run --artifact artifact.md --mode capture
 # Validate coordinatorSubagentDispatch and print the coordinator model chain
 pi-flow helper _shared/resolve-coordinator-dispatch --agent plan-refiner
 
+# Resolve the active flow config (project-local or user/global) and print its path/scope
+pi-flow helper _shared/resolve-flow-config --working-dir .
+
 # Resolve the dispatch model for a given tier
 pi-flow helper _shared/resolve-model-dispatch --model-tier modelTiers.capable --agent coder
 

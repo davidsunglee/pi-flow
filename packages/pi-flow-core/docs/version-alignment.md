@@ -44,6 +44,16 @@ in `.pi/settings.json` directly.
 
 ---
 
+## Flow config and package pinning
+
+A project-pinned pi-flow package (e.g. `npm:@aphotic/pi-flow@0.9.0` in `.pi/settings.json`) pairs naturally with a project-local `<project>/.pi/flow.json`: the dispatch config then matches the pinned core version, ensuring the flow config schema and the installed helpers stay in sync. The user/global `~/.pi/agent/flow.json` serves as the fallback for projects that do not carry their own `.pi/flow.json`.
+
+`/flow:doctor` surfaces both the active package root and the resolved flow config path/scope. It warns when a project package is effective (i.e. a project-scoped install is active) but the flow config falls back to the user/global location — a sign that the project may benefit from a project-local `.pi/flow.json` to lock dispatch config alongside the pinned package.
+
+See [`../skills/_shared/flow-config-resolution.md`](../skills/_shared/flow-config-resolution.md) for the full resolution algorithm.
+
+---
+
 ## Using a local checkout for development
 
 To develop against a local source tree, declare it as a local path in

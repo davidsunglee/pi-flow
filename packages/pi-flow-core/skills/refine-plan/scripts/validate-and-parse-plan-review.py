@@ -143,9 +143,14 @@ def main():
         help="Comma-separated tier list for validate-review-provenance.py",
     )
     parser.add_argument(
+        "--working-dir",
+        default=None,
+        help="Workflow workspace root threaded to validate-review-provenance (default: cwd)",
+    )
+    parser.add_argument(
         "--flow-config",
-        default="~/.pi/agent/flow.json",
-        help="Path to flow config JSON for validate-review-provenance.py",
+        default=None,
+        help="Explicit flow config override threaded to validate-review-provenance (default: project-local then user/global)",
     )
     args = parser.parse_args()
 
@@ -169,13 +174,17 @@ def main():
     if first_line != args.reviewer_provenance:
         fail("does not match supplied REVIEWER_PROVENANCE", review_path=review_path)
 
-    run_helper([
+    provenance_cmd = [
         sys.executable,
         str(VALIDATE_PROVENANCE),
         "--review-file", review_path,
         "--allowed-tiers", args.allowed_tiers,
-        "--flow-config", args.flow_config,
-    ])
+    ]
+    if args.working_dir:
+        provenance_cmd += ["--working-dir", args.working_dir]
+    if args.flow_config:
+        provenance_cmd += ["--flow-config", args.flow_config]
+    run_helper(provenance_cmd)
 
     sections = split_markdown_sections(review_text, "###")
     outcome = sections.get("Outcome", "")

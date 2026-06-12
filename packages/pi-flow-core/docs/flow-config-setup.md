@@ -2,14 +2,20 @@
 
 ## Why this file exists
 
-`~/.pi/agent/flow.json` is the runtime source of truth read by `pi-flow helper _shared/resolve-model-dispatch` and `pi-flow helper _shared/resolve-coordinator-dispatch`. The packaged `flow.example.json` is a starting template only — it captures a working personal configuration as an example and is never read at runtime.
+The runtime source of truth is the *resolved* flow config, located by pi-flow in precedence order: an explicit `--flow-config` override, then a project-local `<working-dir>/.pi/flow.json`, then the user/global `~/.pi/agent/flow.json`. The resolved config is what `pi-flow helper _shared/resolve-model-dispatch` and `pi-flow helper _shared/resolve-coordinator-dispatch` read. The packaged `flow.example.json` is a starting template only — it captures a working personal configuration as an example and is never read at runtime. See [`../skills/_shared/flow-config-resolution.md`](../skills/_shared/flow-config-resolution.md) for the full resolution algorithm.
 
 ## First-time setup
 
-Copy the example file to the expected runtime location:
+`~/.pi/agent/flow.json` is the user/global location — the fallback used when no project-local config is present. A project may instead carry `<project>/.pi/flow.json` to pin dispatch config to a project-scoped pi-flow install; this file takes precedence over the user/global location for any workflow run from within that project directory.
+
+Copy the example file to whichever location fits your setup:
 
 ```sh
+# User/global location (fallback for all projects)
 cp node_modules/@aphotic/pi-flow-core/flow.example.json ~/.pi/agent/flow.json
+
+# Project-local location (pins dispatch config to this project)
+cp node_modules/@aphotic/pi-flow-core/flow.example.json .pi/flow.json
 ```
 
 If you have the package root handy (e.g. from `pi-flow template`), you can also resolve the path dynamically:
@@ -77,8 +83,10 @@ Dispatch sites emit one of these messages byte-equal when a required field is ab
 **Template 1 — Missing/unreadable file:**
 
 ```
-~/.pi/agent/flow.json missing or unreadable — cannot dispatch <agent>.
+flow.json missing or unreadable; searched <locations> — cannot dispatch <agent>.
 ```
+
+The bare `resolve-flow-config` helper (invoked without an agent context) emits: `flow.json missing or unreadable; searched <locations>.` In both forms, `<locations>` renders the full list of searched paths comma-space separated, with the home directory prefix abbreviated as `~`.
 
 **Template 2 — Missing/empty selected tier:**
 
@@ -127,6 +135,26 @@ coordinator-dispatch: all coordinatorSubagentDispatch.modelChain models failed; 
 Parameters `<agent>`, `<tier>`, `<provider>`, `<model>`, and `<error>` are substituted verbatim by the consumer.
 
 ## Verifying setup
+
+### Checking the active flow config
+
+To see which config is active for the current working directory, run the `resolve-flow-config` helper:
+
+```sh
+pi-flow helper _shared/resolve-flow-config --working-dir .
+```
+
+Expected output shape:
+
+```json
+{"path": "...", "scope": "project|user|explicit", "searched": ["..."]}
+```
+
+- `path` — the absolute path of the resolved config file.
+- `scope` — `project` (from `<working-dir>/.pi/flow.json`), `user` (from `~/.pi/agent/flow.json`), or `explicit` (from `--flow-config` override).
+- `searched` — ordered list of locations checked, for transparency.
+
+### Checking dispatch resolution
 
 Run the leaf helper with a known tier and agent name:
 

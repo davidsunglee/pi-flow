@@ -78,7 +78,7 @@ Preamble lines in existing on-disk specs, plans, briefs, or reviews that say `So
 
 ## Flow Config
 
-Copy flow.example.json to ~/.pi/agent/flow.json to configure which model tier is used for each role, the provider→CLI dispatch map, the coordinator model chain, and the subagent execution policy. See [docs/flow-config-setup.md](docs/flow-config-setup.md) for details.
+pi-flow resolves the active flow config in precedence order: an explicit override, then a project-local `.pi/flow.json` (use this to pin dispatch config to a project-scoped/pinned pi-flow install), then the user/global `~/.pi/agent/flow.json` fallback. Copy flow.example.json to whichever location fits your setup. See [docs/flow-config-setup.md](docs/flow-config-setup.md) for details.
 
 ## Required Companion Package
 
