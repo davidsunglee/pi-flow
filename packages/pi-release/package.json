@@ -1,0 +1,33 @@
+{
+  "name": "@aphotic/pi-release",
+  "version": "0.9.0",
+  "type": "module",
+  "description": "Standalone, project-agnostic release skill for Pi: drives single-package and monorepo releases through one interface with shape auto-detection, a full security audit, manual release-notes review, user-owned credentialed actions, and a governed .pi/release-profile.md extension point.",
+  "keywords": ["pi-package"],
+  "files": ["skills", "README.md", "LICENSE", "!**/__tests__", "!**/*.test.mjs", "!**/*.test.ts", "!**/*.test.js"],
+  "scripts": {
+    "test:node": "find __tests__ -name '*.test.mjs' -print0 | xargs -0 node --test --test-reporter tap",
+    "test": "pnpm run test:node",
+    "check": "pnpm run test"
+  },
+  "pi": {
+    "skills": ["skills/*/SKILL.md"]
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davidsunglee/pi-flow.git",
+    "directory": "packages/pi-release"
+  },
+  "bugs": {
+    "url": "https://github.com/davidsunglee/pi-flow/issues"
+  },
+  "homepage": "https://github.com/davidsunglee/pi-flow/tree/main/packages/pi-release#readme",
+  "author": "David Lee",
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
