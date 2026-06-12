@@ -1,6 +1,6 @@
 {
   "name": "@aphotic/pi-release",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "type": "module",
   "description": "Standalone, project-agnostic release skill for Pi: drives single-package and monorepo releases through one interface with shape auto-detection, a full security audit, manual release-notes review, user-owned credentialed actions, and a governed .pi/release-profile.md extension point.",
   "keywords": ["pi-package"],
