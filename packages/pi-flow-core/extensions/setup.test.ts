@@ -5,7 +5,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { resolveScope, runHelperShimSetup, runSetup } from "./setup.ts";
+import { buildFlowConfigGuidance, resolveScope, runHelperShimSetup, runSetup } from "./setup.ts";
 
 type NotifyLevel = "info" | "warning" | "error";
 type NotifyCall = { message: string; level: NotifyLevel };
@@ -720,6 +720,22 @@ test("resolveScope: matches a symlinked sourceInfo.baseDir via realpath normaliz
 
   assert.equal(result.scope, "user");
   assert.equal(result.matchedBaseDir, realPkg);
+});
+
+test("buildFlowConfigGuidance: returned string includes both flow-config scopes and the example copy step", () => {
+  const guidance = buildFlowConfigGuidance();
+  assert.ok(
+    guidance.includes(".pi/flow.json"),
+    "expected guidance to mention .pi/flow.json (project-local scope)",
+  );
+  assert.ok(
+    guidance.includes("~/.pi/agent/flow.json"),
+    "expected guidance to mention ~/.pi/agent/flow.json (user/global scope)",
+  );
+  assert.ok(
+    guidance.includes("flow.example.json"),
+    "expected guidance to mention flow.example.json (copy step)",
+  );
 });
 
 test("resolveScope: silently skips candidate baseDir entries that no longer exist", async () => {

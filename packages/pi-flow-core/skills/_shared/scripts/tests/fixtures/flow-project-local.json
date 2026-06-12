@@ -1,0 +1,22 @@
+{
+    "modelTiers": {
+        "frontier": "anthropic/claude-project-frontier",
+        "capable": "anthropic/claude-opus-4-7",
+        "standard": "anthropic/claude-sonnet-4-6",
+        "efficient": "anthropic/claude-haiku-4-5"
+    },
+    "crossProviderModelTiers": {
+        "frontier": "openai-codex/gpt-5.5",
+        "capable": "openai-codex/gpt-5.5",
+        "standard": "openai-codex/gpt-5.4",
+        "efficient": "openai-codex/gpt-5.4-mini"
+    },
+    "subagentDispatch": {
+        "anthropic": "claude",
+        "openai-codex": "codex"
+    },
+    "coordinatorSubagentDispatch": {
+        "modelChain": ["openai-codex/gpt-5.4"]
+    },
+    "executionPolicy": "guarded"
+}

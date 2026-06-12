@@ -880,6 +880,90 @@ async function seedSettings(cwd: string, packages: unknown[]): Promise<void> {
   await fs.writeFile(p, JSON.stringify({ packages }, null, 2) + "\n");
 }
 
+async function writeFlowConfig(dir: string, rel: string[]): Promise<string> {
+  const p = path.join(dir, ...rel);
+  await fs.mkdir(path.dirname(p), { recursive: true });
+  await fs.writeFile(p, "{}\n");
+  return p;
+}
+
+test("buildDiagnosis: project-local flow.json resolves project scope with no warning", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-flowcfg-project-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  await writeFlowConfig(cwd, [".pi", "flow.json"]);
+
+  const d = await buildDiagnosis({
+    activeRoot: userRoot,
+    cwd,
+    homeDir: home,
+    scope: "user",
+  });
+
+  assert.equal(d.flowConfig.scope, "project");
+  assert.ok(d.flowConfig.path?.endsWith(`${path.sep}.pi${path.sep}flow.json`));
+  assert.equal(d.flowConfigWarning, null);
+});
+
+test("renderReport: a user/global flow.json renders a Flow config section with the user scope", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-flowcfg-render-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  await writeFlowConfig(home, [".pi", "agent", "flow.json"]);
+
+  const d = await buildDiagnosis({
+    activeRoot: userRoot,
+    cwd,
+    homeDir: home,
+    scope: "user",
+  });
+  const report = renderReport(d);
+
+  assert.ok(report.includes("Flow config"));
+  assert.ok(report.includes("[user]"));
+  assert.ok(report.includes("~/.pi/agent/flow.json"));
+});
+
+test("buildDiagnosis: project package effective but only user flow config warns project-package-user-config", async () => {
+  const sandbox = mkSandbox("pi-flow-doctor-flowcfg-mixed-");
+  const home = path.join(sandbox, "home");
+  const cwd = path.join(sandbox, "proj");
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+
+  const userRoot = await seedUserInstall(home, "1.0.0");
+  const overrideRoot = path.join(cwd, "packages", "pi-flow-core");
+  await seedCore(overrideRoot, "1.0.0");
+  await seedTrust(home, cwd);
+  await seedSettings(cwd, ["packages/pi-flow-core"]);
+  await writeFlowConfig(home, [".pi", "agent", "flow.json"]); // user config present
+  // NOTE: deliberately no <cwd>/.pi/flow.json
+
+  const d = await buildDiagnosis({
+    activeRoot: overrideRoot,
+    cwd,
+    homeDir: home,
+    scope: "project",
+  });
+
+  assert.equal(d.effectiveScope, "project");
+  assert.equal(d.flowConfig.scope, "user");
+  assert.equal(d.flowConfigWarning, "project-package-user-config");
+  assert.ok(
+    renderReport(d).includes(
+      "project-local pi-flow package is effective but flow config resolved to user/global",
+    ),
+  );
+});
+
 test("buildDiagnosis: global-only install with aligned shim/agents has no skew", async () => {
   const sandbox = mkSandbox("pi-flow-doctor-globalonly-");
   const home = path.join(sandbox, "home");

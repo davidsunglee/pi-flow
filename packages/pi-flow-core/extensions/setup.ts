@@ -386,6 +386,22 @@ export async function runHelperShimSetup(
   return { status: "conflict", shimPath, conflict };
 }
 
+/**
+ * Static guidance describing where project-local vs user/global flow config
+ * lives and how to seed it from flow.example.json. Setup never creates or
+ * overwrites flow config — this is guidance only.
+ */
+export function buildFlowConfigGuidance(): string {
+  return [
+    "/flow:setup flow config (guidance only — no files written):",
+    "  - project-local: <project>/.pi/flow.json (pins dispatch config to a project-scoped pi-flow install)",
+    "  - user/global:   ~/.pi/agent/flow.json (the fallback used when no project-local config exists)",
+    "  If you don't have one yet, copy the bundled template, e.g.:",
+    "    cp node_modules/@aphotic/pi-flow-core/flow.example.json ~/.pi/agent/flow.json",
+    "  See docs/flow-config-setup.md for both scopes and the resolution precedence.",
+  ].join("\n");
+}
+
 function parseExplicitTarget(args: string): DurableTarget | undefined {
   const tokens = args.split(/\s+/).filter((t) => t.length > 0);
   for (let i = 0; i < tokens.length - 1; i++) {
@@ -458,6 +474,7 @@ export function registerSetup(pi: ExtensionAPI): void {
             effectiveTarget,
             ui: notifier,
           });
+          ctx.ui.notify(buildFlowConfigGuidance(), "info");
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

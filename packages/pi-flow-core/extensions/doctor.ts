@@ -6,6 +6,7 @@
  */
 
 import fs from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type {
@@ -166,6 +167,50 @@ export interface DeclaredPackage {
   name?: string;
 }
 
+export type FlowConfigScope = "project" | "user" | "none";
+
+export interface FlowConfigResolution {
+  scope: FlowConfigScope;
+  path: string | null; // absolute path to the selected config; null when none
+  searched: string[]; // absolute paths consulted, in resolution order
+}
+
+async function isReadableFlowConfig(p: string): Promise<boolean> {
+  try {
+    const st = await fs.stat(p);
+    if (!st.isFile()) return false;
+    await fs.access(p, fsConstants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve the active flow config for (cwd, homeDir), mirroring
+ * skills/_shared/flow-config-resolution.md: project-local <cwd>/.pi/flow.json,
+ * then user/global ~/.pi/agent/flow.json. Selection is on existence +
+ * readability only (no JSON parse). Pure over injected paths; never spawns a
+ * subprocess so doctor keeps working when the helper shim is broken.
+ */
+export async function resolveFlowConfig(opts: {
+  cwd: string;
+  homeDir: string;
+}): Promise<FlowConfigResolution> {
+  const searched: string[] = [];
+  const project = path.join(opts.cwd, ".pi", "flow.json");
+  searched.push(project);
+  if (await isReadableFlowConfig(project)) {
+    return { scope: "project", path: project, searched };
+  }
+  const user = path.join(opts.homeDir, ".pi", "agent", "flow.json");
+  searched.push(user);
+  if (await isReadableFlowConfig(user)) {
+    return { scope: "user", path: user, searched };
+  }
+  return { scope: "none", path: null, searched };
+}
+
 export interface DoctorDiagnosis {
   active: PiFlowCorePackage; // the executing ("intended") package
   effective: PiFlowCorePackage; // the package at the effective root for this cwd (== active when they coincide)
@@ -187,6 +232,15 @@ export interface DoctorDiagnosis {
    * vice versa.
    */
   staleDispatcher: boolean;
+  /** Resolved flow config for this cwd (project-local then user/global). */
+  flowConfig: FlowConfigResolution;
+  /**
+   * Flow-config advisory for the report: "missing" when no usable config exists
+   * anywhere; "project-package-user-config" when a project-scoped package is
+   * effective but flow config resolved to user/global (mixed-version risk);
+   * null otherwise.
+   */
+  flowConfigWarning: "missing" | "project-package-user-config" | null;
 }
 
 export interface BuildDiagnosisOptions {
@@ -882,6 +936,14 @@ export async function buildDiagnosis(
     .map((c) => c.path)
     .filter((p) => !surfacePaths.has(p));
 
+  const flowConfig = await resolveFlowConfig({ cwd, homeDir });
+  let flowConfigWarning: DoctorDiagnosis["flowConfigWarning"] = null;
+  if (flowConfig.scope === "none") {
+    flowConfigWarning = "missing";
+  } else if (effectiveScope === "project" && flowConfig.scope === "user") {
+    flowConfigWarning = "project-package-user-config";
+  }
+
   return {
     active,
     effective,
@@ -895,6 +957,8 @@ export async function buildDiagnosis(
     strictDivergence,
     absentCandidates,
     staleDispatcher,
+    flowConfig,
+    flowConfigWarning,
   };
 }
 
@@ -1237,6 +1301,31 @@ export function renderReport(d: DoctorDiagnosis, opts?: { all?: boolean }): stri
     lines.push(
       `  effective: ${d.effective.name}@${d.effective.version}  ${abbreviatePath(d.effective.root, d.homeDir)}  ${scopeNote}`,
     );
+  }
+  lines.push("");
+
+  // Flow config section — the active flow config Pi resolves for this cwd,
+  // visually distinct from the package-root identity above.
+  lines.push("Flow config");
+  if (d.flowConfig.scope === "none") {
+    const searched = d.flowConfig.searched
+      .map((p) => abbreviatePath(p, d.homeDir))
+      .join(", ");
+    lines.push(`  [none]  no usable flow config; searched ${searched}`);
+    lines.push(
+      "  warning: no flow config found — copy flow.example.json to a project .pi/flow.json or ~/.pi/agent/flow.json (see flow-config-setup.md).",
+    );
+  } else {
+    const scopeLabel =
+      d.flowConfig.scope === "project" ? "(project-local)" : "(user/global)";
+    lines.push(
+      `  [${d.flowConfig.scope}]  ${abbreviatePath(d.flowConfig.path!, d.homeDir)}  ${scopeLabel}`,
+    );
+    if (d.flowConfigWarning === "project-package-user-config") {
+      lines.push(
+        "  warning: project-local pi-flow package is effective but flow config resolved to user/global — add a project .pi/flow.json to pin dispatch config to this package (see version-alignment.md).",
+      );
+    }
   }
   lines.push("");
 
